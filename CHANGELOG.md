@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Lowered the preview camera and flattened its viewing angle so the horizon and background are more visible in the non-XR preview.
+- Set the default Butterchurn preset to `martin - mucus cervix`.
 
 
 ### Added
-

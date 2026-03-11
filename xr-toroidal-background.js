@@ -62,6 +62,8 @@
 		return canvas;
 	};
 
+	const defaultPresetName = "martin - mucus cervix";
+
 	const createButterchurnPresetSource = function() {
 		const butterchurnApi = window.butterchurn && window.butterchurn.createVisualizer ? window.butterchurn : window.butterchurn && window.butterchurn.default && window.butterchurn.default.createVisualizer ? window.butterchurn.default : null;
 		const butterchurnPresetsApi = window.butterchurnPresets && window.butterchurnPresets.getPresets ? window.butterchurnPresets : window.butterchurnPresets && window.butterchurnPresets.default && window.butterchurnPresets.default.getPresets ? window.butterchurnPresets.default : null;
@@ -103,7 +105,7 @@
 					textureRatio: 1
 				});
 				this.visualizer.setInternalMeshSize(32, 24);
-				this.selectPreset(0, 0);
+				this.selectPreset(Math.max(0, this.presetNames.indexOf(defaultPresetName)), 0);
 			},
 			ensureSize: function(width, height) {
 				width = Math.max(1, width | 0);

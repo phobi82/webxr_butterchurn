@@ -420,10 +420,10 @@
 
 			const previewCameraMatrix = function(timeSeconds) {
 				const eyeX = Math.sin(timeSeconds * 0.2) * 3;
-				const eyeY = 3.8;
-				const eyeZ = 5;
+				const eyeY = 2.2;
+				const eyeZ = 5.6;
 				const targetX = 0;
-				const targetY = -0.2;
+				const targetY = 1.25;
 				const targetZ = 0;
 				const zAxis = normalizeVec3(eyeX - targetX, eyeY - targetY, eyeZ - targetZ);
 				const xAxis = normalizeVec3(zAxis.z, 0, -zAxis.x);
