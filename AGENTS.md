@@ -116,6 +116,7 @@ Recommended structure order:
 
 ## Changelog
 - Maintain `CHANGELOG.md` using Keep a Changelog format; update the Unreleased section with notable user-facing changes.
+- Maintain `README.md` alongside code changes so feature descriptions, controls, and local usage stay in sync with the current project state.
 
 ## Commit & Pull Request Guidelines
 - Commits use short, imperative subjects (e.g., `Tighten auto-wire pacing`) with focused diffs; include a brief body when behavior shifts.

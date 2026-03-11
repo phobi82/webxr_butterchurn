@@ -19,6 +19,9 @@
 			const sprintMultiplier = 2;
 			const turnSpeed = 2;
 			const jumpSpeed = 5;
+			const airBoostSpeed = 14;
+			const airMomentumDrag = 0.35;
+			const groundMomentumDrag = 10;
 			const doubleJumpMaxCount = 2;
 			const gravity = -9.81;
 			const floorHalfSize = 40;
@@ -56,6 +59,8 @@
 			let previewTime = 0;
 			let trackingHeading = 0;
 			let jumpVelocity = 0;
+			let horizontalVelocityX = 0;
+			let horizontalVelocityZ = 0;
 			let jumpCount = 0;
 			let jumpMode = "double";
 			let jumpPressedBool = false;
@@ -488,6 +493,8 @@
 				trackingOrigin.z = 0;
 				trackingHeading = 0;
 				jumpVelocity = 0;
+				horizontalVelocityX = 0;
+				horizontalVelocityZ = 0;
 				jumpCount = 0;
 				jumpPressedBool = false;
 				updateReferenceSpace();
@@ -863,6 +870,8 @@
 				let moveY = 0;
 				let turnX = 0;
 				let jumpRequestBool = false;
+				let airBoostActiveBool = false;
+				let rightControllerBoostDir = null;
 				let sprintActiveBool = false;
 				const sources = xrSession.inputSources || [];
 				for (let i = 0; i < sources.length; i += 1) {
@@ -881,6 +890,16 @@
 						const turnAxes = pickAxes(gamepad, true);
 						turnX = Math.abs(turnAxes.x) > 0.08 ? turnAxes.x : 0;
 						jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
+						airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
+						const targetRayPose = frame.getPose(source.targetRaySpace, xrRefSpace);
+						if (targetRayPose) {
+							const q = targetRayPose.transform.orientation;
+							rightControllerBoostDir = normalizeVec3(
+								-(2 * (q.x * q.z + q.w * q.y)),
+								-(2 * (q.y * q.z - q.w * q.x)),
+								-(1 - 2 * (q.x * q.x + q.y * q.y))
+							);
+						}
 					}
 				}
 				if (turnX !== 0 && basePose) {
@@ -919,6 +938,23 @@
 					}
 				}
 				jumpPressedBool = jumpRequestBool;
+				if (!menuOpenBool && airBoostActiveBool && !groundedBool && rightControllerBoostDir) {
+					horizontalVelocityX += rightControllerBoostDir.x * airBoostSpeed * delta;
+					horizontalVelocityZ += rightControllerBoostDir.z * airBoostSpeed * delta;
+					jumpVelocity += rightControllerBoostDir.y * airBoostSpeed * delta;
+				}
+				const horizontalSpeed = Math.sqrt(horizontalVelocityX * horizontalVelocityX + horizontalVelocityZ * horizontalVelocityZ);
+				const drag = groundedBool ? groundMomentumDrag : airMomentumDrag;
+				const dragFactor = Math.max(0, 1 - drag * delta);
+				if (horizontalSpeed > 0.0001) {
+					trackingOrigin.x += horizontalVelocityX * delta;
+					trackingOrigin.z += horizontalVelocityZ * delta;
+					horizontalVelocityX *= dragFactor;
+					horizontalVelocityZ *= dragFactor;
+				} else {
+					horizontalVelocityX = 0;
+					horizontalVelocityZ = 0;
+				}
 				if (jumpVelocity !== 0 || trackingOrigin.y > 0 || !floorSupportBool) {
 					jumpVelocity += gravity * delta;
 					trackingOrigin.y += jumpVelocity * delta;
@@ -929,8 +965,12 @@
 					if (floorSupportBool && trackingOrigin.y <= 0) {
 						trackingOrigin.y = 0;
 						jumpVelocity = 0;
+						horizontalVelocityX *= Math.max(0, 1 - groundMomentumDrag * delta);
+						horizontalVelocityZ *= Math.max(0, 1 - groundMomentumDrag * delta);
 						jumpCount = 0;
 					}
+					updateReferenceSpace();
+				} else if (horizontalSpeed > 0.0001) {
 					updateReferenceSpace();
 				}
 			};
@@ -1146,6 +1186,8 @@
 				if (backgroundRenderer) {
 					backgroundRenderer.onSessionEnd();
 				}
+				horizontalVelocityX = 0;
+				horizontalVelocityZ = 0;
 				window.requestAnimationFrame(renderPreview);
 			};
 
@@ -1161,6 +1203,8 @@
 					trackingOrigin.z = 0;
 					trackingHeading = 0;
 					jumpVelocity = 0;
+					horizontalVelocityX = 0;
+					horizontalVelocityZ = 0;
 					jumpCount = 0;
 					jumpPressedBool = false;
 					menuTogglePressedBool = false;
