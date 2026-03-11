@@ -24,26 +24,28 @@
 			const floorHalfSize = 40;
 			const fallResetY = -25;
 			const rayLength = 4;
-			const menuWidth = 0.62;
-			const menuHeight = 0.42;
+			const menuWidth = 0.68;
+			const menuHeight = 0.5;
 			const eyeDistanceMin = 0.02;
 			const eyeDistanceMax = 0.2;
 			const sliderMinU = 0.18;
 			const sliderMaxU = 0.82;
-			const sliderV = 0.5;
+			const sliderV = 0.53;
 			const sliderHalfHeight = 0.06;
-			const jumpModeButtonTopV = 0.18;
-			const jumpModeButtonBottomV = 0.32;
+			const jumpModeButtonTopV = 0.19;
+			const jumpModeButtonBottomV = 0.34;
 			const jumpModeDoubleMinU = 0.1;
 			const jumpModeDoubleMaxU = 0.45;
 			const jumpModeMultiMinU = 0.55;
 			const jumpModeMultiMaxU = 0.9;
-			const presetRowTopV = 0.67;
-			const presetRowBottomV = 0.9;
+			const presetRowTopV = 0.74;
+			const presetRowBottomV = 0.92;
 			const presetPrevMinU = 0.08;
 			const presetPrevMaxU = 0.22;
 			const presetNextMinU = 0.78;
 			const presetNextMaxU = 0.92;
+			const youtubePlaylistUrl = "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1";
+			const youtubeWindowName = "webxrYoutubePlaylist";
 
 			let gl = null;
 			let xrSession = null;
@@ -87,6 +89,7 @@
 			let backgroundRenderer = null;
 			let activeAudioStream = null;
 			let activeAudioSourceName = "";
+			let youtubeWindowHandle = null;
 
 			const currentView = new Float32Array(16);
 			const currentProj = new Float32Array(16);
@@ -101,7 +104,7 @@
 			const triggerPressedByHand = new Map();
 			const menuCanvas = document.createElement("canvas");
 			menuCanvas.width = 1024;
-			menuCanvas.height = 640;
+			menuCanvas.height = 768;
 			const menuCtx = menuCanvas.getContext("2d");
 
 			const panel = document.createElement("div");
@@ -133,29 +136,64 @@
 			hint.style.color = "#00ff00";
 			panel.appendChild(hint);
 
-			const buttonRow = document.createElement("div");
-			buttonRow.style.display = "flex";
-			buttonRow.style.gap = "8px";
-			panel.appendChild(buttonRow);
+			const xrSection = document.createElement("div");
+			xrSection.style.display = "flex";
+			xrSection.style.flexDirection = "column";
+			xrSection.style.gap = "6px";
+			xrSection.style.padding = "8px";
+			xrSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
+			panel.appendChild(xrSection);
+
+			const xrSectionLabel = document.createElement("div");
+			xrSectionLabel.textContent = "XR";
+			xrSectionLabel.style.fontSize = "12px";
+			xrSectionLabel.style.fontWeight = "bold";
+			xrSectionLabel.style.color = "#00ff00";
+			xrSection.appendChild(xrSectionLabel);
+
+			const xrButtonRow = document.createElement("div");
+			xrButtonRow.style.display = "flex";
+			xrButtonRow.style.flexWrap = "wrap";
+			xrButtonRow.style.gap = "8px";
+			xrSection.appendChild(xrButtonRow);
 
 			const enterButton = document.createElement("button");
 			enterButton.textContent = "Enter VR";
-			buttonRow.appendChild(enterButton);
+			xrButtonRow.appendChild(enterButton);
 
 			const exitButton = document.createElement("button");
 			exitButton.textContent = "Exit VR";
 			exitButton.disabled = true;
-			buttonRow.appendChild(exitButton);
+			xrButtonRow.appendChild(exitButton);
+
+			const audioSection = document.createElement("div");
+			audioSection.style.display = "flex";
+			audioSection.style.flexDirection = "column";
+			audioSection.style.gap = "6px";
+			audioSection.style.padding = "8px";
+			audioSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
+			panel.appendChild(audioSection);
+
+			const audioSectionLabel = document.createElement("div");
+			audioSectionLabel.textContent = "Audio";
+			audioSectionLabel.style.fontSize = "12px";
+			audioSectionLabel.style.fontWeight = "bold";
+			audioSectionLabel.style.color = "#00ff00";
+			audioSection.appendChild(audioSectionLabel);
 
 			const audioRow = document.createElement("div");
 			audioRow.style.display = "flex";
 			audioRow.style.flexWrap = "wrap";
 			audioRow.style.gap = "8px";
-			panel.appendChild(audioRow);
+			audioSection.appendChild(audioRow);
 
 			const audioButton = document.createElement("button");
 			audioButton.textContent = "Share Audio";
 			audioRow.appendChild(audioButton);
+
+			const youtubeAudioButton = document.createElement("button");
+			youtubeAudioButton.textContent = "YouTube Playlist";
+			audioRow.appendChild(youtubeAudioButton);
 
 			const microphoneButton = document.createElement("button");
 			microphoneButton.textContent = "Use Microphone";
@@ -166,23 +204,51 @@
 			stopAudioButton.disabled = true;
 			audioRow.appendChild(stopAudioButton);
 
+			const presetSection = document.createElement("div");
+			presetSection.style.display = "flex";
+			presetSection.style.flexDirection = "column";
+			presetSection.style.gap = "6px";
+			presetSection.style.padding = "8px";
+			presetSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
+			panel.appendChild(presetSection);
+
+			const presetSectionLabel = document.createElement("div");
+			presetSectionLabel.textContent = "Preset";
+			presetSectionLabel.style.fontSize = "12px";
+			presetSectionLabel.style.fontWeight = "bold";
+			presetSectionLabel.style.color = "#00ff00";
+			presetSection.appendChild(presetSectionLabel);
+
+			const presetRow = document.createElement("div");
+			presetRow.style.display = "flex";
+			presetRow.style.flexWrap = "wrap";
+			presetRow.style.gap = "8px";
+			presetSection.appendChild(presetRow);
+
 			const prevPresetButton = document.createElement("button");
 			prevPresetButton.textContent = "Prev Preset";
-			audioRow.appendChild(prevPresetButton);
+			presetRow.appendChild(prevPresetButton);
 
 			const nextPresetButton = document.createElement("button");
 			nextPresetButton.textContent = "Next Preset";
-			audioRow.appendChild(nextPresetButton);
+			presetRow.appendChild(nextPresetButton);
 
 			const audioLabel = document.createElement("div");
 			audioLabel.textContent = "Audio: none";
 			audioLabel.style.fontSize = "13px";
-			panel.appendChild(audioLabel);
+			audioSection.appendChild(audioLabel);
+
+			const audioHint = document.createElement("div");
+			audioHint.textContent = "YouTube Playlist opens the tab automatically. In the share dialog, choose that tab and enable tab audio.";
+			audioHint.style.fontSize = "12px";
+			audioHint.style.maxWidth = "360px";
+			audioHint.style.color = "#00ff00";
+			audioSection.appendChild(audioHint);
 
 			const presetLabel = document.createElement("div");
 			presetLabel.textContent = "Preset: loading...";
 			presetLabel.style.fontSize = "13px";
-			panel.appendChild(presetLabel);
+			presetSection.appendChild(presetLabel);
 
 
 			const canvas = document.createElement("canvas");
@@ -246,7 +312,7 @@
 				}
 			};
 
-			const requestDisplayAudio = async function() {
+			const requestDisplayAudio = async function(sourceName, optionOverrides) {
 				const options = {
 					video: true,
 					audio: {
@@ -257,8 +323,23 @@
 				};
 				options.surfaceSwitching = "include";
 				options.monitorTypeSurfaces = "include";
+				options.systemAudio = "include";
+				options.selfBrowserSurface = "exclude";
+				if (optionOverrides) {
+					const overrideKeys = Object.keys(optionOverrides);
+					for (let i = 0; i < overrideKeys.length; i += 1) {
+						options[overrideKeys[i]] = optionOverrides[overrideKeys[i]];
+					}
+				}
 				const stream = await navigator.mediaDevices.getDisplayMedia(options);
-				setActiveAudioStream(stream, "shared surface");
+				if (!stream.getAudioTracks().length) {
+					const tracks = stream.getTracks();
+					for (let i = 0; i < tracks.length; i += 1) {
+						tracks[i].stop();
+					}
+					throw new Error("shared source has no audio track");
+				}
+				setActiveAudioStream(stream, sourceName || "shared surface");
 			};
 
 			const requestMicrophoneAudio = async function() {
@@ -271,6 +352,24 @@
 					video: false
 				});
 				setActiveAudioStream(stream, "microphone");
+			};
+
+			const requestYoutubePlaylistAudio = async function() {
+				if (!youtubeWindowHandle || youtubeWindowHandle.closed) {
+					youtubeWindowHandle = window.open(youtubePlaylistUrl, youtubeWindowName);
+				} else {
+					youtubeWindowHandle.location.href = youtubePlaylistUrl;
+				}
+				if (!youtubeWindowHandle) {
+					throw new Error("youtube tab blocked");
+				}
+				try {
+					youtubeWindowHandle.focus();
+				} catch (error) {
+				}
+				setStatus("select the YouTube tab and enable tab audio");
+				await requestDisplayAudio("YouTube playlist", {preferCurrentTab: false});
+				setStatus("youtube tab audio active");
 			};
 
 			const copyMatrix = function(target, source) {
@@ -836,28 +935,42 @@
 				}
 			};
 
+			const drawCenteredFittedText = function(text, centerX, topY, maxWidth, fontSize, minFontSize, color, weight) {
+				let currentFontSize = fontSize;
+				while (currentFontSize > minFontSize) {
+					menuCtx.font = (weight || "") + " " + currentFontSize + "px Arial";
+					if (menuCtx.measureText(text).width <= maxWidth) {
+						break;
+					}
+					currentFontSize -= 2;
+				}
+				menuCtx.fillStyle = color;
+				menuCtx.fillText(text, centerX, topY);
+			};
+
 			const drawMenu = function() {
 				if (!menuOpenBool) {
 					return;
 				}
 				menuCtx.fillStyle = "#081030";
 				menuCtx.fillRect(0, 0, menuCanvas.width, menuCanvas.height);
-				menuCtx.fillStyle = "#ffff00";
-				menuCtx.font = "bold 44px Arial";
+				menuCtx.strokeStyle = "#7ee7ff";
+				menuCtx.lineWidth = 4;
+				menuCtx.strokeRect(12, 12, menuCanvas.width - 24, menuCanvas.height - 24);
 				menuCtx.textAlign = "center";
 				menuCtx.textBaseline = "top";
-				menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, 40);
-				menuCtx.font = "26px Arial";
+				menuCtx.fillStyle = "#ffff00";
+				menuCtx.font = "bold 40px Arial";
+				menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, 34);
+				menuCtx.font = "22px Arial";
 				menuCtx.fillStyle = "#9fb6d8";
-				menuCtx.fillText("Select double-jump or multi-jump", menuCanvas.width * 0.5, 96);
+				menuCtx.fillText("Select double-jump or multi-jump", menuCanvas.width * 0.5, 82);
 				const buttonTop = menuCanvas.height * jumpModeButtonTopV;
 				const buttonHeight = menuCanvas.height * (jumpModeButtonBottomV - jumpModeButtonTopV);
 				const doubleButtonX = menuCanvas.width * jumpModeDoubleMinU;
 				const doubleButtonWidth = menuCanvas.width * (jumpModeDoubleMaxU - jumpModeDoubleMinU);
 				const multiButtonX = menuCanvas.width * jumpModeMultiMinU;
 				const multiButtonWidth = menuCanvas.width * (jumpModeMultiMaxU - jumpModeMultiMinU);
-				menuCtx.lineWidth = 4;
-				menuCtx.strokeStyle = "#7ee7ff";
 				menuCtx.fillStyle = jumpMode === "double" ? "#106020" : hoveredJumpMode === "double" ? "#103860" : "#142040";
 				menuCtx.fillRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
 				menuCtx.strokeRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
@@ -865,19 +978,19 @@
 				menuCtx.fillRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
 				menuCtx.strokeRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
 				menuCtx.fillStyle = "#ffff00";
-				menuCtx.font = "bold 34px Arial";
-				menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 26);
-				menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, buttonTop + 26);
+				menuCtx.font = "bold 30px Arial";
+				menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 24);
+				menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, buttonTop + 24);
 				menuCtx.fillStyle = "#9fb6d8";
-				menuCtx.font = "22px Arial";
-				menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 74);
-				menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, buttonTop + 74);
+				menuCtx.font = "20px Arial";
+				menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 68);
+				menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, buttonTop + 68);
 				menuCtx.fillStyle = "#ffff00";
-				menuCtx.font = "bold 38px Arial";
-				menuCtx.fillText("Eye Distance", menuCanvas.width * 0.5, 252);
+				menuCtx.font = "bold 36px Arial";
+				menuCtx.fillText("Eye Distance", menuCanvas.width * 0.5, 290);
 				menuCtx.fillStyle = "#9fb6d8";
-				menuCtx.font = "28px Arial";
-				menuCtx.fillText(Math.round(eyeDistanceMeters * 1000) + " mm", menuCanvas.width * 0.5, 296);
+				menuCtx.font = "26px Arial";
+				menuCtx.fillText(Math.round(eyeDistanceMeters * 1000) + " mm", menuCanvas.width * 0.5, 336);
 				const trackStartX = menuCanvas.width * sliderMinU;
 				const trackEndX = menuCanvas.width * sliderMaxU;
 				const trackY = menuCanvas.height * sliderV;
@@ -898,7 +1011,7 @@
 				menuCtx.fillText(Math.round(eyeDistanceMax * 1000) + " mm", trackEndX, trackY + 52);
 				menuCtx.fillStyle = "#ffff00";
 				menuCtx.font = "bold 34px Arial";
-				menuCtx.fillText("Toroidal Preset", menuCanvas.width * 0.5, menuCanvas.height * 0.6);
+				menuCtx.fillText("Toroidal Preset", menuCanvas.width * 0.5, menuCanvas.height * 0.64);
 				const presetNames = backgroundRenderer ? backgroundRenderer.getPresetNames() : ["Preset 1"];
 				const currentPresetIndex = backgroundRenderer ? backgroundRenderer.getCurrentPresetIndex() : 0;
 				const presetTop = menuCanvas.height * presetRowTopV;
@@ -918,11 +1031,10 @@
 				menuCtx.font = "bold 56px Arial";
 				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 14);
 				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 14);
-				menuCtx.font = "bold 26px Arial";
-				menuCtx.fillText(presetNames[currentPresetIndex] || "No preset", centerX, presetTop + 18);
+				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, presetTop + 24, menuCanvas.width * 0.48, 28, 18, "#ffff00", "bold");
 				menuCtx.fillStyle = "#9fb6d8";
 				menuCtx.font = "22px Arial";
-				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 60);
+				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 70);
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 				gl.disable(gl.CULL_FACE);
@@ -1079,6 +1191,13 @@
 				activateBackgroundAudio();
 				requestDisplayAudio().catch(function(error) {
 					setStatus(error.message || "audio capture failed");
+				});
+			});
+
+			youtubeAudioButton.addEventListener("click", function() {
+				activateBackgroundAudio();
+				requestYoutubePlaylistAudio().catch(function(error) {
+					setStatus(error.message || "youtube audio failed");
 				});
 			});
 
