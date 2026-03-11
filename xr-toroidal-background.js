@@ -24,14 +24,6 @@
 		return unwrappedAngle;
 	};
 
-	const nextPowerOfTwo = function(value) {
-		let size = 1;
-		while (size < value) {
-			size *= 2;
-		}
-		return size;
-	};
-
 	const extractForwardYawPitch = function(viewMatrix) {
 		const forwardX = -viewMatrix[2];
 		const forwardY = -viewMatrix[6];
@@ -228,7 +220,6 @@
 			"precision highp float;",
 			"uniform sampler2D sourceTexture;",
 			"uniform vec2 viewportSize;",
-			"uniform vec2 contentScale;",
 			"uniform vec2 eyeCenterOffset;",
 			"uniform vec2 orientationOffset;",
 			"varying vec2 vScreenUv;",
@@ -238,7 +229,7 @@
 			"}",
 			"void main(){",
 			"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
-			"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y))*contentScale;",
+			"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y));",
 			"gl_FragColor=texture2D(sourceTexture,sampleUv);",
 			"}"
 		].join("");
@@ -250,7 +241,6 @@
 			positionLoc: null,
 			sourceTextureLoc: null,
 			viewportSizeLoc: null,
-			contentScaleLoc: null,
 			eyeCenterOffsetLoc: null,
 			orientationOffsetLoc: null,
 			sourceTexture: null,
@@ -274,7 +264,6 @@
 				this.positionLoc = this.gl.getAttribLocation(this.program, "position");
 				this.sourceTextureLoc = this.gl.getUniformLocation(this.program, "sourceTexture");
 				this.viewportSizeLoc = this.gl.getUniformLocation(this.program, "viewportSize");
-				this.contentScaleLoc = this.gl.getUniformLocation(this.program, "contentScale");
 				this.eyeCenterOffsetLoc = this.gl.getUniformLocation(this.program, "eyeCenterOffset");
 				this.orientationOffsetLoc = this.gl.getUniformLocation(this.program, "orientationOffset");
 				this.positionBuffer = this.gl.createBuffer();
@@ -288,10 +277,10 @@
 				this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
 				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
 				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
-				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
+				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+				this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
 				this.source = createButterchurnPresetSource();
-				this.source.init(1024, 1024);
+				this.source.init(1, 1);
 				this.sourceDirtyBool = true;
 			},
 			createShader: function(type, source) {
@@ -321,8 +310,8 @@
 				}
 				this.sourceWidth = width;
 				this.sourceHeight = height;
-				this.textureWidth = nextPowerOfTwo(width);
-				this.textureHeight = nextPowerOfTwo(height);
+				this.textureWidth = width;
+				this.textureHeight = height;
 				this.source.ensureSize(width, height);
 				this.sourceDirtyBool = true;
 			},
@@ -333,8 +322,7 @@
 				}
 				this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
 				this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
-				this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.textureWidth, this.textureHeight, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null);
-				this.gl.texSubImage2D(this.gl.TEXTURE_2D, 0, 0, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sourceCanvas);
+				this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sourceCanvas);
 				this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
 				this.sourceDirtyBool = false;
 			},
@@ -393,7 +381,6 @@
 				this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
 				this.gl.uniform1i(this.sourceTextureLoc, 0);
 				this.gl.uniform2f(this.viewportSizeLoc, width, height);
-				this.gl.uniform2f(this.contentScaleLoc, width / this.textureWidth, height / this.textureHeight);
 				this.gl.uniform2f(this.eyeCenterOffsetLoc, this.eyeCenterOffsetX, this.eyeCenterOffsetY);
 				this.gl.uniform2f(this.orientationOffsetLoc, offsetX, offsetY);
 				this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);

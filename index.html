@@ -1196,7 +1196,15 @@
 					xrSession = await navigator.xr.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
 					xrSession.addEventListener("end", endSession);
 					await gl.makeXRCompatible();
-					xrSession.updateRenderState({baseLayer: new XRWebGLLayer(xrSession, gl)});
+					let framebufferScaleFactor = 1;
+					if (window.XRWebGLLayer && typeof XRWebGLLayer.getNativeFramebufferScaleFactor === "function") {
+						framebufferScaleFactor = XRWebGLLayer.getNativeFramebufferScaleFactor(xrSession) || 1;
+					}
+					xrSession.updateRenderState({
+						baseLayer: new XRWebGLLayer(xrSession, gl, {
+							framebufferScaleFactor: framebufferScaleFactor
+						})
+					});
 					baseRefSpace = await xrSession.requestReferenceSpace("local-floor");
 					trackingOrigin.x = 0;
 					trackingOrigin.y = 0;
