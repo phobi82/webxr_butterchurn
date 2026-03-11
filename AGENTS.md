@@ -112,6 +112,7 @@ Recommended structure order:
 ## Testing Guidelines
 - when Chrome DevTools MCP is available, use it to its full extent for manual verification (console, network, storage, performance, screenshots, viewport/device emulation, and interaction automation as applicable).
 - If required to inspect external web content, prefer Chrome DevTools MCP.
+- To inspect the in-VR menu without changing repository code, prefer a temporary Chrome DevTools script injection that opens the existing `menuCanvas` as a large DOM overlay or refreshes an `img` from `menuCanvas.toDataURL(...)`; use this only for manual verification and reload afterward instead of committing preview-only helpers.
 - For logic changes, add temporary console diagnostics during development and remove before commit; document manual test steps in the PR.
 
 ## Changelog

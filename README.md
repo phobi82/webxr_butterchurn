@@ -16,7 +16,7 @@ Implemented currently:
 - jump, double-jump, and multi-jump modes
 - in-air directional boost on the right controller face button
 - automatic pose reset after falling out of bounds
-- in-headset menu for jump mode, eye distance, and preset switching
+- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy feedback, and preset switching
 - Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 background sampling
 - toroidal fullscreen background pass driven by head orientation
 - audio input from shared screen/tab audio, a dedicated YouTube playlist tab, or microphone capture

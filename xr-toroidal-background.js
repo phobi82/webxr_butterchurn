@@ -79,6 +79,8 @@
 			visualizer: null,
 			audioContext: null,
 			audioNode: null,
+			audioAnalyser: null,
+			audioAnalyserData: null,
 			audioStream: null,
 			activatedBool: false,
 			presetNames: [],
@@ -87,6 +89,7 @@
 			currentWidth: 0,
 			currentHeight: 0,
 			lastRenderTimeSeconds: 0,
+			audioLevel: 0,
 			init: function(width, height) {
 				this.canvas = createCanvasForSource(width, height);
 				this.currentWidth = width;
@@ -162,12 +165,24 @@
 						this.visualizer.disconnectAudio(this.audioNode);
 					} catch (error) {
 					}
+					try {
+						this.audioNode.disconnect();
+					} catch (error) {
+					}
 					this.audioNode = null;
 				}
 				if (!stream) {
+					this.audioLevel = 0;
 					return;
 				}
+				if (!this.audioAnalyser) {
+					this.audioAnalyser = this.audioContext.createAnalyser();
+					this.audioAnalyser.fftSize = 256;
+					this.audioAnalyser.smoothingTimeConstant = 0.82;
+					this.audioAnalyserData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+				}
 				this.audioNode = this.audioContext.createMediaStreamSource(stream);
+				this.audioNode.connect(this.audioAnalyser);
 				this.visualizer.connectAudio(this.audioNode);
 			},
 			selectPreset: function(index, blendTimeSeconds) {
@@ -187,6 +202,17 @@
 					elapsedTimeSeconds = clampNumber(timeSeconds - this.lastRenderTimeSeconds, 1 / 240, 0.25);
 				}
 				this.lastRenderTimeSeconds = timeSeconds;
+				if (this.audioAnalyser && this.audioAnalyserData) {
+					this.audioAnalyser.getByteFrequencyData(this.audioAnalyserData);
+					let levelSum = 0;
+					for (let i = 0; i < this.audioAnalyserData.length; i += 1) {
+						levelSum += this.audioAnalyserData[i];
+					}
+					const averageLevel = levelSum / (this.audioAnalyserData.length * 255);
+					this.audioLevel += (averageLevel - this.audioLevel) * 0.16;
+				} else {
+					this.audioLevel *= 0.9;
+				}
 				this.visualizer.render({elapsedTime: elapsedTimeSeconds});
 			},
 			getCurrentTextureSource: function() {
@@ -197,6 +223,9 @@
 			},
 			getCurrentPresetIndex: function() {
 				return this.currentPresetIndex;
+			},
+			getAudioLevel: function() {
+				return this.audioLevel;
 			},
 			onSessionStart: function() {
 				this.activate();
@@ -398,6 +427,9 @@
 			},
 			getCurrentPresetIndex: function() {
 				return this.source.getCurrentPresetIndex();
+			},
+			getAudioLevel: function() {
+				return this.source.getAudioLevel ? this.source.getAudioLevel() : 0;
 			},
 			selectPreset: function(index) {
 				const renderer = this;
