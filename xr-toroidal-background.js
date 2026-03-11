@@ -1,5 +1,9 @@
 (function() {
 	const tau = Math.PI * 2;
+	// Scales horizontal buffer scrolling caused by head yaw.
+	const headYawBufferShiftFactor = 0.8;
+	// Scales vertical buffer scrolling caused by head pitch.
+	const headPitchBufferShiftFactor = 0.8;
 
 	const clampNumber = function(value, minValue, maxValue) {
 		return Math.max(minValue, Math.min(maxValue, value));
@@ -7,6 +11,17 @@
 
 	const wrapUnit = function(value) {
 		return value - Math.floor(value);
+	};
+
+	const unwrapAngle = function(angle, referenceAngle) {
+		let unwrappedAngle = angle;
+		while (unwrappedAngle - referenceAngle > Math.PI) {
+			unwrappedAngle -= tau;
+		}
+		while (unwrappedAngle - referenceAngle < -Math.PI) {
+			unwrappedAngle += tau;
+		}
+		return unwrappedAngle;
 	};
 
 	const nextPowerOfTwo = function(value) {
@@ -233,6 +248,7 @@
 			textureWidth: 0,
 			textureHeight: 0,
 			headYaw: 0,
+			lastRawHeadYaw: null,
 			headPitch: 0,
 			headHorizontalFov: Math.PI / 2,
 			headVerticalFov: Math.PI / 2,
@@ -315,7 +331,7 @@
 			setViewFromMatrix: function(viewMatrix, projectionMatrix) {
 				const forwardAngles = extractForwardYawPitch(viewMatrix);
 				const fov = extractProjectionFov(projectionMatrix);
-				this.headYaw = forwardAngles.yaw;
+				this.setHeadYaw(forwardAngles.yaw);
 				this.headPitch = forwardAngles.pitch;
 				this.headHorizontalFov = Math.max(0.0001, fov.horizontal);
 				this.headVerticalFov = Math.max(0.0001, fov.vertical);
@@ -324,11 +340,19 @@
 			setHeadPoseFromQuaternion: function(quaternion, projectionMatrix) {
 				const forwardAngles = extractForwardYawPitchFromQuaternion(quaternion);
 				const fov = extractProjectionFov(projectionMatrix);
-				this.headYaw = forwardAngles.yaw;
+				this.setHeadYaw(forwardAngles.yaw);
 				this.headPitch = forwardAngles.pitch;
 				this.headHorizontalFov = Math.max(0.0001, fov.horizontal);
 				this.headVerticalFov = Math.max(0.0001, fov.vertical);
 				this.setEyeProjection(projectionMatrix);
+			},
+			setHeadYaw: function(rawYaw) {
+				if (this.lastRawHeadYaw === null) {
+					this.headYaw = rawYaw;
+				} else {
+					this.headYaw = unwrapAngle(rawYaw, this.lastRawHeadYaw) + (this.headYaw - this.lastRawHeadYaw);
+				}
+				this.lastRawHeadYaw = rawYaw;
 			},
 			setEyeProjection: function(projectionMatrix) {
 				this.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
@@ -343,8 +367,8 @@
 					this.source.render(this.lastUpdateTimeSeconds);
 					this.updateSourceTexture();
 				}
-				const offsetX = wrapUnit(this.headYaw / this.headHorizontalFov);
-				const offsetY = clampNumber(this.headPitch / this.headVerticalFov, -1000, 1000);
+				const offsetX = wrapUnit(this.headYaw * headYawBufferShiftFactor / this.headHorizontalFov);
+				const offsetY = clampNumber(this.headPitch * headPitchBufferShiftFactor / this.headVerticalFov, -1000, 1000);
 				this.gl.disable(this.gl.DEPTH_TEST);
 				this.gl.disable(this.gl.CULL_FACE);
 				this.gl.useProgram(this.program);
