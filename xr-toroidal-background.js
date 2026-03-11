@@ -88,6 +88,7 @@
 			audioContext: null,
 			audioNode: null,
 			audioStream: null,
+			activatedBool: false,
 			presetNames: [],
 			presetMap: {},
 			currentPresetIndex: 0,
@@ -103,17 +104,27 @@
 				if (!butterchurnApi || !this.presetNames.length) {
 					return;
 				}
+			},
+			activate: function() {
+				if (!butterchurnApi || !this.presetNames.length || this.activatedBool) {
+					if (this.audioContext && this.audioContext.state === "suspended") {
+						return this.audioContext.resume().catch(function() {
+						});
+					}
+					return Promise.resolve();
+				}
 				this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
 				this.visualizer = butterchurnApi.createVisualizer(this.audioContext, this.canvas, {
-					width: width,
-					height: height,
+					width: this.currentWidth,
+					height: this.currentHeight,
 					meshWidth: 32,
 					meshHeight: 24,
 					pixelRatio: 1,
 					textureRatio: 1
 				});
+				this.activatedBool = true;
 				this.visualizer.setOutputAA(false);
-				this.visualizer.setRendererSize(width, height, {
+				this.visualizer.setRendererSize(this.currentWidth, this.currentHeight, {
 					meshWidth: 32,
 					meshHeight: 24,
 					pixelRatio: 1,
@@ -121,6 +132,14 @@
 				});
 				this.visualizer.setInternalMeshSize(32, 24);
 				this.selectPreset(Math.max(0, this.presetNames.indexOf(defaultPresetName)), 0);
+				if (this.audioStream) {
+					this.setAudioStream(this.audioStream);
+				}
+				if (this.audioContext.state === "suspended") {
+					return this.audioContext.resume().catch(function() {
+					});
+				}
+				return Promise.resolve();
 			},
 			ensureSize: function(width, height) {
 				width = Math.max(1, width | 0);
@@ -176,9 +195,6 @@
 					elapsedTimeSeconds = clampNumber(timeSeconds - this.lastRenderTimeSeconds, 1 / 240, 0.25);
 				}
 				this.lastRenderTimeSeconds = timeSeconds;
-				if (this.audioContext && this.audioContext.state === "suspended") {
-					this.audioContext.resume();
-				}
 				this.visualizer.render({elapsedTime: elapsedTimeSeconds});
 			},
 			getCurrentTextureSource: function() {
@@ -191,9 +207,7 @@
 				return this.currentPresetIndex;
 			},
 			onSessionStart: function() {
-				if (this.audioContext && this.audioContext.state === "suspended") {
-					this.audioContext.resume();
-				}
+				this.activate();
 			},
 			onSessionEnd: function() {
 			}
@@ -388,6 +402,9 @@
 			},
 			setAudioStream: function(stream) {
 				this.source.setAudioStream(stream);
+			},
+			activateAudio: function() {
+				return this.source.activate();
 			},
 			getPresetNames: function() {
 				return this.source.getPresetNames();

@@ -205,6 +205,14 @@
 				presetLabel.textContent = "Preset: " + (presetNames[currentPresetIndex] || "none");
 			};
 
+			const activateBackgroundAudio = function() {
+				if (!backgroundRenderer || !backgroundRenderer.activateAudio) {
+					return Promise.resolve();
+				}
+				return backgroundRenderer.activateAudio().catch(function() {
+				});
+			};
+
 			const setActiveAudioStream = function(stream, sourceName) {
 				if (activeAudioStream) {
 					const oldTracks = activeAudioStream.getTracks();
@@ -1062,17 +1070,20 @@
 
 			enterButton.addEventListener("click", function() {
 				if (navigator.xr && gl && !xrSession) {
+					activateBackgroundAudio();
 					startSession();
 				}
 			});
 
 			audioButton.addEventListener("click", function() {
+				activateBackgroundAudio();
 				requestDisplayAudio().catch(function(error) {
 					setStatus(error.message || "audio capture failed");
 				});
 			});
 
 			microphoneButton.addEventListener("click", function() {
+				activateBackgroundAudio();
 				requestMicrophoneAudio().catch(function(error) {
 					setStatus(error.message || "microphone capture failed");
 				});
@@ -1084,10 +1095,12 @@
 			});
 
 			prevPresetButton.addEventListener("click", function() {
+				activateBackgroundAudio();
 				cyclePreset(-1);
 			});
 
 			nextPresetButton.addEventListener("click", function() {
+				activateBackgroundAudio();
 				cyclePreset(1);
 			});
 
@@ -1103,6 +1116,9 @@
 					canvas.height = window.innerHeight * window.devicePixelRatio;
 				}
 			});
+
+			document.addEventListener("pointerdown", activateBackgroundAudio, {passive: true});
+			document.addEventListener("keydown", activateBackgroundAudio);
 
 			const init = async function() {
 				if (!initGl()) {
