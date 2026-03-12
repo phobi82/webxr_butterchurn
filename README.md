@@ -12,18 +12,22 @@ Implemented currently:
 - desktop preview rendering when no XR session is active
 - left-stick locomotion with head-relative movement
 - right-stick smooth turning
+- right-stick crouch and tiptoe height control layered on top of relative headset movement
 - sprint on the left controller face button
-- jump, double-jump, and multi-jump modes
+- jump, hold-to-jump-higher variable jump physics, double-jump, and multi-jump modes
 - in-air directional boost on the right controller face button
+- simple collidable level geometry with platforms, walls, landing surfaces, ceiling checks, and smooth climbable obstacles
+- a textured goat model placed on the ground as a scene prop
 - automatic pose reset after falling out of bounds
-- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy feedback, and preset switching
+- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy/peak/beat feedback, and preset switching
 - Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 background sampling
 - toroidal fullscreen background pass driven by head orientation
-- audio input from shared screen/tab audio, a dedicated YouTube playlist tab, or microphone capture
+- audio input from shared screen/tab audio, a dedicated YouTube playlist tab, or microphone capture with beat/peak analysis
 
 ## Project Files
 
 - `index.html`: single-page app entry point and main XR logic
+- `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
 - `xr-toroidal-background.js`: toroidal background renderer and Butterchurn bridge
 - `butterchurn.min.js`: bundled Butterchurn runtime
 - `butterchurnPresets.min.js`: bundled Butterchurn preset pack
@@ -58,8 +62,8 @@ There is no build step and no backend.
 
 - left stick: move
 - left trigger: sprint
-- right stick: turn
-- A (right controller): jump
+- right stick: turn, crouch, and tiptoe
+- A (right controller): jump, hold briefly for extra height
 - right trigger while airborne: directional air boost
 - Y (left controller): open or close the in-headset menu
 - trigger on a menu control: activate menu buttons and drag the eye-distance slider

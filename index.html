@@ -8,6 +8,7 @@
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
 		<script src="xr-toroidal-background.js"></script>
+		<script src="glb-asset-manager.js"></script>
 		<script>
 			document.body.style.backgroundColor = "#000020";
 			document.body.style.color = "#ffff00";
@@ -18,15 +19,29 @@
 			const walkSpeed = 4;
 			const sprintMultiplier = 2;
 			const turnSpeed = 2;
-			const jumpSpeed = 5;
+			const jumpSpeed = 3.55;
+			const jumpHoldBoostSpeed = 6.5;
+			const jumpHoldMaxSeconds = 0.22;
 			const airBoostSpeed = 14;
 			const airMomentumDrag = 0.35;
 			const groundMomentumDrag = 10;
 			const doubleJumpMaxCount = 2;
 			const gravity = -9.81;
+			const jumpGravity = -8.6;
 			const floorHalfSize = 40;
 			const fallResetY = -25;
 			const rayLength = 4;
+			const playerRadius = 0.32;
+			const playerHeadClearance = 0.12;
+			const defaultEyeHeight = 1.7; // Body height minus 10 cm.
+			const tiptoeEyeHeightBoost = 0.3;
+			const crouchMinEyeHeight = 0.5;
+			const crouchSpeed = 1.8;
+			const climbSpeed = 2.4;
+			const stickDeadzone = 0.08;
+			const stanceStickDeadzone = 0.22;
+			const stanceVerticalDominanceMargin = 0.12;
+			const stepHeight = 0.5;
 			const eyeDistanceMin = 0.02;
 			const eyeDistanceMax = 0.2;
 			const floorAlphaMin = 0;
@@ -54,6 +69,23 @@
 			const presetNextMaxU = 0.92;
 			const youtubePlaylistUrl = "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1";
 			const youtubeWindowName = "webxrYoutubePlaylist";
+			const sceneGlbAssets = [
+				{
+					url: "https://phobi82.github.io/Phobis-Crystal-Lake/goat.glb",
+					position: {x: 1.4, y: 0.256, z: -2.6},
+					scale: 1,
+					rotationY: -0.55,
+					collisionBool: true
+				}
+			];
+			const levelBoxes = [
+				{x: 0, y: 0.6, z: -6, width: 2.4, height: 1.2, depth: 2.4, color: [0.2, 0.72, 1, 0.72]},
+				{x: -3.6, y: 0.9, z: -10.5, width: 2.6, height: 1.8, depth: 2.6, color: [1, 0.55, 0.2, 0.72]},
+				{x: 4.2, y: 1.3, z: -13.5, width: 3, height: 2.6, depth: 3, color: [0.3, 1, 0.55, 0.72]},
+				{x: 0, y: 1.2, z: -18, width: 8, height: 2.4, depth: 1.3, color: [1, 0.28, 0.42, 0.68]},
+				{x: -8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.95, 0.2, 0.8, 0.48]},
+				{x: 8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.1, 0.95, 0.9, 0.48]}
+			];
 
 			let gl = null;
 			let xrSession = null;
@@ -66,9 +98,15 @@
 			let jumpVelocity = 0;
 			let horizontalVelocityX = 0;
 			let horizontalVelocityZ = 0;
+			let currentBaseEyeHeightMeters = defaultEyeHeight;
+			let calibratedStandingEyeHeightMeters = defaultEyeHeight;
+			let standingEyeHeightCalibratedBool = false;
+			let stickEyeHeightOffsetMeters = 0;
+			let effectiveEyeHeightMeters = defaultEyeHeight;
 			let jumpCount = 0;
 			let jumpMode = "double";
 			let jumpPressedBool = false;
+			let jumpHoldTimeSeconds = 0;
 			let menuOpenBool = false;
 			let menuTogglePressedBool = false;
 			let floorAlpha = 0.72;
@@ -99,7 +137,9 @@
 			let lineBuffer = null;
 			let gridBuffer = null;
 			let gridVertexCount = 0;
+			let boxBuffer = null;
 			let menuTexture = null;
+			let glbAssetManager = null;
 			let backgroundRenderer = null;
 			let activeAudioStream = null;
 			let activeAudioSourceName = "";
@@ -438,6 +478,131 @@
 				return {x: x / len, y: y / len, z: z / len};
 			};
 
+			const getPlayerHeight = function(viewerTransform) {
+				return effectiveEyeHeightMeters + playerHeadClearance;
+			};
+
+			const getBoxBounds = function(box) {
+				return {
+					minX: box.x - box.width * 0.5,
+					maxX: box.x + box.width * 0.5,
+					minY: box.y - box.height * 0.5,
+					maxY: box.y + box.height * 0.5,
+					minZ: box.z - box.depth * 0.5,
+					maxZ: box.z + box.depth * 0.5
+				};
+			};
+
+			const getCollisionBoxes = function() {
+				const boxes = levelBoxes.slice();
+				if (glbAssetManager && glbAssetManager.getCollisionBoxes) {
+					const glbCollisionBoxes = glbAssetManager.getCollisionBoxes();
+					for (let i = 0; i < glbCollisionBoxes.length; i += 1) {
+						boxes.push(glbCollisionBoxes[i]);
+					}
+				}
+				return boxes;
+			};
+
+			const rangesOverlap = function(minA, maxA, minB, maxB) {
+				return maxA > minB && minA < maxB;
+			};
+
+			const getFloorHeightAtPosition = function(x, z, maxY) {
+				let surfaceY = Math.abs(x) <= floorHalfSize && Math.abs(z) <= floorHalfSize && 0 <= maxY ? 0 : -Infinity;
+				const collisionBoxes = getCollisionBoxes();
+				for (let i = 0; i < collisionBoxes.length; i += 1) {
+					const bounds = getBoxBounds(collisionBoxes[i]);
+					if (bounds.maxY <= maxY && x >= bounds.minX - playerRadius && x <= bounds.maxX + playerRadius && z >= bounds.minZ - playerRadius && z <= bounds.maxZ + playerRadius) {
+						surfaceY = Math.max(surfaceY, bounds.maxY);
+					}
+				}
+				return surfaceY;
+			};
+
+			const getMaxClimbSurfaceY = function(currentY) {
+				return currentY + Math.max(stepHeight, effectiveEyeHeightMeters - 0.5);
+			};
+
+			const resolveHorizontalMovement = function(currentX, currentY, currentZ, nextX, nextZ, playerHeight) {
+				const bodyMinY = currentY + 0.02;
+				const bodyMaxY = currentY + playerHeight;
+				const currentSurfaceY = getFloorHeightAtPosition(currentX, currentZ, currentY + 0.05);
+				const maxClimbSurfaceY = getMaxClimbSurfaceY(currentY);
+				const collisionBoxes = getCollisionBoxes();
+				const canOccupyPosition = function(testX, testZ) {
+					const testSurfaceY = getFloorHeightAtPosition(testX, testZ, maxClimbSurfaceY);
+					let targetY = currentY;
+					for (let i = 0; i < collisionBoxes.length; i += 1) {
+						const bounds = getBoxBounds(collisionBoxes[i]);
+						if (!rangesOverlap(bodyMinY, bodyMaxY, bounds.minY, bounds.maxY)) {
+							continue;
+						}
+						if (testSurfaceY > currentSurfaceY + 0.001 && testSurfaceY <= maxClimbSurfaceY && testX >= bounds.minX - playerRadius && testX <= bounds.maxX + playerRadius && testZ >= bounds.minZ - playerRadius && testZ <= bounds.maxZ + playerRadius) {
+							targetY = Math.max(targetY, testSurfaceY);
+							continue;
+						}
+						if (testX >= bounds.minX - playerRadius && testX <= bounds.maxX + playerRadius && testZ >= bounds.minZ - playerRadius && testZ <= bounds.maxZ + playerRadius) {
+							return null;
+						}
+					}
+					return {x: testX, y: targetY, z: testZ};
+				};
+				const fullStep = canOccupyPosition(nextX, nextZ);
+				if (fullStep) {
+					return fullStep;
+				}
+				const xOnlyStep = canOccupyPosition(nextX, currentZ);
+				if (xOnlyStep) {
+					horizontalVelocityZ = 0;
+					return xOnlyStep;
+				}
+				const zOnlyStep = canOccupyPosition(currentX, nextZ);
+				if (zOnlyStep) {
+					horizontalVelocityX = 0;
+					return zOnlyStep;
+				}
+				horizontalVelocityX = 0;
+				horizontalVelocityZ = 0;
+				return {x: currentX, y: currentY, z: currentZ};
+			};
+
+			const resolveVerticalMovement = function(previousY, nextY, x, z, playerHeight) {
+				let resolvedY = nextY;
+				let groundedBool = false;
+				let hitCeilingBool = false;
+				let supportingSurfaceY = getFloorHeightAtPosition(x, z, getMaxClimbSurfaceY(Math.max(previousY, resolvedY)));
+				const collisionBoxes = getCollisionBoxes();
+				for (let i = 0; i < collisionBoxes.length; i += 1) {
+					const bounds = getBoxBounds(collisionBoxes[i]);
+					if (x < bounds.minX - playerRadius || x > bounds.maxX + playerRadius || z < bounds.minZ - playerRadius || z > bounds.maxZ + playerRadius) {
+						continue;
+					}
+					if (jumpVelocity <= 0 && previousY >= bounds.maxY && resolvedY <= bounds.maxY) {
+						resolvedY = bounds.maxY;
+						groundedBool = true;
+						supportingSurfaceY = Math.max(supportingSurfaceY, bounds.maxY);
+					}
+					if (jumpVelocity > 0) {
+						const currentHeadY = previousY + playerHeight;
+						const nextHeadY = resolvedY + playerHeight;
+						if (currentHeadY <= bounds.minY && nextHeadY >= bounds.minY) {
+							resolvedY = Math.min(resolvedY, bounds.minY - playerHeight);
+							hitCeilingBool = true;
+						}
+					}
+				}
+				if (supportingSurfaceY > -Infinity && jumpVelocity <= 0 && resolvedY <= supportingSurfaceY) {
+					resolvedY = supportingSurfaceY;
+					groundedBool = true;
+				}
+				return {
+					y: resolvedY,
+					groundedBool: groundedBool,
+					hitCeilingBool: hitCeilingBool
+				};
+			};
+
 
 			const dotVec3 = function(ax, ay, az, bx, by, bz) {
 				return ax * bx + ay * by + az * bz;
@@ -461,11 +626,36 @@
 				]);
 			};
 
+			const multiplyMatrices = function(a, b) {
+				const out = new Float32Array(16);
+				for (let column = 0; column < 4; column += 1) {
+					for (let row = 0; row < 4; row += 1) {
+						out[column * 4 + row] =
+							a[0 * 4 + row] * b[column * 4 + 0] +
+							a[1 * 4 + row] * b[column * 4 + 1] +
+							a[2 * 4 + row] * b[column * 4 + 2] +
+							a[3 * 4 + row] * b[column * 4 + 3];
+					}
+				}
+				return out;
+			};
+
 			const translateScale = function(tx, ty, tz, sx, sy, sz) {
 				return new Float32Array([
 					sx, 0, 0, 0,
 					0, sy, 0, 0,
 					0, 0, sz, 0,
+					tx, ty, tz, 1
+				]);
+			};
+
+			const translateRotateYScale = function(tx, ty, tz, yaw, sx, sy, sz) {
+				const cosYaw = Math.cos(yaw);
+				const sinYaw = Math.sin(yaw);
+				return new Float32Array([
+					cosYaw * sx, 0, -sinYaw * sx, 0,
+					0, sy, 0, 0,
+					sinYaw * sz, 0, cosYaw * sz, 0,
 					tx, ty, tz, 1
 				]);
 			};
@@ -533,14 +723,22 @@
 			};
 
 			const getAudioReactiveFloorColors = function() {
-				const audioLevel = backgroundRenderer && backgroundRenderer.getAudioLevel ? clampNumber(backgroundRenderer.getAudioLevel(), 0, 1) : 0;
+				const audioMetrics = backgroundRenderer && backgroundRenderer.getAudioMetrics ? backgroundRenderer.getAudioMetrics() : {level: 0, peak: 0, transient: 0, beatPulse: 0};
+				const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
+				const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
+				const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
+				const transientLevel = clampNumber(audioMetrics.transient || 0, 0, 1);
 				const baseHue = (sceneTimeSeconds * 0.03) % 1;
-				const floorRgb = hslToRgb(baseHue, lerpNumber(0.45, 0.95, audioLevel), lerpNumber(0.26, 0.58, audioLevel));
-				const gridRgb = hslToRgb((baseHue + 0.08) % 1, lerpNumber(0.55, 1, audioLevel), lerpNumber(0.48, 0.74, audioLevel));
+				const floorDrive = clampNumber(audioLevel * 0.72 + audioPeak * 0.28 + beatPulse * 0.4, 0, 1);
+				const floorRgb = hslToRgb((baseHue + beatPulse * 0.03) % 1, lerpNumber(0.45, 0.98, floorDrive), lerpNumber(0.26, 0.66, floorDrive));
+				const gridRgb = hslToRgb((baseHue + 0.08 + beatPulse * 0.05) % 1, lerpNumber(0.55, 1, floorDrive), lerpNumber(0.48, 0.82, clampNumber(floorDrive + transientLevel, 0, 1)));
 				return {
 					audioLevel: audioLevel,
+					audioPeak: audioPeak,
+					beatPulse: beatPulse,
+					transient: transientLevel,
 					floor: [floorRgb[0], floorRgb[1], floorRgb[2], floorAlpha],
-					grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(floorAlpha * 0.72, floorAlpha, audioLevel * 0.85), 0, 1)]
+					grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(floorAlpha * 0.72, floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
 				};
 			};
 
@@ -550,12 +748,12 @@
 				}
 				const offset = rotateXZ(-trackingOrigin.x, -trackingOrigin.z, -trackingHeading);
 				xrRefSpace = baseRefSpace.getOffsetReferenceSpace(new XRRigidTransform(
-					{x: offset.x, y: -trackingOrigin.y, z: offset.z},
+					{x: offset.x, y: -(trackingOrigin.y + effectiveEyeHeightMeters - currentBaseEyeHeightMeters), z: offset.z},
 					{x: 0, y: Math.sin(-trackingHeading * 0.5), z: 0, w: Math.cos(-trackingHeading * 0.5)}
 				));
 			};
 
-			const resetPlayerPose = function() {
+			const resetMovementState = function() {
 				trackingOrigin.x = 0;
 				trackingOrigin.y = 0;
 				trackingOrigin.z = 0;
@@ -563,8 +761,18 @@
 				jumpVelocity = 0;
 				horizontalVelocityX = 0;
 				horizontalVelocityZ = 0;
+				currentBaseEyeHeightMeters = defaultEyeHeight;
+				calibratedStandingEyeHeightMeters = defaultEyeHeight;
+				standingEyeHeightCalibratedBool = false;
+				stickEyeHeightOffsetMeters = 0;
+				effectiveEyeHeightMeters = defaultEyeHeight;
 				jumpCount = 0;
 				jumpPressedBool = false;
+				jumpHoldTimeSeconds = 0;
+			};
+
+			const resetPlayerPose = function() {
+				resetMovementState();
 				updateReferenceSpace();
 			};
 
@@ -668,6 +876,22 @@
 				gridBuffer = gl.createBuffer();
 				gl.bindBuffer(gl.ARRAY_BUFFER, gridBuffer);
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gridData), gl.STATIC_DRAW);
+				boxBuffer = gl.createBuffer();
+				gl.bindBuffer(gl.ARRAY_BUFFER, boxBuffer);
+				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+					-0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5,
+					-0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5,
+					-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, -0.5, 0.5,
+					-0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5,
+					-0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
+					-0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
+					-0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5,
+					-0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5,
+					-0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, 0.5,
+					-0.5, -0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5,
+					0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, -0.5,
+					0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5
+				]), gl.STATIC_DRAW);
 				menuBuffer = gl.createBuffer();
 				gl.bindBuffer(gl.ARRAY_BUFFER, menuBuffer);
 				gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
@@ -740,6 +964,17 @@
 				gl.disable(gl.CULL_FACE);
 				drawColor(floorBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, floorHalfSize, 1, floorHalfSize), reactiveColors.floor);
 				drawColor(gridBuffer, gridVertexCount, gl.LINES, identityMatrix(), reactiveColors.grid);
+				for (let i = 0; i < levelBoxes.length; i += 1) {
+					const box = levelBoxes[i];
+					const pulse = clampNumber(reactiveColors.audioLevel * 0.4 + reactiveColors.beatPulse * 0.75 + reactiveColors.transient * 1.8, 0, 1);
+					const boxColor = [
+						clampNumber(box.color[0] + pulse * 0.25, 0, 1),
+						clampNumber(box.color[1] + pulse * 0.25, 0, 1),
+						clampNumber(box.color[2] + pulse * 0.25, 0, 1),
+						clampNumber(box.color[3] + reactiveColors.beatPulse * 0.12, 0.2, 0.95)
+					];
+					drawColor(boxBuffer, 36, gl.TRIANGLES, translateScale(box.x, box.y, box.z, box.width, box.height, box.depth), boxColor);
+				}
 				gl.enable(gl.CULL_FACE);
 			};
 
@@ -878,6 +1113,117 @@
 				backgroundRenderer.selectPreset(nextPresetIndex).then(updatePresetLabel);
 			};
 
+			const pickAxes = function(gamepad, preferSecondaryBool) {
+				const primaryX = gamepad.axes[0] || 0;
+				const primaryY = gamepad.axes[1] || 0;
+				const secondaryX = gamepad.axes[2] || 0;
+				const secondaryY = gamepad.axes[3] || 0;
+				if (gamepad.axes.length < 4) {
+					return {x: primaryX, y: primaryY};
+				}
+				const primaryStrength = Math.abs(primaryX) + Math.abs(primaryY);
+				const secondaryStrength = Math.abs(secondaryX) + Math.abs(secondaryY);
+				if (preferSecondaryBool) {
+					return secondaryStrength > 0.01 ? {x: secondaryX, y: secondaryY} : {x: primaryX, y: primaryY};
+				}
+				return primaryStrength > 0.01 ? {x: primaryX, y: primaryY} : {x: secondaryX, y: secondaryY};
+			};
+
+			const readLocomotionInput = function(frame) {
+				const locomotion = {
+					moveX: 0,
+					moveY: 0,
+					turnX: 0,
+					stanceInputY: 0,
+					jumpRequestBool: false,
+					airBoostActiveBool: false,
+					rightControllerBoostDir: null,
+					sprintActiveBool: false
+				};
+				const sources = xrSession ? xrSession.inputSources || [] : [];
+				for (let i = 0; i < sources.length; i += 1) {
+					const source = sources[i];
+					const gamepad = source.gamepad;
+					if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) {
+						continue;
+					}
+					if (source.handedness === "left") {
+						const moveAxes = pickAxes(gamepad, false);
+						locomotion.moveX = Math.abs(moveAxes.x) > stickDeadzone ? moveAxes.x : 0;
+						locomotion.moveY = Math.abs(moveAxes.y) > stickDeadzone ? moveAxes.y : 0;
+						locomotion.sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
+					}
+					if (source.handedness === "right") {
+						const turnAxes = pickAxes(gamepad, true);
+						locomotion.turnX = Math.abs(turnAxes.x) > stickDeadzone ? turnAxes.x : 0;
+						locomotion.stanceInputY = Math.abs(turnAxes.y) > stanceStickDeadzone && Math.abs(turnAxes.y) > Math.abs(turnAxes.x) + stanceVerticalDominanceMargin ? -turnAxes.y : 0;
+						locomotion.jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
+						locomotion.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
+						const targetRayPose = xrRefSpace ? frame.getPose(source.targetRaySpace, xrRefSpace) : null;
+						if (targetRayPose) {
+							const q = targetRayPose.transform.orientation;
+							locomotion.rightControllerBoostDir = normalizeVec3(
+								-(2 * (q.x * q.z + q.w * q.y)),
+								-(2 * (q.y * q.z - q.w * q.x)),
+								-(1 - 2 * (q.x * q.x + q.y * q.y))
+							);
+						}
+					}
+				}
+				return locomotion;
+			};
+
+			const updateEyeHeightFromInput = function(delta, viewerTransform, stanceInputY) {
+				const previousEffectiveEyeHeightMeters = effectiveEyeHeightMeters;
+				const previousStickEyeHeightOffsetMeters = stickEyeHeightOffsetMeters;
+				const previousBaseEyeHeightMeters = currentBaseEyeHeightMeters;
+				currentBaseEyeHeightMeters = viewerTransform.position && viewerTransform.position.y ? viewerTransform.position.y : defaultEyeHeight;
+				if (!standingEyeHeightCalibratedBool) {
+					calibratedStandingEyeHeightMeters = currentBaseEyeHeightMeters;
+					standingEyeHeightCalibratedBool = true;
+				}
+				const physicalEyeHeightMeters = defaultEyeHeight + (currentBaseEyeHeightMeters - calibratedStandingEyeHeightMeters);
+				const neutralEyeHeightMeters = Math.max(defaultEyeHeight, physicalEyeHeightMeters);
+				const minEyeHeightMeters = crouchMinEyeHeight;
+				const maxEyeHeightMeters = defaultEyeHeight + tiptoeEyeHeightBoost;
+				let nextEyeHeightMeters = clampNumber(physicalEyeHeightMeters + stickEyeHeightOffsetMeters, minEyeHeightMeters, maxEyeHeightMeters);
+				if (stanceInputY > 0) {
+					nextEyeHeightMeters = Math.min(maxEyeHeightMeters, nextEyeHeightMeters + stanceInputY * crouchSpeed * delta);
+				} else if (stanceInputY < 0) {
+					nextEyeHeightMeters = Math.max(minEyeHeightMeters, nextEyeHeightMeters + stanceInputY * crouchSpeed * delta);
+				} else if (nextEyeHeightMeters > neutralEyeHeightMeters) {
+					nextEyeHeightMeters = Math.max(neutralEyeHeightMeters, nextEyeHeightMeters - crouchSpeed * delta);
+				}
+				effectiveEyeHeightMeters = nextEyeHeightMeters;
+				stickEyeHeightOffsetMeters = effectiveEyeHeightMeters - physicalEyeHeightMeters;
+				return {
+					heightChangedBool: Math.abs(effectiveEyeHeightMeters - previousEffectiveEyeHeightMeters) > 0.0001,
+					offsetChangedBool: Math.abs(stickEyeHeightOffsetMeters - previousStickEyeHeightOffsetMeters) > 0.0001,
+					baseHeightChangedBool: Math.abs(currentBaseEyeHeightMeters - previousBaseEyeHeightMeters) > 0.0001
+				};
+			};
+
+			const applyWalkingMovement = function(delta, moveX, moveY, worldYaw, playerHeight, sprintActiveBool) {
+				if (moveX === 0 && moveY === 0) {
+					return false;
+				}
+				const cosYaw = Math.cos(worldYaw);
+				const sinYaw = Math.sin(worldYaw);
+				const movementSpeed = walkSpeed * (sprintActiveBool ? sprintMultiplier : 1);
+				const moveStep = resolveHorizontalMovement(
+					trackingOrigin.x,
+					trackingOrigin.y,
+					trackingOrigin.z,
+					trackingOrigin.x + (moveY * sinYaw + moveX * cosYaw) * movementSpeed * delta,
+					trackingOrigin.z + (moveY * cosYaw - moveX * sinYaw) * movementSpeed * delta,
+					playerHeight
+				);
+				trackingOrigin.x = moveStep.x;
+				trackingOrigin.y = moveStep.y > trackingOrigin.y ? Math.min(moveStep.y, trackingOrigin.y + climbSpeed * delta) : moveStep.y;
+				trackingOrigin.z = moveStep.z;
+				return true;
+			};
+
 			const updateMenuInput = function(frame, pose) {
 				const sources = xrSession ? xrSession.inputSources || [] : [];
 				let togglePressedBool = false;
@@ -933,62 +1279,12 @@
 				}
 				const basePose = baseRefSpace ? frame.getViewerPose(baseRefSpace) : null;
 				const viewerTransform = basePose ? basePose.transform : pose.transform;
-				const pickAxes = function(gamepad, preferSecondaryBool) {
-					const primaryX = gamepad.axes[0] || 0;
-					const primaryY = gamepad.axes[1] || 0;
-					const secondaryX = gamepad.axes[2] || 0;
-					const secondaryY = gamepad.axes[3] || 0;
-					if (gamepad.axes.length < 4) {
-						return {x: primaryX, y: primaryY};
-					}
-					const primaryStrength = Math.abs(primaryX) + Math.abs(primaryY);
-					const secondaryStrength = Math.abs(secondaryX) + Math.abs(secondaryY);
-					if (preferSecondaryBool) {
-						return secondaryStrength > 0.01 ? {x: secondaryX, y: secondaryY} : {x: primaryX, y: primaryY};
-					}
-					return primaryStrength > 0.01 ? {x: primaryX, y: primaryY} : {x: secondaryX, y: secondaryY};
-				};
-				let moveX = 0;
-				let moveY = 0;
-				let turnX = 0;
-				let jumpRequestBool = false;
-				let airBoostActiveBool = false;
-				let rightControllerBoostDir = null;
-				let sprintActiveBool = false;
-				const sources = xrSession.inputSources || [];
-				for (let i = 0; i < sources.length; i += 1) {
-					const source = sources[i];
-					const gamepad = source.gamepad;
-					if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) {
-						continue;
-					}
-					if (source.handedness === "left") {
-						const moveAxes = pickAxes(gamepad, false);
-						moveX = Math.abs(moveAxes.x) > 0.08 ? moveAxes.x : 0;
-						moveY = Math.abs(moveAxes.y) > 0.08 ? moveAxes.y : 0;
-						sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-					}
-					if (source.handedness === "right") {
-						const turnAxes = pickAxes(gamepad, true);
-						turnX = Math.abs(turnAxes.x) > 0.08 ? turnAxes.x : 0;
-						jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
-						airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-						const targetRayPose = frame.getPose(source.targetRaySpace, xrRefSpace);
-						if (targetRayPose) {
-							const q = targetRayPose.transform.orientation;
-							rightControllerBoostDir = normalizeVec3(
-								-(2 * (q.x * q.z + q.w * q.y)),
-								-(2 * (q.y * q.z - q.w * q.x)),
-								-(1 - 2 * (q.x * q.x + q.y * q.y))
-							);
-						}
-					}
-				}
-				if (turnX !== 0 && basePose) {
+				const locomotion = readLocomotionInput(frame);
+				if (locomotion.turnX !== 0 && basePose) {
 					const offsetWorld = rotateXZ(viewerTransform.position.x, viewerTransform.position.z, trackingHeading);
 					const worldX = trackingOrigin.x + offsetWorld.x;
 					const worldZ = trackingOrigin.z + offsetWorld.z;
-					trackingHeading -= turnX * turnSpeed * delta;
+					trackingHeading -= locomotion.turnX * turnSpeed * delta;
 					const offsetWorldNext = rotateXZ(viewerTransform.position.x, viewerTransform.position.z, trackingHeading);
 					trackingOrigin.x = worldX - offsetWorldNext.x;
 					trackingOrigin.z = worldZ - offsetWorldNext.z;
@@ -999,60 +1295,87 @@
 					2 * (orientation.w * orientation.y + orientation.x * orientation.z),
 					1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
 				);
+				const eyeHeightState = updateEyeHeightFromInput(delta, viewerTransform, locomotion.stanceInputY);
 				const worldYaw = headYaw + trackingHeading;
-				if (moveX !== 0 || moveY !== 0) {
-					const cosYaw = Math.cos(worldYaw);
-					const sinYaw = Math.sin(worldYaw);
-					const movementSpeed = walkSpeed * (sprintActiveBool ? sprintMultiplier : 1);
-					trackingOrigin.x += (moveY * sinYaw + moveX * cosYaw) * movementSpeed * delta;
-					trackingOrigin.z += (moveY * cosYaw - moveX * sinYaw) * movementSpeed * delta;
+				const playerHeight = getPlayerHeight(viewerTransform);
+				const walkedBool = applyWalkingMovement(delta, locomotion.moveX, locomotion.moveY, worldYaw, playerHeight, locomotion.sprintActiveBool);
+				if (walkedBool) {
 					updateReferenceSpace();
 				}
-				const floorSupportBool = Math.abs(trackingOrigin.x) <= floorHalfSize && Math.abs(trackingOrigin.z) <= floorHalfSize;
-				const groundedBool = floorSupportBool && trackingOrigin.y <= 0.001 && jumpVelocity <= 0;
+				const floorHeight = getFloorHeightAtPosition(trackingOrigin.x, trackingOrigin.z, getMaxClimbSurfaceY(trackingOrigin.y));
+				const groundedBool = floorHeight > -Infinity && trackingOrigin.y <= floorHeight + 0.001 && jumpVelocity <= 0;
+				if (groundedBool) {
+					trackingOrigin.y = floorHeight > trackingOrigin.y ? Math.min(floorHeight, trackingOrigin.y + climbSpeed * delta) : floorHeight;
+				}
 				if (groundedBool) {
 					jumpCount = 0;
 				}
-				if (jumpRequestBool && !jumpPressedBool && (jumpMode === "multi" || jumpCount < doubleJumpMaxCount)) {
+				if (locomotion.jumpRequestBool && !jumpPressedBool && (jumpMode === "multi" || jumpCount < doubleJumpMaxCount)) {
 					jumpVelocity = jumpSpeed;
+					jumpHoldTimeSeconds = jumpHoldMaxSeconds;
 					if (jumpMode === "double") {
 						jumpCount += 1;
 					}
 				}
-				jumpPressedBool = jumpRequestBool;
-				if (!menuOpenBool && airBoostActiveBool && !groundedBool && rightControllerBoostDir) {
-					horizontalVelocityX += rightControllerBoostDir.x * airBoostSpeed * delta;
-					horizontalVelocityZ += rightControllerBoostDir.z * airBoostSpeed * delta;
-					jumpVelocity += rightControllerBoostDir.y * airBoostSpeed * delta;
+				if (locomotion.jumpRequestBool && jumpVelocity > 0 && jumpHoldTimeSeconds > 0) {
+					jumpVelocity += jumpHoldBoostSpeed * delta;
+					jumpHoldTimeSeconds = Math.max(0, jumpHoldTimeSeconds - delta);
+				}
+				if (!locomotion.jumpRequestBool) {
+					jumpHoldTimeSeconds = 0;
+				}
+				jumpPressedBool = locomotion.jumpRequestBool;
+				if (!menuOpenBool && locomotion.airBoostActiveBool && !groundedBool && locomotion.rightControllerBoostDir) {
+					horizontalVelocityX += locomotion.rightControllerBoostDir.x * airBoostSpeed * delta;
+					horizontalVelocityZ += locomotion.rightControllerBoostDir.z * airBoostSpeed * delta;
+					jumpVelocity += locomotion.rightControllerBoostDir.y * airBoostSpeed * delta;
 				}
 				const horizontalSpeed = Math.sqrt(horizontalVelocityX * horizontalVelocityX + horizontalVelocityZ * horizontalVelocityZ);
 				const drag = groundedBool ? groundMomentumDrag : airMomentumDrag;
 				const dragFactor = Math.max(0, 1 - drag * delta);
 				if (horizontalSpeed > 0.0001) {
-					trackingOrigin.x += horizontalVelocityX * delta;
-					trackingOrigin.z += horizontalVelocityZ * delta;
+					const resolvedMomentum = resolveHorizontalMovement(
+						trackingOrigin.x,
+						trackingOrigin.y,
+						trackingOrigin.z,
+						trackingOrigin.x + horizontalVelocityX * delta,
+						trackingOrigin.z + horizontalVelocityZ * delta,
+						playerHeight
+					);
+					trackingOrigin.x = resolvedMomentum.x;
+					trackingOrigin.y = resolvedMomentum.y > trackingOrigin.y ? Math.min(resolvedMomentum.y, trackingOrigin.y + climbSpeed * delta) : resolvedMomentum.y;
+					trackingOrigin.z = resolvedMomentum.z;
 					horizontalVelocityX *= dragFactor;
 					horizontalVelocityZ *= dragFactor;
 				} else {
 					horizontalVelocityX = 0;
 					horizontalVelocityZ = 0;
 				}
-				if (jumpVelocity !== 0 || trackingOrigin.y > 0 || !floorSupportBool) {
-					jumpVelocity += gravity * delta;
+				const supportHeight = getFloorHeightAtPosition(trackingOrigin.x, trackingOrigin.z, getMaxClimbSurfaceY(Math.max(trackingOrigin.y, trackingOrigin.y + jumpVelocity * delta)));
+				const floorSupportBool = supportHeight > -Infinity;
+				if (jumpVelocity !== 0 || trackingOrigin.y > supportHeight || !floorSupportBool) {
+					const previousY = trackingOrigin.y;
+					jumpVelocity += jumpGravity * delta;
 					trackingOrigin.y += jumpVelocity * delta;
+					const resolvedVertical = resolveVerticalMovement(previousY, trackingOrigin.y, trackingOrigin.x, trackingOrigin.z, playerHeight);
+					trackingOrigin.y = resolvedVertical.y;
+					if (resolvedVertical.hitCeilingBool && jumpVelocity > 0) {
+						jumpVelocity = 0;
+						jumpHoldTimeSeconds = 0;
+					}
 					if (trackingOrigin.y <= fallResetY) {
 						resetPlayerPose();
 						return;
 					}
-					if (floorSupportBool && trackingOrigin.y <= 0) {
-						trackingOrigin.y = 0;
+					if (resolvedVertical.groundedBool) {
 						jumpVelocity = 0;
+						jumpHoldTimeSeconds = 0;
 						horizontalVelocityX *= Math.max(0, 1 - groundMomentumDrag * delta);
 						horizontalVelocityZ *= Math.max(0, 1 - groundMomentumDrag * delta);
 						jumpCount = 0;
 					}
 					updateReferenceSpace();
-				} else if (horizontalSpeed > 0.0001) {
+				} else if (horizontalSpeed > 0.0001 || eyeHeightState.heightChangedBool || eyeHeightState.offsetChangedBool || eyeHeightState.baseHeightChangedBool) {
 					updateReferenceSpace();
 				}
 			};
@@ -1079,6 +1402,8 @@
 				const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
 				const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
 				const audioPercent = Math.round(reactiveColors.audioLevel * 100);
+				const peakPercent = Math.round(reactiveColors.audioPeak * 100);
+				const beatPercent = Math.round(reactiveColors.beatPulse * 100);
 				const contentLeft = menuCanvas.width * menuContentMinU;
 				const contentWidth = menuCanvas.width * (menuContentMaxU - menuContentMinU);
 				const headerGradient = menuCtx.createLinearGradient(0, 0, menuCanvas.width, menuCanvas.height);
@@ -1126,6 +1451,9 @@
 				menuCtx.fillRect(contentLeft + 160, 125, (contentWidth - 250) * reactiveColors.audioLevel, 14);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.2)";
 				menuCtx.strokeRect(contentLeft + 160, 125, contentWidth - 250, 14);
+				menuCtx.fillStyle = "#ffffff";
+				menuCtx.font = "18px Arial";
+				menuCtx.fillText("Peak " + peakPercent + "%  Beat " + beatPercent + "%", contentLeft + 20, 148);
 				menuCtx.fillStyle = "rgba(6,14,24,0.78)";
 				menuCtx.fillRect(contentLeft, 182, contentWidth, 164);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
@@ -1291,6 +1619,9 @@
 				if (floorAlpha > 0.001) {
 					drawFloor();
 				}
+				if (glbAssetManager) {
+					glbAssetManager.draw(currentView, currentProj);
+				}
 				drawMenu();
 				drawControllerRays();
 			};
@@ -1397,15 +1728,7 @@
 						})
 					});
 					baseRefSpace = await xrSession.requestReferenceSpace("local-floor");
-					trackingOrigin.x = 0;
-					trackingOrigin.y = 0;
-					trackingOrigin.z = 0;
-					trackingHeading = 0;
-					jumpVelocity = 0;
-					horizontalVelocityX = 0;
-					horizontalVelocityZ = 0;
-					jumpCount = 0;
-					jumpPressedBool = false;
+					resetMovementState();
 					menuTogglePressedBool = false;
 					triggerPressedByHand.clear();
 					updateReferenceSpace();
@@ -1485,6 +1808,22 @@
 			const init = async function() {
 				if (!initGl()) {
 					return;
+				}
+				if (window.createGlbAssetManager) {
+					try {
+						glbAssetManager = window.createGlbAssetManager({
+							gl: gl,
+							createProgram: createProgram,
+							identityMatrix: identityMatrix,
+							multiplyMatrices: multiplyMatrices,
+							translateRotateYScale: translateRotateYScale,
+							setStatus: setStatus
+						});
+						glbAssetManager.init();
+						await glbAssetManager.loadAssets(sceneGlbAssets);
+					} catch (error) {
+						setStatus(error.message || "glb init failed");
+					}
 				}
 				if (window.createToroidalBackgroundRenderer) {
 					backgroundRenderer = window.createToroidalBackgroundRenderer();
