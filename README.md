@@ -1,6 +1,6 @@
 # WebXR Visualizer Foundation
 
-Local WebXR prototype in plain HTML and vanilla JavaScript. The current focus is stable VR movement, jumping, headset menu interaction, and a Butterchurn-driven toroidal background that can react to live audio.
+Local WebXR prototype in plain HTML and vanilla JavaScript. The current focus is stable VR movement, jumping, headset menu interaction, and Butterchurn-driven XR visualizer modes that can react to live audio.
 
 ## Current Scope
 
@@ -19,16 +19,24 @@ Implemented currently:
 - simple collidable level geometry with platforms, walls, landing surfaces, ceiling checks, and smooth climbable obstacles
 - a textured goat model placed on the ground as a scene prop
 - automatic pose reset after falling out of bounds
-- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy/peak/beat feedback, and preset switching
-- Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 background sampling
-- toroidal fullscreen background pass driven by head orientation
+- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy/peak/beat feedback, visualizer-mode switching, and preset switching
+- Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 texture sampling in canvas-driven modes
+- toroidal fullscreen visualizer pass driven by head orientation
+- stereoscopic Butterchurn volume mode that reinterprets the active preset as layered depth shells per eye
+- modular visualizer architecture with a shared Butterchurn source, phase-aware mode modules, and a mode manager
 - audio input from shared screen/tab audio, a dedicated YouTube playlist tab, or microphone capture with beat/peak analysis
 
 ## Project Files
 
 - `index.html`: single-page app entry point and main XR logic
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
-- `xr-toroidal-background.js`: toroidal background renderer and Butterchurn bridge
+- `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes
+- `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
+- `xr-visualizer-source-butterchurn.js`: Butterchurn preset source, audio analysis, and canvas output
+- `xr-visualizer-manager.js`: mode registry, mode switching, and render-phase orchestration
+- `xr-visualizer-mode-fullscreen.js`: reusable fullscreen textured-mode helper for canvas-driven passes
+- `xr-visualizer-mode-toroidal.js`: toroidal pre-scene visualizer mode
+- `xr-visualizer-mode-stereo-volume.js`: stereoscopic fullscreen volume mode
 - `butterchurn.min.js`: bundled Butterchurn runtime
 - `butterchurnPresets.min.js`: bundled Butterchurn preset pack
 - `CHANGELOG.md`: notable user-facing changes
@@ -57,6 +65,7 @@ There is no build step and no backend.
 - `Use Microphone`: capture microphone audio
 - `Stop Audio`: disconnect the active audio source
 - `Prev Preset` / `Next Preset`: cycle Butterchurn presets
+- `Prev Mode` / `Next Mode`: cycle XR visualizer modes
 
 ## VR Controls
 
@@ -73,6 +82,8 @@ There is no build step and no backend.
 - Everything runs locally in the browser.
 - The project intentionally stays simple: one HTML entry point, plain JavaScript, no framework, no bundler.
 - Current work prioritizes XR locomotion and render-loop stability before deeper audiovisual features.
+- Current Butterchurn stereo depth is a V1 image-space interpretation of the preset output; a later V2 may interpret preset wave/shape data into explicit stereo geometry.
+- The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
 
 ## Development
 

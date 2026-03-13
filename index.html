@@ -7,7 +7,13 @@
 	<body>
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
-		<script src="xr-toroidal-background.js"></script>
+		<script src="xr-visualizer-utils.js"></script>
+		<script src="xr-visualizer-gl-utils.js"></script>
+		<script src="xr-visualizer-source-butterchurn.js"></script>
+		<script src="xr-visualizer-manager.js"></script>
+		<script src="xr-visualizer-mode-fullscreen.js"></script>
+		<script src="xr-visualizer-mode-toroidal.js"></script>
+		<script src="xr-visualizer-mode-stereo-volume.js"></script>
 		<script src="glb-asset-manager.js"></script>
 		<script>
 			document.body.style.backgroundColor = "#000020";
@@ -61,8 +67,10 @@
 			const menuSliderMinU = 0.18;
 			const menuSliderMaxU = 0.82;
 			const menuSliderHalfHeight = 0.055;
-			const presetRowTopV = 0.8;
-			const presetRowBottomV = 0.93;
+			const shaderModeRowTopV = 0.75;
+			const shaderModeRowBottomV = 0.83;
+			const presetRowTopV = 0.87;
+			const presetRowBottomV = 0.95;
 			const presetPrevMinU = 0.08;
 			const presetPrevMaxU = 0.22;
 			const presetNextMinU = 0.78;
@@ -116,6 +124,7 @@
 			let eyeDistanceHoverBool = false;
 			let floorAlphaHoverBool = false;
 			let hoveredJumpMode = "";
+			let hoveredShaderModeAction = "";
 			let hoveredPresetAction = "";
 			let sceneTimeSeconds = 0;
 			let colorProgram = null;
@@ -140,7 +149,7 @@
 			let boxBuffer = null;
 			let menuTexture = null;
 			let glbAssetManager = null;
-			let backgroundRenderer = null;
+			let visualizerRenderer = null;
 			let activeAudioStream = null;
 			let activeAudioSourceName = "";
 			let youtubeWindowHandle = null;
@@ -304,6 +313,33 @@
 			presetLabel.style.fontSize = "13px";
 			presetSection.appendChild(presetLabel);
 
+			const shaderModeSectionLabel = document.createElement("div");
+			shaderModeSectionLabel.textContent = "Visualizer Mode";
+			shaderModeSectionLabel.style.fontSize = "12px";
+			shaderModeSectionLabel.style.fontWeight = "bold";
+			shaderModeSectionLabel.style.color = "#00ff00";
+			shaderModeSectionLabel.style.marginTop = "4px";
+			presetSection.appendChild(shaderModeSectionLabel);
+
+			const shaderModeRow = document.createElement("div");
+			shaderModeRow.style.display = "flex";
+			shaderModeRow.style.flexWrap = "wrap";
+			shaderModeRow.style.gap = "8px";
+			presetSection.appendChild(shaderModeRow);
+
+			const prevShaderModeButton = document.createElement("button");
+			prevShaderModeButton.textContent = "Prev Mode";
+			shaderModeRow.appendChild(prevShaderModeButton);
+
+			const nextShaderModeButton = document.createElement("button");
+			nextShaderModeButton.textContent = "Next Mode";
+			shaderModeRow.appendChild(nextShaderModeButton);
+
+			const shaderModeLabel = document.createElement("div");
+			shaderModeLabel.textContent = "Visualizer Mode: loading...";
+			shaderModeLabel.style.fontSize = "13px";
+			presetSection.appendChild(shaderModeLabel);
+
 
 			const canvas = document.createElement("canvas");
 			canvas.style.display = "block";
@@ -315,21 +351,25 @@
 				status.textContent = "XR: " + text;
 			};
 
-			const updatePresetLabel = function() {
-				if (!backgroundRenderer) {
+			const updateVisualizerLabels = function() {
+				if (!visualizerRenderer) {
 					presetLabel.textContent = "Preset: none";
+					shaderModeLabel.textContent = "Visualizer Mode: none";
 					return;
 				}
-				const presetNames = backgroundRenderer.getPresetNames();
-				const currentPresetIndex = backgroundRenderer.getCurrentPresetIndex();
+				const presetNames = visualizerRenderer.getPresetNames();
+				const currentPresetIndex = visualizerRenderer.getCurrentPresetIndex();
 				presetLabel.textContent = "Preset: " + (presetNames[currentPresetIndex] || "none");
+				const shaderModeNames = visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"];
+				const currentShaderModeIndex = visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0;
+				shaderModeLabel.textContent = "Visualizer Mode: " + (shaderModeNames[currentShaderModeIndex] || "none");
 			};
 
-			const activateBackgroundAudio = function() {
-				if (!backgroundRenderer || !backgroundRenderer.activateAudio) {
+			const activateVisualizerAudio = function() {
+				if (!visualizerRenderer || !visualizerRenderer.activateAudio) {
 					return Promise.resolve();
 				}
-				return backgroundRenderer.activateAudio().catch(function() {
+				return visualizerRenderer.activateAudio().catch(function() {
 				});
 			};
 
@@ -344,8 +384,8 @@
 				activeAudioSourceName = sourceName;
 				audioLabel.textContent = "Audio: " + sourceName;
 				stopAudioButton.disabled = !stream;
-				if (backgroundRenderer) {
-					backgroundRenderer.setAudioStream(stream);
+				if (visualizerRenderer) {
+					visualizerRenderer.setAudioStream(stream);
 				}
 				if (!stream) {
 					return;
@@ -358,8 +398,8 @@
 							activeAudioSourceName = "";
 							audioLabel.textContent = "Audio: none";
 							stopAudioButton.disabled = true;
-							if (backgroundRenderer) {
-								backgroundRenderer.setAudioStream(null);
+							if (visualizerRenderer) {
+								visualizerRenderer.setAudioStream(null);
 							}
 						}
 					});
@@ -723,7 +763,7 @@
 			};
 
 			const getAudioReactiveFloorColors = function() {
-				const audioMetrics = backgroundRenderer && backgroundRenderer.getAudioMetrics ? backgroundRenderer.getAudioMetrics() : {level: 0, peak: 0, transient: 0, beatPulse: 0};
+				const audioMetrics = visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : {level: 0, peak: 0, transient: 0, beatPulse: 0};
 				const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
 				const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
 				const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
@@ -1032,12 +1072,20 @@
 				const floorAlphaSliderBool = v >= floorAlphaSliderV - menuSliderHalfHeight && v <= floorAlphaSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
 				const eyeDistanceSliderBool = v >= eyeDistanceSliderV - menuSliderHalfHeight && v <= eyeDistanceSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
 				let jumpModeHit = "";
+				let shaderModeAction = "";
 				let presetAction = "";
 				if (v >= jumpModeButtonTopV && v <= jumpModeButtonBottomV) {
 					if (u >= jumpModeDoubleMinU && u <= jumpModeDoubleMaxU) {
 						jumpModeHit = "double";
 					} else if (u >= jumpModeMultiMinU && u <= jumpModeMultiMaxU) {
 						jumpModeHit = "multi";
+					}
+				}
+				if (v >= shaderModeRowTopV && v <= shaderModeRowBottomV) {
+					if (u >= presetPrevMinU && u <= presetPrevMaxU) {
+						shaderModeAction = "prev";
+					} else if (u >= presetNextMinU && u <= presetNextMaxU) {
+						shaderModeAction = "next";
 					}
 				}
 				if (v >= presetRowTopV && v <= presetRowBottomV) {
@@ -1047,7 +1095,7 @@
 						presetAction = "next";
 					}
 				}
-				return {distance: distance, point: point, u: u, floorAlphaSliderBool: floorAlphaSliderBool, eyeDistanceSliderBool: eyeDistanceSliderBool, jumpMode: jumpModeHit, presetAction: presetAction};
+				return {distance: distance, point: point, u: u, floorAlphaSliderBool: floorAlphaSliderBool, eyeDistanceSliderBool: eyeDistanceSliderBool, jumpMode: jumpModeHit, shaderModeAction: shaderModeAction, presetAction: presetAction};
 			};
 
 			const updateControllerRays = function(frame) {
@@ -1055,6 +1103,7 @@
 				eyeDistanceHoverBool = false;
 				floorAlphaHoverBool = false;
 				hoveredJumpMode = "";
+				hoveredShaderModeAction = "";
 				hoveredPresetAction = "";
 				if (!xrSession || !xrRefSpace) {
 					return;
@@ -1093,6 +1142,7 @@
 						eyeDistanceHoverBool = hit.eyeDistanceSliderBool || eyeDistanceHoverBool;
 						floorAlphaHoverBool = hit.floorAlphaSliderBool || floorAlphaHoverBool;
 						hoveredJumpMode = hit.jumpMode || hoveredJumpMode;
+						hoveredShaderModeAction = hit.shaderModeAction || hoveredShaderModeAction;
 						hoveredPresetAction = hit.presetAction || hoveredPresetAction;
 					}
 					controllerRays.push(ray);
@@ -1100,17 +1150,31 @@
 			};
 
 			const cyclePreset = function(direction) {
-				if (!backgroundRenderer) {
+				if (!visualizerRenderer) {
 					return;
 				}
-				const presetNames = backgroundRenderer.getPresetNames();
+				const presetNames = visualizerRenderer.getPresetNames();
 				const presetCount = presetNames.length;
 				if (!presetCount) {
 					return;
 				}
-				let nextPresetIndex = backgroundRenderer.getCurrentPresetIndex();
+				let nextPresetIndex = visualizerRenderer.getCurrentPresetIndex();
 				nextPresetIndex = (nextPresetIndex + direction + presetCount) % presetCount;
-				backgroundRenderer.selectPreset(nextPresetIndex).then(updatePresetLabel);
+				visualizerRenderer.selectPreset(nextPresetIndex).then(updateVisualizerLabels);
+			};
+
+			const cycleShaderMode = function(direction) {
+				if (!visualizerRenderer || !visualizerRenderer.getModeNames || !visualizerRenderer.selectMode) {
+					return;
+				}
+				const shaderModeNames = visualizerRenderer.getModeNames();
+				const shaderModeCount = shaderModeNames.length;
+				if (!shaderModeCount) {
+					return;
+				}
+				let nextShaderModeIndex = visualizerRenderer.getCurrentModeIndex();
+				nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
+				visualizerRenderer.selectMode(nextShaderModeIndex).then(updateVisualizerLabels);
 			};
 
 			const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -1251,6 +1315,9 @@
 					const wasTriggerPressedBool = triggerPressedByHand.get(hand) || false;
 					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.jumpMode) {
 						jumpMode = ray.hit.jumpMode;
+					}
+					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.shaderModeAction) {
+						cycleShaderMode(ray.hit.shaderModeAction === "prev" ? -1 : 1);
 					}
 					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.presetAction) {
 						cyclePreset(ray.hit.presetAction === "prev" ? -1 : 1);
@@ -1566,16 +1633,37 @@
 				menuCtx.textAlign = "center";
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 32px Arial";
-				menuCtx.fillText("Toroidal Preset", menuCanvas.width * 0.5, 734);
-				const presetNames = backgroundRenderer ? backgroundRenderer.getPresetNames() : ["Preset 1"];
-				const currentPresetIndex = backgroundRenderer ? backgroundRenderer.getCurrentPresetIndex() : 0;
-				const presetTop = menuCanvas.height * presetRowTopV;
-				const presetHeight = menuCanvas.height * (presetRowBottomV - presetRowTopV);
+				menuCtx.fillText("Visualizer Mode", menuCanvas.width * 0.5, 704);
+				const shaderModeNames = visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"];
+				const currentShaderModeIndex = visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0;
+				const shaderModeTop = menuCanvas.height * shaderModeRowTopV;
+				const shaderModeHeight = menuCanvas.height * (shaderModeRowBottomV - shaderModeRowTopV);
 				const prevX = menuCanvas.width * presetPrevMinU;
 				const prevWidth = menuCanvas.width * (presetPrevMaxU - presetPrevMinU);
 				const nextX = menuCanvas.width * presetNextMinU;
 				const nextWidth = menuCanvas.width * (presetNextMaxU - presetNextMinU);
 				const centerX = menuCanvas.width * 0.5;
+				menuCtx.fillStyle = hoveredShaderModeAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
+				menuCtx.fillRect(prevX, shaderModeTop, prevWidth, shaderModeHeight);
+				menuCtx.strokeRect(prevX, shaderModeTop, prevWidth, shaderModeHeight);
+				menuCtx.fillStyle = hoveredShaderModeAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
+				menuCtx.fillRect(nextX, shaderModeTop, nextWidth, shaderModeHeight);
+				menuCtx.strokeRect(nextX, shaderModeTop, nextWidth, shaderModeHeight);
+				menuCtx.fillStyle = "#ffffff";
+				menuCtx.font = "bold 56px Arial";
+				menuCtx.fillText("<", prevX + prevWidth * 0.5, shaderModeTop + 2);
+				menuCtx.fillText(">", nextX + nextWidth * 0.5, shaderModeTop + 2);
+				drawCenteredFittedText(shaderModeNames[currentShaderModeIndex] || "No mode", centerX, shaderModeTop + 18, menuCanvas.width * 0.48, 26, 16, "#ffffff", "bold");
+				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
+				menuCtx.font = "20px Arial";
+				menuCtx.fillText((currentShaderModeIndex + 1) + " / " + shaderModeNames.length, centerX, shaderModeTop + 56);
+				menuCtx.fillStyle = "#ffffff";
+				menuCtx.font = "bold 32px Arial";
+				menuCtx.fillText("Butterchurn Preset", menuCanvas.width * 0.5, 826);
+				const presetNames = visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"];
+				const currentPresetIndex = visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0;
+				const presetTop = menuCanvas.height * presetRowTopV;
+				const presetHeight = menuCanvas.height * (presetRowBottomV - presetRowTopV);
 				menuCtx.fillStyle = hoveredPresetAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
 				menuCtx.fillRect(prevX, presetTop, prevWidth, presetHeight);
 				menuCtx.strokeRect(prevX, presetTop, prevWidth, presetHeight);
@@ -1584,12 +1672,12 @@
 				menuCtx.strokeRect(nextX, presetTop, nextWidth, presetHeight);
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 56px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 14);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 14);
-				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, presetTop + 24, menuCanvas.width * 0.48, 28, 18, "#ffffff", "bold");
+				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 2);
+				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 2);
+				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, presetTop + 18, menuCanvas.width * 0.48, 26, 16, "#ffffff", "bold");
 				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "22px Arial";
-				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 70);
+				menuCtx.font = "20px Arial";
+				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 56);
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 				gl.disable(gl.CULL_FACE);
@@ -1613,8 +1701,8 @@
 			};
 
 			const renderScene = function() {
-				if (backgroundRenderer) {
-					backgroundRenderer.draw();
+				if (visualizerRenderer) {
+					visualizerRenderer.drawPreScene();
 				}
 				if (floorAlpha > 0.001) {
 					drawFloor();
@@ -1622,8 +1710,14 @@
 				if (glbAssetManager) {
 					glbAssetManager.draw(currentView, currentProj);
 				}
+				if (visualizerRenderer) {
+					visualizerRenderer.drawWorld();
+				}
 				drawMenu();
 				drawControllerRays();
+				if (visualizerRenderer) {
+					visualizerRenderer.drawPostScene();
+				}
 			};
 
 			const renderView = function(view, viewport, pose) {
@@ -1632,8 +1726,8 @@
 				invertRigidViewMatrix(adjustedView, view.transform.matrix, eye.x, eye.y, eye.z);
 				copyMatrix(currentView, adjustedView);
 				copyMatrix(currentProj, view.projectionMatrix);
-				if (backgroundRenderer) {
-					backgroundRenderer.setEyeProjection(view.projectionMatrix);
+				if (visualizerRenderer) {
+					visualizerRenderer.setEyeProjection(view.projectionMatrix);
 				}
 				renderScene();
 			};
@@ -1650,10 +1744,10 @@
 				applyLocomotion(delta, pose, frame);
 				const renderPose = frame.getViewerPose(xrRefSpace) || pose;
 				updateMenuInput(frame, renderPose);
-				if (backgroundRenderer) {
-					backgroundRenderer.update(time * 0.001);
+				if (visualizerRenderer) {
+					visualizerRenderer.update(time * 0.001);
 					if (renderPose.transform && renderPose.views.length) {
-						backgroundRenderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
+						visualizerRenderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 					}
 				}
 				const baseLayer = xrSession.renderState.baseLayer;
@@ -1673,8 +1767,8 @@
 				sceneTimeSeconds = previewTime;
 				canvas.width = window.innerWidth * window.devicePixelRatio;
 				canvas.height = window.innerHeight * window.devicePixelRatio;
-				if (backgroundRenderer) {
-					backgroundRenderer.update(previewTime);
+				if (visualizerRenderer) {
+					visualizerRenderer.update(previewTime);
 				}
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.viewport(0, 0, canvas.width, canvas.height);
@@ -1682,8 +1776,8 @@
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 				copyMatrix(currentView, previewCameraMatrix(previewTime));
 				copyMatrix(currentProj, perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
-				if (backgroundRenderer) {
-					backgroundRenderer.setViewFromMatrix(currentView, currentProj);
+				if (visualizerRenderer) {
+					visualizerRenderer.setViewFromMatrix(currentView, currentProj);
 				}
 				renderScene();
 				window.requestAnimationFrame(renderPreview);
@@ -1705,8 +1799,8 @@
 				exitButton.disabled = true;
 				enterButton.disabled = false;
 				setStatus(navigator.xr ? "ready" : "headset not detected.");
-				if (backgroundRenderer) {
-					backgroundRenderer.onSessionEnd();
+				if (visualizerRenderer) {
+					visualizerRenderer.onSessionEnd();
 				}
 				horizontalVelocityX = 0;
 				horizontalVelocityZ = 0;
@@ -1736,8 +1830,8 @@
 					exitButton.disabled = false;
 					setStatus("session running");
 					lastRenderTime = 0;
-					if (backgroundRenderer) {
-						backgroundRenderer.onSessionStart();
+					if (visualizerRenderer) {
+						visualizerRenderer.onSessionStart();
 					}
 					frameHandle = xrSession.requestAnimationFrame(renderXr);
 				} catch (error) {
@@ -1748,27 +1842,27 @@
 
 			enterButton.addEventListener("click", function() {
 				if (navigator.xr && gl && !xrSession) {
-					activateBackgroundAudio();
+					activateVisualizerAudio();
 					startSession();
 				}
 			});
 
 			audioButton.addEventListener("click", function() {
-				activateBackgroundAudio();
+				activateVisualizerAudio();
 				requestDisplayAudio().catch(function(error) {
 					setStatus(error.message || "audio capture failed");
 				});
 			});
 
 			youtubeAudioButton.addEventListener("click", function() {
-				activateBackgroundAudio();
+				activateVisualizerAudio();
 				requestYoutubePlaylistAudio().catch(function(error) {
 					setStatus(error.message || "youtube audio failed");
 				});
 			});
 
 			microphoneButton.addEventListener("click", function() {
-				activateBackgroundAudio();
+				activateVisualizerAudio();
 				requestMicrophoneAudio().catch(function(error) {
 					setStatus(error.message || "microphone capture failed");
 				});
@@ -1780,13 +1874,21 @@
 			});
 
 			prevPresetButton.addEventListener("click", function() {
-				activateBackgroundAudio();
+				activateVisualizerAudio();
 				cyclePreset(-1);
 			});
 
 			nextPresetButton.addEventListener("click", function() {
-				activateBackgroundAudio();
+				activateVisualizerAudio();
 				cyclePreset(1);
+			});
+
+			prevShaderModeButton.addEventListener("click", function() {
+				cycleShaderMode(-1);
+			});
+
+			nextShaderModeButton.addEventListener("click", function() {
+				cycleShaderMode(1);
 			});
 
 			exitButton.addEventListener("click", function() {
@@ -1802,8 +1904,8 @@
 				}
 			});
 
-			document.addEventListener("pointerdown", activateBackgroundAudio, {passive: true});
-			document.addEventListener("keydown", activateBackgroundAudio);
+			document.addEventListener("pointerdown", activateVisualizerAudio, {passive: true});
+			document.addEventListener("keydown", activateVisualizerAudio);
 
 			const init = async function() {
 				if (!initGl()) {
@@ -1825,11 +1927,11 @@
 						setStatus(error.message || "glb init failed");
 					}
 				}
-				if (window.createToroidalBackgroundRenderer) {
-					backgroundRenderer = window.createToroidalBackgroundRenderer();
-					backgroundRenderer.init({gl: gl});
-					backgroundRenderer.setAudioStream(activeAudioStream);
-					updatePresetLabel();
+				if (window.createXrVisualizerManager) {
+					visualizerRenderer = window.createXrVisualizerManager();
+					visualizerRenderer.init({gl: gl});
+					visualizerRenderer.setAudioStream(activeAudioStream);
+					updateVisualizerLabels();
 				}
 				if (!navigator.xr) {
 					enterButton.disabled = true;
