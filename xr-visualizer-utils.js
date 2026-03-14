@@ -57,12 +57,33 @@
 		};
 	};
 
+	const extractCameraPositionFromViewMatrix = function(viewMatrix) {
+		const rightX = viewMatrix[0];
+		const rightY = viewMatrix[4];
+		const rightZ = viewMatrix[8];
+		const upX = viewMatrix[1];
+		const upY = viewMatrix[5];
+		const upZ = viewMatrix[9];
+		const forwardX = -viewMatrix[2];
+		const forwardY = -viewMatrix[6];
+		const forwardZ = -viewMatrix[10];
+		const tx = viewMatrix[12];
+		const ty = viewMatrix[13];
+		const tz = viewMatrix[14];
+		return {
+			x: -(rightX * tx + rightY * ty + rightZ * tz),
+			y: -(upX * tx + upY * ty + upZ * tz),
+			z: -((-forwardX) * tx + (-forwardY) * ty + (-forwardZ) * tz)
+		};
+	};
+
 	window.xrVisualizerUtils = {
 		clampNumber: clampNumber,
 		wrapUnit: wrapUnit,
 		unwrapAngle: unwrapAngle,
 		extractForwardYawPitch: extractForwardYawPitch,
 		extractForwardYawPitchFromQuaternion: extractForwardYawPitchFromQuaternion,
-		extractProjectionFov: extractProjectionFov
+		extractProjectionFov: extractProjectionFov,
+		extractCameraPositionFromViewMatrix: extractCameraPositionFromViewMatrix
 	};
 })();

@@ -21,13 +21,16 @@
 			audioAnalyser: null,
 			audioAnalyserData: null,
 			audioStream: null,
+			audioSourceKind: "none",
+			debugAudioNodes: null,
 			activatedBool: false,
 			presetNames: [],
 			presetMap: {},
 			currentPresetIndex: 0,
 			currentWidth: 0,
 			currentHeight: 0,
-			lastRenderTimeSeconds: 0,
+			lastFrameTimeSeconds: 0,
+			lastCanvasRenderTimeSeconds: 0,
 			audioLevel: 0,
 			audioPeak: 0,
 			audioBassLevel: 0,
@@ -73,7 +76,9 @@
 				});
 				this.visualizer.setInternalMeshSize(32, 24);
 				this.selectPreset(this.currentPresetIndex, 0);
-				if (this.audioStream) {
+				if (this.audioSourceKind === "debug") {
+					this.startDebugAudio();
+				} else if (this.audioStream) {
 					this.setAudioStream(this.audioStream);
 				}
 				if (this.audioContext.state === "suspended") {
@@ -109,14 +114,36 @@
 				this.beatPulse = 0;
 				this.beatCooldownSeconds = 0;
 			},
-			setAudioStream: function(stream) {
-				if (this.audioStream !== stream) {
-					this.audioVersion += 1;
-				}
-				this.audioStream = stream;
-				if (!this.visualizer || !this.audioContext) {
+			ensureAudioAnalyser: function() {
+				if (this.audioAnalyser) {
 					return;
 				}
+				this.audioAnalyser = this.audioContext.createAnalyser();
+				this.audioAnalyser.fftSize = 256;
+				this.audioAnalyser.smoothingTimeConstant = 0.82;
+				this.audioAnalyserData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+			},
+			destroyDebugAudioNodes: function() {
+				if (!this.debugAudioNodes) {
+					return;
+				}
+				const stopNodes = this.debugAudioNodes.stopNodes || [];
+				for (let i = 0; i < stopNodes.length; i += 1) {
+					try {
+						stopNodes[i].stop();
+					} catch (error) {
+					}
+				}
+				const disconnectNodes = this.debugAudioNodes.disconnectNodes || [];
+				for (let i = 0; i < disconnectNodes.length; i += 1) {
+					try {
+						disconnectNodes[i].disconnect();
+					} catch (error) {
+					}
+				}
+				this.debugAudioNodes = null;
+			},
+			disconnectCurrentAudioInput: function() {
 				if (this.audioNode) {
 					try {
 						this.visualizer.disconnectAudio(this.audioNode);
@@ -128,44 +155,120 @@
 					}
 					this.audioNode = null;
 				}
-				if (!stream) {
-					this.resetAudioMetrics();
-					return;
-				}
-				if (!this.audioAnalyser) {
-					this.audioAnalyser = this.audioContext.createAnalyser();
-					this.audioAnalyser.fftSize = 256;
-					this.audioAnalyser.smoothingTimeConstant = 0.82;
-					this.audioAnalyserData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
-				}
-				this.audioNode = this.audioContext.createMediaStreamSource(stream);
+				this.destroyDebugAudioNodes();
+			},
+			attachAudioNode: function(node) {
+				this.ensureAudioAnalyser();
+				this.audioNode = node;
 				this.audioNode.connect(this.audioAnalyser);
 				this.visualizer.connectAudio(this.audioNode);
 			},
-			selectPreset: function(index, blendTimeSeconds) {
-				if (!this.presetNames.length) {
-					return Promise.resolve();
-				}
-				const nextPresetIndex = (index + this.presetNames.length) % this.presetNames.length;
-				if (nextPresetIndex !== this.currentPresetIndex) {
-					this.currentPresetIndex = nextPresetIndex;
-					this.presetVersion += 1;
-				}
-				if (!this.visualizer) {
-					return Promise.resolve();
-				}
-				this.visualizer.loadPreset(this.presetMap[this.presetNames[this.currentPresetIndex]], blendTimeSeconds || 0);
-				return Promise.resolve();
+			createDebugAudioNodes: function() {
+				const mixGain = this.audioContext.createGain();
+				mixGain.gain.value = 0.75;
+
+				const bassOsc = this.audioContext.createOscillator();
+				bassOsc.type = "sine";
+				bassOsc.frequency.value = 55;
+				const bassGain = this.audioContext.createGain();
+				bassGain.gain.value = 0.055;
+				const bassLfo = this.audioContext.createOscillator();
+				bassLfo.type = "triangle";
+				bassLfo.frequency.value = 1.85;
+				const bassLfoGain = this.audioContext.createGain();
+				bassLfoGain.gain.value = 0.11;
+				bassOsc.connect(bassGain);
+				bassGain.connect(mixGain);
+				bassLfo.connect(bassLfoGain);
+				bassLfoGain.connect(bassGain.gain);
+
+				const kickOsc = this.audioContext.createOscillator();
+				kickOsc.type = "triangle";
+				kickOsc.frequency.value = 43;
+				const kickGain = this.audioContext.createGain();
+				kickGain.gain.value = 0;
+				const kickBase = this.audioContext.createConstantSource();
+				kickBase.offset.value = 0.03;
+				const kickLfo = this.audioContext.createOscillator();
+				kickLfo.type = "square";
+				kickLfo.frequency.value = 2.05;
+				const kickLfoGain = this.audioContext.createGain();
+				kickLfoGain.gain.value = 0.1;
+				kickOsc.connect(kickGain);
+				kickGain.connect(mixGain);
+				kickBase.connect(kickGain.gain);
+				kickLfo.connect(kickLfoGain);
+				kickLfoGain.connect(kickGain.gain);
+
+				const midOsc = this.audioContext.createOscillator();
+				midOsc.type = "sawtooth";
+				midOsc.frequency.value = 220;
+				const midGain = this.audioContext.createGain();
+				midGain.gain.value = 0.012;
+				const midLfo = this.audioContext.createOscillator();
+				midLfo.type = "sine";
+				midLfo.frequency.value = 5.1;
+				const midLfoGain = this.audioContext.createGain();
+				midLfoGain.gain.value = 0.02;
+				midOsc.connect(midGain);
+				midGain.connect(mixGain);
+				midLfo.connect(midLfoGain);
+				midLfoGain.connect(midGain.gain);
+
+				const highOsc = this.audioContext.createOscillator();
+				highOsc.type = "square";
+				highOsc.frequency.value = 1320;
+				const highGain = this.audioContext.createGain();
+				highGain.gain.value = 0.004;
+				const highLfo = this.audioContext.createOscillator();
+				highLfo.type = "square";
+				highLfo.frequency.value = 7.6;
+				const highLfoGain = this.audioContext.createGain();
+				highLfoGain.gain.value = 0.012;
+				highOsc.connect(highGain);
+				highGain.connect(mixGain);
+				highLfo.connect(highLfoGain);
+				highLfoGain.connect(highGain.gain);
+
+				const sweepFilter = this.audioContext.createBiquadFilter();
+				sweepFilter.type = "lowpass";
+				sweepFilter.frequency.value = 1600;
+				const filterLfo = this.audioContext.createOscillator();
+				filterLfo.type = "sine";
+				filterLfo.frequency.value = 0.21;
+				const filterLfoGain = this.audioContext.createGain();
+				filterLfoGain.gain.value = 1200;
+				mixGain.connect(sweepFilter);
+				filterLfo.connect(filterLfoGain);
+				filterLfoGain.connect(sweepFilter.frequency);
+
+				bassOsc.start();
+				bassLfo.start();
+				kickOsc.start();
+				kickBase.start();
+				kickLfo.start();
+				midOsc.start();
+				midLfo.start();
+				highOsc.start();
+				highLfo.start();
+				filterLfo.start();
+
+				return {
+					inputNode: sweepFilter,
+					stopNodes: [bassOsc, bassLfo, kickOsc, kickBase, kickLfo, midOsc, midLfo, highOsc, highLfo, filterLfo],
+					disconnectNodes: [bassGain, bassLfoGain, kickGain, kickLfoGain, midGain, midLfoGain, highGain, highLfoGain, mixGain, sweepFilter, filterLfoGain]
+				};
 			},
-			renderCanvas: function(timeSeconds) {
-				if (!this.visualizer) {
+			advanceFrame: function(timeSeconds) {
+				if (this.lastFrameTimeSeconds === timeSeconds) {
 					return;
 				}
+				const tau = Math.PI * 2;
 				let elapsedTimeSeconds = 1 / 60;
-				if (this.lastRenderTimeSeconds > 0) {
-					elapsedTimeSeconds = utils.clampNumber(timeSeconds - this.lastRenderTimeSeconds, 1 / 240, 0.25);
+				if (this.lastFrameTimeSeconds > 0) {
+					elapsedTimeSeconds = utils.clampNumber(timeSeconds - this.lastFrameTimeSeconds, 1 / 240, 0.25);
 				}
-				this.lastRenderTimeSeconds = timeSeconds;
+				this.lastFrameTimeSeconds = timeSeconds;
 				if (this.audioAnalyser && this.audioAnalyserData) {
 					this.audioAnalyser.getByteFrequencyData(this.audioAnalyserData);
 					let levelSum = 0;
@@ -203,6 +306,76 @@
 					this.beatPulse *= 0.82;
 					this.beatCooldownSeconds = 0;
 				}
+				if (this.audioSourceKind === "debug") {
+					const debugBeatStrength = Math.max(0, Math.sin(timeSeconds * tau * 2.05));
+					const debugTransientStrength = Math.max(0, Math.sin(timeSeconds * tau * 7.6));
+					this.audioBassLevel = Math.max(this.audioBassLevel, 0.16 + debugBeatStrength * 0.45);
+					this.audioTransientLevel = Math.max(this.audioTransientLevel, debugBeatStrength * 0.05 + debugTransientStrength * 0.035);
+					this.audioPeak = Math.max(this.audioPeak, this.audioLevel + debugBeatStrength * 0.12);
+					if (debugBeatStrength > 0.985 && this.beatCooldownSeconds <= 0.09) {
+						this.beatPulse = 1;
+						this.beatCooldownSeconds = 0.18;
+					}
+				}
+			},
+			setAudioStream: function(stream) {
+				if (this.audioSourceKind !== "stream" || this.audioStream !== stream) {
+					this.audioVersion += 1;
+				}
+				this.audioStream = stream;
+				this.audioSourceKind = stream ? "stream" : "none";
+				if (!this.visualizer || !this.audioContext) {
+					if (!stream) {
+						this.resetAudioMetrics();
+					}
+					return;
+				}
+				this.disconnectCurrentAudioInput();
+				if (!stream) {
+					this.resetAudioMetrics();
+					return;
+				}
+				this.attachAudioNode(this.audioContext.createMediaStreamSource(stream));
+			},
+			startDebugAudio: function() {
+				if (this.audioSourceKind !== "debug") {
+					this.audioVersion += 1;
+				}
+				this.audioStream = null;
+				this.audioSourceKind = "debug";
+				if (!this.visualizer || !this.audioContext) {
+					return Promise.resolve();
+				}
+				this.disconnectCurrentAudioInput();
+				this.debugAudioNodes = this.createDebugAudioNodes();
+				this.attachAudioNode(this.debugAudioNodes.inputNode);
+				return Promise.resolve();
+			},
+			selectPreset: function(index, blendTimeSeconds) {
+				if (!this.presetNames.length) {
+					return Promise.resolve();
+				}
+				const nextPresetIndex = (index + this.presetNames.length) % this.presetNames.length;
+				if (nextPresetIndex !== this.currentPresetIndex) {
+					this.currentPresetIndex = nextPresetIndex;
+					this.presetVersion += 1;
+				}
+				if (!this.visualizer) {
+					return Promise.resolve();
+				}
+				this.visualizer.loadPreset(this.presetMap[this.presetNames[this.currentPresetIndex]], blendTimeSeconds || 0);
+				return Promise.resolve();
+			},
+			renderCanvas: function(timeSeconds) {
+				this.advanceFrame(timeSeconds);
+				if (!this.visualizer) {
+					return;
+				}
+				let elapsedTimeSeconds = 1 / 60;
+				if (this.lastCanvasRenderTimeSeconds > 0) {
+					elapsedTimeSeconds = utils.clampNumber(timeSeconds - this.lastCanvasRenderTimeSeconds, 1 / 240, 0.25);
+				}
+				this.lastCanvasRenderTimeSeconds = timeSeconds;
 				this.visualizer.render({elapsedTime: elapsedTimeSeconds});
 				this.canvasRenderVersion += 1;
 			},
@@ -250,7 +423,7 @@
 					canvas: this.canvas,
 					textureSource: this.canvas,
 					audioMetrics: this.getAudioMetrics(),
-					timeSeconds: this.lastRenderTimeSeconds
+					timeSeconds: this.lastFrameTimeSeconds
 				};
 			},
 			onSessionStart: function() {

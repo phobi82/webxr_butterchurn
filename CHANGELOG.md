@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added a second Butterchurn visualizer mode that interprets the active preset as a stereoscopic image-space volume instead of only the existing toroidal wrap.
+- Added a second Butterchurn visualizer mode that compiles preset `shapes` and `waves` into simple world-space stereo geometry instead of only offering the toroidal pre-scene pass.
+- Added a `Debug Audio` input mode that injects a synthetic beat/bass/transient signal into the shared Butterchurn audio path without requiring screen-share or microphone permission.
+- Added a `Suno Live Radio` desktop audio shortcut that opens the requested tab and reuses the same tab-audio capture flow as the existing YouTube shortcut.
+- Added first-person desktop preview controls with `WASD` movement, `Shift` sprint, `Ctrl` crouch, `Space` jump, and mouse-look on the main canvas.
+- Added a desktop `M` shortcut that renders the existing headset menu canvas as a 2D overlay for menu debugging outside XR.
 
 ### Changed
 - Extended the desktop controls and the in-headset VR menu so visualizer mode and Butterchurn preset can both be cycled independently from the same UI flow.
@@ -16,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed and split the XR rendering modules into `xr-visualizer-*` files, with separate utils, GL helpers, Butterchurn source, mode manager, and per-mode renderers.
 - Added render-phase support to the visualizer manager so fullscreen and future world-space modes are no longer forced into a background-only architecture.
 - Corrected the toroidal mode timing after the refactor so its Butterchurn canvas is prepared once per frame instead of once per eye.
+- Split the shared Butterchurn source into a generic per-frame update path plus an optional canvas-render path, so world-space modes can reuse audio and preset state without depending on fullscreen texture generation.
+- Reworked `stereoVolume` into a true `world`-phase mode with its own preset-compilation stage, leaving `toroidal` isolated on the shared fullscreen helper.
+- Changed the shared audio source logic so stream inputs and the new synthetic debug input use the same analyser/beat pipeline and the same stop/reset path.
+- Reorganized the desktop audio controls into a source row (`Share Audio`, `Use Microphone`, `Debug Audio`, `Stop Audio`) and a separate tab-source row for `YouTube Playlist` and `Suno Live Radio`.
+- Removed the separate desktop preset section and now show the desktop menu overlay by default at startup, since preset and mode selection already live in the mirrored headset menu canvas.
+- Split the on-page controls hint into separate `VR:` and `Desktop:` lines for readability.
 
 ## [0.0.3] - 2026-03-13
 

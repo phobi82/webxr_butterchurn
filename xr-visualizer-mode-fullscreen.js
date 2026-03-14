@@ -45,6 +45,7 @@
 			},
 			prepareSourceFrame: function(width, height, timeSeconds) {
 				this.source.ensureCanvasSize(width, height);
+				this.source.advanceFrame(timeSeconds);
 				if (this.lastPreparedTimeSeconds === timeSeconds && width === this.lastPreparedWidth && height === this.lastPreparedHeight) {
 					return this.source.getStateSnapshot();
 				}

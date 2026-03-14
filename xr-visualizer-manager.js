@@ -27,8 +27,13 @@
 				headPitch: 0,
 				headHorizontalFov: Math.PI / 2,
 				headVerticalFov: Math.PI / 2,
+				headPositionX: 0,
+				headPositionY: 0,
+				headPositionZ: 0,
 				eyeCenterOffsetX: 0,
-				eyeCenterOffsetY: 0
+				eyeCenterOffsetY: 0,
+				viewMatrix: new Float32Array(16),
+				projMatrix: new Float32Array(16)
 			},
 			lastSourceSnapshot: null,
 			init: function(options) {
@@ -80,18 +85,27 @@
 			},
 			update: function(timeSeconds) {
 				this.frameState.timeSeconds = timeSeconds;
-				const sourceState = this.getSourceState();
-				this.forEachMode(function(mode) {
-					if (mode.update) {
-						mode.update(sourceState, this.frameState);
-					}
-				}.bind(this));
+				this.source.advanceFrame(timeSeconds);
+				const mode = this.getActiveMode();
+				if (mode && mode.update) {
+					mode.update(this.getSourceState(), this.frameState);
+				}
+			},
+			setRenderMatrices: function(viewMatrix, projMatrix) {
+				for (let i = 0; i < 16; i += 1) {
+					this.frameState.viewMatrix[i] = viewMatrix[i];
+					this.frameState.projMatrix[i] = projMatrix[i];
+				}
 			},
 			setViewFromMatrix: function(viewMatrix, projectionMatrix) {
 				const forwardAngles = utils.extractForwardYawPitch(viewMatrix);
+				const cameraPosition = utils.extractCameraPositionFromViewMatrix(viewMatrix);
 				const fov = utils.extractProjectionFov(projectionMatrix);
 				this.setHeadYaw(forwardAngles.yaw);
 				this.frameState.headPitch = forwardAngles.pitch;
+				this.frameState.headPositionX = cameraPosition.x;
+				this.frameState.headPositionY = cameraPosition.y;
+				this.frameState.headPositionZ = cameraPosition.z;
 				this.frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
 				this.frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
 				this.setEyeProjection(projectionMatrix);
@@ -117,6 +131,11 @@
 				this.frameState.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
 				this.frameState.eyeCenterOffsetY = -(projectionMatrix[9] || 0) * 0.5;
 			},
+			setHeadPosition: function(x, y, z) {
+				this.frameState.headPositionX = x;
+				this.frameState.headPositionY = y;
+				this.frameState.headPositionZ = z;
+			},
 			drawPhase: function(methodName) {
 				const mode = this.getActiveMode();
 				if (!mode || !mode[methodName]) {
@@ -139,6 +158,15 @@
 					if (mode.onAudioChanged) {
 						mode.onAudioChanged(this.getSourceState(), this.frameState);
 					}
+				}.bind(this));
+			},
+			startDebugAudio: function() {
+				return this.source.startDebugAudio().then(function() {
+					this.forEachMode(function(mode) {
+						if (mode.onAudioChanged) {
+							mode.onAudioChanged(this.getSourceState(), this.frameState);
+						}
+					}.bind(this));
 				}.bind(this));
 			},
 			activateAudio: function() {
@@ -170,7 +198,7 @@
 			},
 			selectPreset: function(index) {
 				return this.source.selectPreset(index, 1.2).then(function() {
-					this.source.lastRenderTimeSeconds = 0;
+					this.source.lastCanvasRenderTimeSeconds = 0;
 					this.forEachMode(function(mode) {
 						if (mode.onPresetChanged) {
 							mode.onPresetChanged(this.getSourceState(), this.frameState);

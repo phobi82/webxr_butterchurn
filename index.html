@@ -25,6 +25,7 @@
 			const walkSpeed = 4;
 			const sprintMultiplier = 2;
 			const turnSpeed = 2;
+			const desktopMouseSensitivity = 0.0024;
 			const jumpSpeed = 3.55;
 			const jumpHoldBoostSpeed = 6.5;
 			const jumpHoldMaxSeconds = 0.22;
@@ -77,6 +78,8 @@
 			const presetNextMaxU = 0.92;
 			const youtubePlaylistUrl = "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1";
 			const youtubeWindowName = "webxrYoutubePlaylist";
+			const sunoLiveRadioUrl = "https://suno.com/labs/live-radio";
+			const sunoLiveRadioWindowName = "webxrSunoLiveRadio";
 			const sceneGlbAssets = [
 				{
 					url: "https://phobi82.github.io/Phobis-Crystal-Lake/goat.glb",
@@ -101,6 +104,7 @@
 			let xrRefSpace = null;
 			let frameHandle = null;
 			let lastRenderTime = 0;
+			let previewLastRenderTime = 0;
 			let previewTime = 0;
 			let trackingHeading = 0;
 			let jumpVelocity = 0;
@@ -153,6 +157,26 @@
 			let activeAudioStream = null;
 			let activeAudioSourceName = "";
 			let youtubeWindowHandle = null;
+			let sunoLiveRadioWindowHandle = null;
+			let desktopPreviewMenuVisibleBool = true;
+			let desktopLookYaw = 0;
+			let desktopLookPitch = -0.16;
+			let desktopJumpVelocity = 0;
+			let desktopJumpCount = 0;
+			let desktopJumpPressedBool = false;
+			let desktopJumpHoldTimeSeconds = 0;
+			let desktopEyeHeightMeters = defaultEyeHeight;
+			let desktopJumpHeldBool = false;
+			let desktopMoveForwardBool = false;
+			let desktopMoveBackwardBool = false;
+			let desktopMoveLeftBool = false;
+			let desktopMoveRightBool = false;
+			let desktopSprintBool = false;
+			let desktopCrouchBool = false;
+			let desktopPointerLockedBool = false;
+			let desktopMenuPointerActiveBool = false;
+			let desktopMenuPointerU = 0;
+			let desktopMenuPointerV = 0;
 
 			const currentView = new Float32Array(16);
 			const currentProj = new Float32Array(16);
@@ -165,10 +189,27 @@
 			const menuNormal = {x: 0, y: 0, z: 1};
 			const controllerRays = [];
 			const triggerPressedByHand = new Map();
+			const desktopTrackingOrigin = {x: 0, y: 0, z: 5.6};
 			const menuCanvas = document.createElement("canvas");
 			menuCanvas.width = 1280;
 			menuCanvas.height = 960;
 			const menuCtx = menuCanvas.getContext("2d");
+			const desktopMenuPreviewCanvas = document.createElement("canvas");
+			desktopMenuPreviewCanvas.width = menuCanvas.width;
+			desktopMenuPreviewCanvas.height = menuCanvas.height;
+			desktopMenuPreviewCanvas.style.position = "fixed";
+			desktopMenuPreviewCanvas.style.right = "12px";
+			desktopMenuPreviewCanvas.style.top = "12px";
+			desktopMenuPreviewCanvas.style.width = "420px";
+			desktopMenuPreviewCanvas.style.height = "315px";
+			desktopMenuPreviewCanvas.style.border = "1px solid #ffff00";
+			desktopMenuPreviewCanvas.style.backgroundColor = "rgba(0, 0, 32, 0.92)";
+			desktopMenuPreviewCanvas.style.display = "block";
+			desktopMenuPreviewCanvas.style.pointerEvents = "auto";
+			desktopMenuPreviewCanvas.style.cursor = "pointer";
+			desktopMenuPreviewCanvas.style.zIndex = "9";
+			document.body.appendChild(desktopMenuPreviewCanvas);
+			const desktopMenuPreviewCtx = desktopMenuPreviewCanvas.getContext("2d");
 
 			const panel = document.createElement("div");
 			panel.style.position = "fixed";
@@ -193,11 +234,17 @@
 			status.style.fontSize = "14px";
 			panel.appendChild(status);
 
-			const hint = document.createElement("div");
-			hint.textContent = "Left stick: move. Right stick: turn. A: jump. Y: menu. Trigger: menu select / slider drag.";
-			hint.style.fontSize = "13px";
-			hint.style.color = "#00ff00";
-			panel.appendChild(hint);
+			const vrHint = document.createElement("div");
+			vrHint.textContent = "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.";
+			vrHint.style.fontSize = "13px";
+			vrHint.style.color = "#00ff00";
+			panel.appendChild(vrHint);
+
+			const desktopHint = document.createElement("div");
+			desktopHint.textContent = "Desktop: click view + mouse look, WASD move, Space jump, Shift sprint, Ctrl crouch, M menu.";
+			desktopHint.style.fontSize = "13px";
+			desktopHint.style.color = "#00ff00";
+			panel.appendChild(desktopHint);
 
 			const xrSection = document.createElement("div");
 			xrSection.style.display = "flex";
@@ -244,57 +291,42 @@
 			audioSectionLabel.style.color = "#00ff00";
 			audioSection.appendChild(audioSectionLabel);
 
-			const audioRow = document.createElement("div");
-			audioRow.style.display = "flex";
-			audioRow.style.flexWrap = "wrap";
-			audioRow.style.gap = "8px";
-			audioSection.appendChild(audioRow);
+			const audioSourceRow = document.createElement("div");
+			audioSourceRow.style.display = "flex";
+			audioSourceRow.style.flexWrap = "wrap";
+			audioSourceRow.style.gap = "8px";
+			audioSection.appendChild(audioSourceRow);
 
 			const audioButton = document.createElement("button");
 			audioButton.textContent = "Share Audio";
-			audioRow.appendChild(audioButton);
-
-			const youtubeAudioButton = document.createElement("button");
-			youtubeAudioButton.textContent = "YouTube Playlist";
-			audioRow.appendChild(youtubeAudioButton);
+			audioSourceRow.appendChild(audioButton);
 
 			const microphoneButton = document.createElement("button");
 			microphoneButton.textContent = "Use Microphone";
-			audioRow.appendChild(microphoneButton);
+			audioSourceRow.appendChild(microphoneButton);
+
+			const debugAudioButton = document.createElement("button");
+			debugAudioButton.textContent = "Debug Audio";
+			audioSourceRow.appendChild(debugAudioButton);
 
 			const stopAudioButton = document.createElement("button");
 			stopAudioButton.textContent = "Stop Audio";
 			stopAudioButton.disabled = true;
-			audioRow.appendChild(stopAudioButton);
+			audioSourceRow.appendChild(stopAudioButton);
 
-			const presetSection = document.createElement("div");
-			presetSection.style.display = "flex";
-			presetSection.style.flexDirection = "column";
-			presetSection.style.gap = "6px";
-			presetSection.style.padding = "8px";
-			presetSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
-			panel.appendChild(presetSection);
+			const audioPlaylistRow = document.createElement("div");
+			audioPlaylistRow.style.display = "flex";
+			audioPlaylistRow.style.flexWrap = "wrap";
+			audioPlaylistRow.style.gap = "8px";
+			audioSection.appendChild(audioPlaylistRow);
 
-			const presetSectionLabel = document.createElement("div");
-			presetSectionLabel.textContent = "Preset";
-			presetSectionLabel.style.fontSize = "12px";
-			presetSectionLabel.style.fontWeight = "bold";
-			presetSectionLabel.style.color = "#00ff00";
-			presetSection.appendChild(presetSectionLabel);
+			const youtubeAudioButton = document.createElement("button");
+			youtubeAudioButton.textContent = "YouTube Playlist";
+			audioPlaylistRow.appendChild(youtubeAudioButton);
 
-			const presetRow = document.createElement("div");
-			presetRow.style.display = "flex";
-			presetRow.style.flexWrap = "wrap";
-			presetRow.style.gap = "8px";
-			presetSection.appendChild(presetRow);
-
-			const prevPresetButton = document.createElement("button");
-			prevPresetButton.textContent = "Prev Preset";
-			presetRow.appendChild(prevPresetButton);
-
-			const nextPresetButton = document.createElement("button");
-			nextPresetButton.textContent = "Next Preset";
-			presetRow.appendChild(nextPresetButton);
+			const sunoLiveRadioButton = document.createElement("button");
+			sunoLiveRadioButton.textContent = "Suno Live Radio";
+			audioPlaylistRow.appendChild(sunoLiveRadioButton);
 
 			const audioLabel = document.createElement("div");
 			audioLabel.textContent = "Audio: none";
@@ -302,44 +334,11 @@
 			audioSection.appendChild(audioLabel);
 
 			const audioHint = document.createElement("div");
-			audioHint.textContent = "YouTube Playlist opens the tab automatically. In the share dialog, choose that tab and enable tab audio.";
+			audioHint.textContent = "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.";
 			audioHint.style.fontSize = "12px";
 			audioHint.style.maxWidth = "360px";
 			audioHint.style.color = "#00ff00";
 			audioSection.appendChild(audioHint);
-
-			const presetLabel = document.createElement("div");
-			presetLabel.textContent = "Preset: loading...";
-			presetLabel.style.fontSize = "13px";
-			presetSection.appendChild(presetLabel);
-
-			const shaderModeSectionLabel = document.createElement("div");
-			shaderModeSectionLabel.textContent = "Visualizer Mode";
-			shaderModeSectionLabel.style.fontSize = "12px";
-			shaderModeSectionLabel.style.fontWeight = "bold";
-			shaderModeSectionLabel.style.color = "#00ff00";
-			shaderModeSectionLabel.style.marginTop = "4px";
-			presetSection.appendChild(shaderModeSectionLabel);
-
-			const shaderModeRow = document.createElement("div");
-			shaderModeRow.style.display = "flex";
-			shaderModeRow.style.flexWrap = "wrap";
-			shaderModeRow.style.gap = "8px";
-			presetSection.appendChild(shaderModeRow);
-
-			const prevShaderModeButton = document.createElement("button");
-			prevShaderModeButton.textContent = "Prev Mode";
-			shaderModeRow.appendChild(prevShaderModeButton);
-
-			const nextShaderModeButton = document.createElement("button");
-			nextShaderModeButton.textContent = "Next Mode";
-			shaderModeRow.appendChild(nextShaderModeButton);
-
-			const shaderModeLabel = document.createElement("div");
-			shaderModeLabel.textContent = "Visualizer Mode: loading...";
-			shaderModeLabel.style.fontSize = "13px";
-			presetSection.appendChild(shaderModeLabel);
-
 
 			const canvas = document.createElement("canvas");
 			canvas.style.display = "block";
@@ -353,16 +352,8 @@
 
 			const updateVisualizerLabels = function() {
 				if (!visualizerRenderer) {
-					presetLabel.textContent = "Preset: none";
-					shaderModeLabel.textContent = "Visualizer Mode: none";
 					return;
 				}
-				const presetNames = visualizerRenderer.getPresetNames();
-				const currentPresetIndex = visualizerRenderer.getCurrentPresetIndex();
-				presetLabel.textContent = "Preset: " + (presetNames[currentPresetIndex] || "none");
-				const shaderModeNames = visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"];
-				const currentShaderModeIndex = visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0;
-				shaderModeLabel.textContent = "Visualizer Mode: " + (shaderModeNames[currentShaderModeIndex] || "none");
 			};
 
 			const activateVisualizerAudio = function() {
@@ -373,16 +364,23 @@
 				});
 			};
 
-			const setActiveAudioStream = function(stream, sourceName) {
-				if (activeAudioStream) {
-					const oldTracks = activeAudioStream.getTracks();
-					for (let i = 0; i < oldTracks.length; i += 1) {
-						oldTracks[i].stop();
-					}
+			const clearActiveAudioStream = function() {
+				if (!activeAudioStream) {
+					return;
 				}
+				const oldStream = activeAudioStream;
+				activeAudioStream = null;
+				const oldTracks = oldStream.getTracks();
+				for (let i = 0; i < oldTracks.length; i += 1) {
+					oldTracks[i].stop();
+				}
+			};
+
+			const setActiveAudioStream = function(stream, sourceName) {
+				clearActiveAudioStream();
 				activeAudioStream = stream;
-				activeAudioSourceName = sourceName;
-				audioLabel.textContent = "Audio: " + sourceName;
+				activeAudioSourceName = sourceName || "";
+				audioLabel.textContent = "Audio: " + (sourceName || "none");
 				stopAudioButton.disabled = !stream;
 				if (visualizerRenderer) {
 					visualizerRenderer.setAudioStream(stream);
@@ -404,6 +402,20 @@
 						}
 					});
 				}
+			};
+
+			const startDebugAudio = function() {
+				clearActiveAudioStream();
+				return activateVisualizerAudio().then(function() {
+					if (!visualizerRenderer || !visualizerRenderer.startDebugAudio) {
+						return;
+					}
+					return visualizerRenderer.startDebugAudio().then(function() {
+						activeAudioSourceName = "debug signal";
+						audioLabel.textContent = "Audio: debug signal";
+						stopAudioButton.disabled = false;
+					});
+				});
 			};
 
 			const requestDisplayAudio = async function(sourceName, optionOverrides) {
@@ -464,6 +476,24 @@
 				setStatus("select the YouTube tab and enable tab audio");
 				await requestDisplayAudio("YouTube playlist", {preferCurrentTab: false});
 				setStatus("youtube tab audio active");
+			};
+
+			const requestSunoLiveRadioAudio = async function() {
+				if (!sunoLiveRadioWindowHandle || sunoLiveRadioWindowHandle.closed) {
+					sunoLiveRadioWindowHandle = window.open(sunoLiveRadioUrl, sunoLiveRadioWindowName);
+				} else {
+					sunoLiveRadioWindowHandle.location.href = sunoLiveRadioUrl;
+				}
+				if (!sunoLiveRadioWindowHandle) {
+					throw new Error("suno live radio tab blocked");
+				}
+				try {
+					sunoLiveRadioWindowHandle.focus();
+				} catch (error) {
+				}
+				setStatus("select the Suno Live Radio tab and enable tab audio");
+				await requestDisplayAudio("Suno Live Radio", {preferCurrentTab: false});
+				setStatus("suno live radio tab audio active");
 			};
 
 			const copyMatrix = function(target, source) {
@@ -816,6 +846,26 @@
 				updateReferenceSpace();
 			};
 
+			const resetDesktopPreviewState = function() {
+				desktopTrackingOrigin.x = 0;
+				desktopTrackingOrigin.y = 0;
+				desktopTrackingOrigin.z = 5.6;
+				desktopLookYaw = 0;
+				desktopLookPitch = -0.16;
+				desktopJumpVelocity = 0;
+				desktopJumpCount = 0;
+				desktopJumpPressedBool = false;
+				desktopJumpHoldTimeSeconds = 0;
+				desktopEyeHeightMeters = defaultEyeHeight;
+				desktopMoveForwardBool = false;
+				desktopMoveBackwardBool = false;
+				desktopMoveLeftBool = false;
+				desktopMoveRightBool = false;
+				desktopSprintBool = false;
+				desktopCrouchBool = false;
+				desktopJumpHeldBool = false;
+			};
+
 			const createShader = function(type, source) {
 				const shader = gl.createShader(type);
 				gl.shaderSource(shader, source);
@@ -848,19 +898,25 @@
 				]);
 			};
 
-			const previewCameraMatrix = function(timeSeconds) {
-				const eyeX = Math.sin(timeSeconds * 0.2) * 3;
-				const eyeY = 2.2;
-				const eyeZ = 5.6;
-				const targetX = 0;
-				const targetY = 1.25;
-				const targetZ = 0;
-				const zAxis = normalizeVec3(eyeX - targetX, eyeY - targetY, eyeZ - targetZ);
-				const xAxis = normalizeVec3(zAxis.z, 0, -zAxis.x);
+			const createViewMatrixFromYawPitch = function(eyeX, eyeY, eyeZ, yaw, pitch) {
+				const cosYaw = Math.cos(yaw);
+				const sinYaw = Math.sin(yaw);
+				const cosPitch = Math.cos(pitch);
+				const sinPitch = Math.sin(pitch);
+				const xAxis = {
+					x: cosYaw,
+					y: 0,
+					z: sinYaw
+				};
 				const yAxis = {
-					x: zAxis.y * xAxis.z - zAxis.z * xAxis.y,
-					y: zAxis.z * xAxis.x - zAxis.x * xAxis.z,
-					z: zAxis.x * xAxis.y - zAxis.y * xAxis.x
+					x: -sinYaw * sinPitch,
+					y: cosPitch,
+					z: cosYaw * sinPitch
+				};
+				const zAxis = {
+					x: -sinYaw * cosPitch,
+					y: -sinPitch,
+					z: cosYaw * cosPitch
 				};
 				return new Float32Array([
 					xAxis.x, yAxis.x, zAxis.x, 0,
@@ -871,6 +927,102 @@
 					-(zAxis.x * eyeX + zAxis.y * eyeY + zAxis.z * eyeZ),
 					1
 				]);
+			};
+
+			const previewCameraMatrix = function() {
+				return createViewMatrixFromYawPitch(
+					desktopTrackingOrigin.x,
+					desktopTrackingOrigin.y + desktopEyeHeightMeters,
+					desktopTrackingOrigin.z,
+					desktopLookYaw,
+					desktopLookPitch
+				);
+			};
+
+			const applyDesktopPreviewMovement = function(delta) {
+				const playerHeight = desktopEyeHeightMeters + playerHeadClearance;
+				const targetEyeHeightMeters = desktopCrouchBool ? crouchMinEyeHeight : defaultEyeHeight;
+				if (desktopEyeHeightMeters < targetEyeHeightMeters) {
+					desktopEyeHeightMeters = Math.min(targetEyeHeightMeters, desktopEyeHeightMeters + crouchSpeed * delta);
+				} else if (desktopEyeHeightMeters > targetEyeHeightMeters) {
+					desktopEyeHeightMeters = Math.max(targetEyeHeightMeters, desktopEyeHeightMeters - crouchSpeed * delta);
+				}
+
+				let moveX = 0;
+				let moveY = 0;
+				if (desktopMoveLeftBool) {
+					moveX -= 1;
+				}
+				if (desktopMoveRightBool) {
+					moveX += 1;
+				}
+				if (desktopMoveForwardBool) {
+					moveY -= 1;
+				}
+				if (desktopMoveBackwardBool) {
+					moveY += 1;
+				}
+				if (moveX !== 0 || moveY !== 0) {
+					const moveLength = Math.sqrt(moveX * moveX + moveY * moveY) || 1;
+					moveX /= moveLength;
+					moveY /= moveLength;
+					const movementSpeed = walkSpeed * (desktopSprintBool ? sprintMultiplier : 1);
+					const moveStep = resolveHorizontalMovement(
+						desktopTrackingOrigin.x,
+						desktopTrackingOrigin.y,
+						desktopTrackingOrigin.z,
+						desktopTrackingOrigin.x + (moveY * Math.sin(desktopLookYaw) + moveX * Math.cos(desktopLookYaw)) * movementSpeed * delta,
+						desktopTrackingOrigin.z + (moveY * Math.cos(desktopLookYaw) - moveX * Math.sin(desktopLookYaw)) * movementSpeed * delta,
+						playerHeight
+					);
+					desktopTrackingOrigin.x = moveStep.x;
+					desktopTrackingOrigin.y = moveStep.y > desktopTrackingOrigin.y ? Math.min(moveStep.y, desktopTrackingOrigin.y + climbSpeed * delta) : moveStep.y;
+					desktopTrackingOrigin.z = moveStep.z;
+				}
+
+				const floorHeight = getFloorHeightAtPosition(desktopTrackingOrigin.x, desktopTrackingOrigin.z, getMaxClimbSurfaceY(desktopTrackingOrigin.y));
+				const groundedBool = floorHeight > -Infinity && desktopTrackingOrigin.y <= floorHeight + 0.001 && desktopJumpVelocity <= 0;
+				if (groundedBool) {
+					desktopTrackingOrigin.y = floorHeight > desktopTrackingOrigin.y ? Math.min(floorHeight, desktopTrackingOrigin.y + climbSpeed * delta) : floorHeight;
+					desktopJumpCount = 0;
+				}
+				if (desktopJumpHeldBool && !desktopJumpPressedBool && (jumpMode === "multi" || desktopJumpCount < doubleJumpMaxCount)) {
+					desktopJumpVelocity = jumpSpeed;
+					desktopJumpHoldTimeSeconds = jumpHoldMaxSeconds;
+					if (jumpMode === "double") {
+						desktopJumpCount += 1;
+					}
+				}
+				if (desktopJumpHeldBool && desktopJumpVelocity > 0 && desktopJumpHoldTimeSeconds > 0) {
+					desktopJumpVelocity += jumpHoldBoostSpeed * delta;
+					desktopJumpHoldTimeSeconds = Math.max(0, desktopJumpHoldTimeSeconds - delta);
+				}
+				if (!desktopJumpHeldBool) {
+					desktopJumpHoldTimeSeconds = 0;
+				}
+				desktopJumpPressedBool = desktopJumpHeldBool;
+
+				const supportHeight = getFloorHeightAtPosition(desktopTrackingOrigin.x, desktopTrackingOrigin.z, getMaxClimbSurfaceY(Math.max(desktopTrackingOrigin.y, desktopTrackingOrigin.y + desktopJumpVelocity * delta)));
+				if (desktopJumpVelocity !== 0 || desktopTrackingOrigin.y > supportHeight || supportHeight === -Infinity) {
+					const previousY = desktopTrackingOrigin.y;
+					desktopJumpVelocity += jumpGravity * delta;
+					desktopTrackingOrigin.y += desktopJumpVelocity * delta;
+					const resolvedVertical = resolveVerticalMovement(previousY, desktopTrackingOrigin.y, desktopTrackingOrigin.x, desktopTrackingOrigin.z, playerHeight);
+					desktopTrackingOrigin.y = resolvedVertical.y;
+					if (resolvedVertical.hitCeilingBool && desktopJumpVelocity > 0) {
+						desktopJumpVelocity = 0;
+						desktopJumpHoldTimeSeconds = 0;
+					}
+					if (desktopTrackingOrigin.y <= fallResetY) {
+						resetDesktopPreviewState();
+						return;
+					}
+					if (resolvedVertical.groundedBool) {
+						desktopJumpVelocity = 0;
+						desktopJumpHoldTimeSeconds = 0;
+						desktopJumpCount = 0;
+					}
+				}
 			};
 
 			const initGl = function() {
@@ -1069,6 +1221,10 @@
 				}
 				const u = 0.5 + localX / menuWidth;
 				const v = 0.5 - localY / menuHeight;
+				return Object.assign({distance: distance, point: point, u: u, v: v}, getMenuInteractionAtUv(u, v));
+			};
+
+			const getMenuInteractionAtUv = function(u, v) {
 				const floorAlphaSliderBool = v >= floorAlphaSliderV - menuSliderHalfHeight && v <= floorAlphaSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
 				const eyeDistanceSliderBool = v >= eyeDistanceSliderV - menuSliderHalfHeight && v <= eyeDistanceSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
 				let jumpModeHit = "";
@@ -1095,7 +1251,7 @@
 						presetAction = "next";
 					}
 				}
-				return {distance: distance, point: point, u: u, floorAlphaSliderBool: floorAlphaSliderBool, eyeDistanceSliderBool: eyeDistanceSliderBool, jumpMode: jumpModeHit, shaderModeAction: shaderModeAction, presetAction: presetAction};
+				return {floorAlphaSliderBool: floorAlphaSliderBool, eyeDistanceSliderBool: eyeDistanceSliderBool, jumpMode: jumpModeHit, shaderModeAction: shaderModeAction, presetAction: presetAction};
 			};
 
 			const updateControllerRays = function(frame) {
@@ -1175,6 +1331,46 @@
 				let nextShaderModeIndex = visualizerRenderer.getCurrentModeIndex();
 				nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
 				visualizerRenderer.selectMode(nextShaderModeIndex).then(updateVisualizerLabels);
+			};
+
+			const clearDesktopMenuPointerState = function() {
+				desktopMenuPointerActiveBool = false;
+				desktopMenuPointerU = 0;
+				desktopMenuPointerV = 0;
+				eyeDistanceHoverBool = false;
+				floorAlphaHoverBool = false;
+				hoveredJumpMode = "";
+				hoveredShaderModeAction = "";
+				hoveredPresetAction = "";
+				if (activeSliderHand === "desktop") {
+					activeSliderHand = "";
+				}
+				if (activeFloorAlphaSliderHand === "desktop") {
+					activeFloorAlphaSliderHand = "";
+				}
+			};
+
+			const applyDesktopMenuPointerState = function() {
+				if (xrSession || !desktopPreviewMenuVisibleBool || desktopPointerLockedBool || !desktopMenuPointerActiveBool) {
+					eyeDistanceHoverBool = activeSliderHand === "desktop";
+					floorAlphaHoverBool = activeFloorAlphaSliderHand === "desktop";
+					hoveredJumpMode = "";
+					hoveredShaderModeAction = "";
+					hoveredPresetAction = "";
+					return;
+				}
+				const hit = getMenuInteractionAtUv(desktopMenuPointerU, desktopMenuPointerV);
+				eyeDistanceHoverBool = !!hit.eyeDistanceSliderBool || activeSliderHand === "desktop";
+				floorAlphaHoverBool = !!hit.floorAlphaSliderBool || activeFloorAlphaSliderHand === "desktop";
+				hoveredJumpMode = hit.jumpMode || "";
+				hoveredShaderModeAction = hit.shaderModeAction || "";
+				hoveredPresetAction = hit.presetAction || "";
+				if (activeSliderHand === "desktop") {
+					eyeDistanceMeters = sliderUToEyeDistance(desktopMenuPointerU);
+				}
+				if (activeFloorAlphaSliderHand === "desktop") {
+					floorAlpha = sliderUToFloorAlpha(desktopMenuPointerU);
+				}
 			};
 
 			const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -1460,10 +1656,7 @@
 				menuCtx.fillText(text, centerX, topY);
 			};
 
-			const drawMenu = function() {
-				if (!menuOpenBool) {
-					return;
-				}
+			const renderMenuCanvasTexture = function() {
 				const reactiveColors = getAudioReactiveFloorColors();
 				const accentRgb = hslToRgb((sceneTimeSeconds * 0.03 + 0.04) % 1, 0.85, 0.62);
 				const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
@@ -1680,9 +1873,29 @@
 				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 56);
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
+			};
+
+			const drawMenu = function() {
+				if (!menuOpenBool) {
+					return;
+				}
+				renderMenuCanvasTexture();
 				gl.disable(gl.CULL_FACE);
 				drawTexturedPlane(basisScale(menuCenter.x, menuCenter.y, menuCenter.z, menuRight, menuUp, menuNormal, menuWidth, menuHeight, 1));
 				gl.enable(gl.CULL_FACE);
+			};
+
+			const updateDesktopMenuPreview = function() {
+				if (!desktopPreviewMenuVisibleBool) {
+					desktopMenuPreviewCanvas.style.display = "none";
+					return;
+				}
+				applyDesktopMenuPointerState();
+				renderMenuCanvasTexture();
+				desktopMenuPreviewCanvas.style.display = "block";
+				desktopMenuPreviewCanvas.style.pointerEvents = desktopPointerLockedBool || xrSession ? "none" : "auto";
+				desktopMenuPreviewCtx.clearRect(0, 0, desktopMenuPreviewCanvas.width, desktopMenuPreviewCanvas.height);
+				desktopMenuPreviewCtx.drawImage(menuCanvas, 0, 0);
 			};
 
 			const drawControllerRays = function() {
@@ -1727,6 +1940,7 @@
 				copyMatrix(currentView, adjustedView);
 				copyMatrix(currentProj, view.projectionMatrix);
 				if (visualizerRenderer) {
+					visualizerRenderer.setRenderMatrices(currentView, currentProj);
 					visualizerRenderer.setEyeProjection(view.projectionMatrix);
 				}
 				renderScene();
@@ -1745,10 +1959,11 @@
 				const renderPose = frame.getViewerPose(xrRefSpace) || pose;
 				updateMenuInput(frame, renderPose);
 				if (visualizerRenderer) {
-					visualizerRenderer.update(time * 0.001);
 					if (renderPose.transform && renderPose.views.length) {
+						visualizerRenderer.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
 						visualizerRenderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 					}
+					visualizerRenderer.update(time * 0.001);
 				}
 				const baseLayer = xrSession.renderState.baseLayer;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, baseLayer.framebuffer);
@@ -1764,22 +1979,25 @@
 					return;
 				}
 				previewTime = time * 0.001;
+				const delta = previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTime - previewLastRenderTime));
+				previewLastRenderTime = previewTime;
 				sceneTimeSeconds = previewTime;
+				applyDesktopPreviewMovement(delta);
 				canvas.width = window.innerWidth * window.devicePixelRatio;
 				canvas.height = window.innerHeight * window.devicePixelRatio;
-				if (visualizerRenderer) {
-					visualizerRenderer.update(previewTime);
-				}
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.viewport(0, 0, canvas.width, canvas.height);
 				gl.clearColor(0.01, 0.01, 0.08, 1);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-				copyMatrix(currentView, previewCameraMatrix(previewTime));
+				copyMatrix(currentView, previewCameraMatrix());
 				copyMatrix(currentProj, perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
 				if (visualizerRenderer) {
+					visualizerRenderer.setRenderMatrices(currentView, currentProj);
 					visualizerRenderer.setViewFromMatrix(currentView, currentProj);
+					visualizerRenderer.update(previewTime);
 				}
 				renderScene();
+				updateDesktopMenuPreview();
 				window.requestAnimationFrame(renderPreview);
 			};
 
@@ -1792,6 +2010,7 @@
 				baseRefSpace = null;
 				xrRefSpace = null;
 				lastRenderTime = 0;
+				previewLastRenderTime = 0;
 				menuOpenBool = false;
 				activeSliderHand = "";
 				controllerRays.length = 0;
@@ -1809,6 +2028,10 @@
 
 			const startSession = async function() {
 				try {
+					if (document.pointerLockElement === canvas && document.exitPointerLock) {
+						document.exitPointerLock();
+					}
+					desktopMenuPreviewCanvas.style.display = "none";
 					xrSession = await navigator.xr.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
 					xrSession.addEventListener("end", endSession);
 					await gl.makeXRCompatible();
@@ -1861,10 +2084,23 @@
 				});
 			});
 
+			sunoLiveRadioButton.addEventListener("click", function() {
+				activateVisualizerAudio();
+				requestSunoLiveRadioAudio().catch(function(error) {
+					setStatus(error.message || "suno live radio audio failed");
+				});
+			});
+
 			microphoneButton.addEventListener("click", function() {
 				activateVisualizerAudio();
 				requestMicrophoneAudio().catch(function(error) {
 					setStatus(error.message || "microphone capture failed");
+				});
+			});
+
+			debugAudioButton.addEventListener("click", function() {
+				startDebugAudio().catch(function(error) {
+					setStatus(error.message || "debug audio failed");
 				});
 			});
 
@@ -1873,29 +2109,53 @@
 				audioLabel.textContent = "Audio: none";
 			});
 
-			prevPresetButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				cyclePreset(-1);
-			});
-
-			nextPresetButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				cyclePreset(1);
-			});
-
-			prevShaderModeButton.addEventListener("click", function() {
-				cycleShaderMode(-1);
-			});
-
-			nextShaderModeButton.addEventListener("click", function() {
-				cycleShaderMode(1);
-			});
-
 			exitButton.addEventListener("click", function() {
 				if (xrSession) {
 					xrSession.end();
 				}
 			});
+
+			const setDesktopMovementKeyState = function(code, pressedBool) {
+				if (code === "KeyW") {
+					desktopMoveForwardBool = pressedBool;
+					return true;
+				}
+				if (code === "KeyS") {
+					desktopMoveBackwardBool = pressedBool;
+					return true;
+				}
+				if (code === "KeyA") {
+					desktopMoveLeftBool = pressedBool;
+					return true;
+				}
+				if (code === "KeyD") {
+					desktopMoveRightBool = pressedBool;
+					return true;
+				}
+				if (code === "ShiftLeft" || code === "ShiftRight") {
+					desktopSprintBool = pressedBool;
+					return true;
+				}
+				if (code === "ControlLeft" || code === "ControlRight") {
+					desktopCrouchBool = pressedBool;
+					return true;
+				}
+				if (code === "Space") {
+					desktopJumpHeldBool = pressedBool;
+					return true;
+				}
+				return false;
+			};
+
+			const releaseDesktopMovementKeys = function() {
+				desktopMoveForwardBool = false;
+				desktopMoveBackwardBool = false;
+				desktopMoveLeftBool = false;
+				desktopMoveRightBool = false;
+				desktopSprintBool = false;
+				desktopCrouchBool = false;
+				desktopJumpHeldBool = false;
+			};
 
 			window.addEventListener("resize", function() {
 				if (!xrSession) {
@@ -1904,13 +2164,135 @@
 				}
 			});
 
+			const updateDesktopMenuPointerFromEvent = function(event) {
+				const rect = desktopMenuPreviewCanvas.getBoundingClientRect();
+				if (rect.width <= 0 || rect.height <= 0) {
+					return null;
+				}
+				desktopMenuPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
+				desktopMenuPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
+				desktopMenuPointerActiveBool = true;
+				return getMenuInteractionAtUv(desktopMenuPointerU, desktopMenuPointerV);
+			};
+
+			canvas.addEventListener("click", function() {
+				if (!xrSession && document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+					canvas.requestPointerLock();
+				}
+			});
+
+			desktopMenuPreviewCanvas.addEventListener("mousemove", function(event) {
+				if (xrSession || desktopPointerLockedBool || !desktopPreviewMenuVisibleBool) {
+					return;
+				}
+				updateDesktopMenuPointerFromEvent(event);
+			});
+
+			desktopMenuPreviewCanvas.addEventListener("mouseleave", function() {
+				if (activeSliderHand === "desktop" || activeFloorAlphaSliderHand === "desktop") {
+					return;
+				}
+				clearDesktopMenuPointerState();
+			});
+
+			desktopMenuPreviewCanvas.addEventListener("mousedown", function(event) {
+				if (xrSession || desktopPointerLockedBool || !desktopPreviewMenuVisibleBool) {
+					return;
+				}
+				const hit = updateDesktopMenuPointerFromEvent(event);
+				if (!hit) {
+					return;
+				}
+				if (hit.jumpMode) {
+					jumpMode = hit.jumpMode;
+				}
+				if (hit.shaderModeAction) {
+					cycleShaderMode(hit.shaderModeAction === "prev" ? -1 : 1);
+				}
+				if (hit.presetAction) {
+					activateVisualizerAudio();
+					cyclePreset(hit.presetAction === "prev" ? -1 : 1);
+				}
+				if (hit.eyeDistanceSliderBool) {
+					activeSliderHand = "desktop";
+					eyeDistanceMeters = sliderUToEyeDistance(desktopMenuPointerU);
+				}
+				if (hit.floorAlphaSliderBool) {
+					activeFloorAlphaSliderHand = "desktop";
+					floorAlpha = sliderUToFloorAlpha(desktopMenuPointerU);
+				}
+				event.preventDefault();
+			});
+
+			desktopMenuPreviewCanvas.addEventListener("mouseup", function() {
+				if (activeSliderHand === "desktop") {
+					activeSliderHand = "";
+				}
+				if (activeFloorAlphaSliderHand === "desktop") {
+					activeFloorAlphaSliderHand = "";
+				}
+			});
+
+			document.addEventListener("pointerlockchange", function() {
+				desktopPointerLockedBool = document.pointerLockElement === canvas;
+				if (desktopPointerLockedBool) {
+					clearDesktopMenuPointerState();
+				}
+			});
+
+			document.addEventListener("mousemove", function(event) {
+				if (!desktopPointerLockedBool || xrSession) {
+					return;
+				}
+				desktopLookYaw += event.movementX * desktopMouseSensitivity;
+				desktopLookPitch = clampNumber(desktopLookPitch - event.movementY * desktopMouseSensitivity, -1.35, 1.35);
+			});
+
 			document.addEventListener("pointerdown", activateVisualizerAudio, {passive: true});
 			document.addEventListener("keydown", activateVisualizerAudio);
+			document.addEventListener("keydown", function(event) {
+				if (xrSession) {
+					return;
+				}
+				if (event.code === "KeyM" && !event.repeat) {
+					desktopPreviewMenuVisibleBool = !desktopPreviewMenuVisibleBool;
+					if (!desktopPreviewMenuVisibleBool) {
+						clearDesktopMenuPointerState();
+						desktopMenuPreviewCanvas.style.display = "none";
+					}
+					event.preventDefault();
+					return;
+				}
+				if (setDesktopMovementKeyState(event.code, true)) {
+					event.preventDefault();
+				}
+			});
+
+			document.addEventListener("keyup", function(event) {
+				if (setDesktopMovementKeyState(event.code, false)) {
+					event.preventDefault();
+				}
+			});
+
+			document.addEventListener("mouseup", function() {
+				if (activeSliderHand === "desktop") {
+					activeSliderHand = "";
+				}
+				if (activeFloorAlphaSliderHand === "desktop") {
+					activeFloorAlphaSliderHand = "";
+				}
+			});
+
+			window.addEventListener("blur", function() {
+				releaseDesktopMovementKeys();
+				clearDesktopMenuPointerState();
+			});
 
 			const init = async function() {
 				if (!initGl()) {
 					return;
 				}
+				resetDesktopPreviewState();
 				if (window.createGlbAssetManager) {
 					try {
 						glbAssetManager = window.createGlbAssetManager({
