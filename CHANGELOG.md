@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a GitHub Pages deployment workflow under `.github/workflows/deploy-pages.yml` so pushes to `main` can publish the site through GitHub Actions instead of depending on branch-based auto-deploy behavior.
+
+### Changed
+- Documented that the repository Pages source should be switched to `GitHub Actions` to use the new workflow-based deployment path reliably.
+
 ## [0.1.0] - 2026-03-14
 
 ### Added

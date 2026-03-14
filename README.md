@@ -107,6 +107,11 @@ There is no build step and no backend.
 - Use browser devtools for logging and debugging.
 - Keep movement changes small and testable so locomotion regressions stay easy to spot.
 
+## GitHub Pages
+
+- The repository now includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml` that deploys the site on every push to `main`.
+- In the repository Pages settings, set `Build and deployment -> Source` to `GitHub Actions` so GitHub uses the workflow-based deploy path instead of branch auto-publishing.
+
 ## Acknowledgements
 
 Parts of this project are derived from or based on Butterchurn, and this repository also bundles Butterchurn preset data.
