@@ -325,7 +325,6 @@
 					this.gl.vertexAttribPointer(this.colorLoc, 4, this.gl.FLOAT, false, 0, 0);
 					this.gl.drawArrays(this.gl.LINES, 0, this.waveVertexCount);
 				}
-				this.gl.disable(this.gl.BLEND);
 				this.gl.enable(this.gl.CULL_FACE);
 			},
 			onPresetChanged: function() {

@@ -1118,6 +1118,8 @@
 			};
 
 			const drawColor = function(buffer, count, mode, model, color) {
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 				gl.useProgram(colorProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 				gl.enableVertexAttribArray(colorPositionLoc);
@@ -1134,6 +1136,8 @@
 			};
 
 			const drawTexturedPlane = function(model) {
+				gl.enable(gl.BLEND);
+				gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 				gl.useProgram(texProgram);
 				gl.bindBuffer(gl.ARRAY_BUFFER, menuBuffer);
 				gl.enableVertexAttribArray(texPositionLoc);

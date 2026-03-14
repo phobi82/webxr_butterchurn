@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Documented that the repository Pages source should be switched to `GitHub Actions` to use the new workflow-based deployment path reliably.
+- Fixed the shared alpha-render paths so `Ground Opacity` works again even after switching into the `stereoVolume` world renderer, which had been leaving WebGL blending disabled for later scene draws.
 
 ## [0.1.0] - 2026-03-14
 
