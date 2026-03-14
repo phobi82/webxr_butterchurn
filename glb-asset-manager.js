@@ -6,6 +6,10 @@
 		const multiplyMatrices = deps.multiplyMatrices;
 		const translateRotateYScale = deps.translateRotateYScale;
 		const setStatus = deps.setStatus;
+		const getLightingState = deps.getLightingState;
+		const getSceneLightingUniformLocations = deps.getSceneLightingUniformLocations;
+		const applySceneLightingUniforms = deps.applySceneLightingUniforms;
+		const maxSceneLights = deps.maxSceneLights || 4;
 		let litProgram = null;
 		let litPositionLoc = null;
 		let litNormalLoc = null;
@@ -14,7 +18,7 @@
 		let litViewLoc = null;
 		let litProjLoc = null;
 		let litSamplerLoc = null;
-		let litLightDirLoc = null;
+		let litLightingUniforms = null;
 		const assets = [];
 
 		const loadImageBitmapFromBlob = function(blob) {
@@ -115,7 +119,7 @@
 		return {
 			init: function() {
 				const litVs = "attribute vec3 position;attribute vec3 normal;attribute vec2 uv;uniform mat4 model;uniform mat4 view;uniform mat4 proj;varying vec3 vNormal;varying vec2 vUv;void main(){vNormal=mat3(model)*normal;vUv=uv;gl_Position=proj*view*model*vec4(position,1.0);}";
-				const litFs = "precision mediump float;uniform sampler2D tex;uniform vec3 lightDir;varying vec3 vNormal;varying vec2 vUv;void main(){vec3 n=normalize(vNormal);float light=max(dot(n,normalize(-lightDir)),0.0);vec4 base=texture2D(tex,vUv);gl_FragColor=vec4(base.rgb*(0.28+light*0.72),base.a);}";
+				const litFs = "precision mediump float;uniform sampler2D tex;uniform vec3 ambientColor;uniform float ambientStrength;uniform vec3 lightDirections[" + maxSceneLights + "];uniform vec3 lightColors[" + maxSceneLights + "];uniform float lightStrengths[" + maxSceneLights + "];varying vec3 vNormal;varying vec2 vUv;void main(){vec3 n=normalize(vNormal);vec3 lightAccum=ambientColor*ambientStrength;for(int i=0;i<" + maxSceneLights + ";i+=1){if(lightStrengths[i]>0.0){float diffuse=max(dot(n,normalize(lightDirections[i])),0.0);lightAccum+=lightColors[i]*(diffuse*lightStrengths[i]);}}vec4 base=texture2D(tex,vUv);gl_FragColor=vec4(base.rgb*min(lightAccum,vec3(1.9)),base.a);}";
 				litProgram = createProgram(litVs, litFs);
 				litPositionLoc = gl.getAttribLocation(litProgram, "position");
 				litNormalLoc = gl.getAttribLocation(litProgram, "normal");
@@ -124,7 +128,7 @@
 				litViewLoc = gl.getUniformLocation(litProgram, "view");
 				litProjLoc = gl.getUniformLocation(litProgram, "proj");
 				litSamplerLoc = gl.getUniformLocation(litProgram, "tex");
-				litLightDirLoc = gl.getUniformLocation(litProgram, "lightDir");
+				litLightingUniforms = getSceneLightingUniformLocations ? getSceneLightingUniformLocations(gl, litProgram) : null;
 				if (!gl.getExtension("OES_element_index_uint")) {
 					throw new Error("WebGL uint32 index extension missing.");
 				}
@@ -188,7 +192,6 @@
 					indexType: indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
 					worldMatrix: worldMatrix,
 					texture: texture,
-					lightDirection: config.lightDirection || {x: -0.35, y: 1, z: 0.2},
 					collisionBox: config.collisionBool === false ? null : createCollisionBox({
 						min: json.accessors[primitive.attributes.POSITION].min,
 						max: json.accessors[primitive.attributes.POSITION].max
@@ -209,6 +212,9 @@
 					return;
 				}
 				gl.useProgram(litProgram);
+				if (applySceneLightingUniforms && litLightingUniforms && getLightingState) {
+					applySceneLightingUniforms(gl, litLightingUniforms, getLightingState());
+				}
 				for (let i = 0; i < assets.length; i += 1) {
 					const asset = assets[i];
 					gl.bindBuffer(gl.ARRAY_BUFFER, asset.positionBuffer);
@@ -224,7 +230,6 @@
 					gl.uniformMatrix4fv(litModelLoc, false, asset.worldMatrix);
 					gl.uniformMatrix4fv(litViewLoc, false, currentView);
 					gl.uniformMatrix4fv(litProjLoc, false, currentProj);
-					gl.uniform3f(litLightDirLoc, asset.lightDirection.x, asset.lightDirection.y, asset.lightDirection.z);
 					gl.activeTexture(gl.TEXTURE0);
 					gl.bindTexture(gl.TEXTURE_2D, asset.texture);
 					gl.uniform1i(litSamplerLoc, 0);

@@ -19,11 +19,14 @@ Current capabilities:
 - simple collidable level geometry with platforms, walls, landing surfaces, ceiling checks, and smooth climbable obstacles
 - a textured goat model placed on the ground as a scene prop
 - automatic pose reset after falling out of bounds
-- an in-headset menu for jump mode, ground opacity, eye distance, audio metrics, visualizer-mode switching, and preset switching
+- an in-headset menu for jump mode, ground opacity, eye distance, audio metrics, visualizer-mode switching, light-preset switching, and preset switching
 - Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 texture sampling in canvas-driven modes
 - a toroidal fullscreen visualizer pass driven by head orientation
 - a stereoscopic Butterchurn world mode that turns preset `shapes` and `waves` into simple 3D scene primitives
+- shared scene lighting with moving, audio-reactive, colorful top-light rigs that affect the floor, obstacle boxes, and GLB props
+- two lighting presets: `Aurora Drift` for slower overhead motion and `Disco Storm` for aggressive disco-style strobing
 - modular visualizer code split into shared Butterchurn source, render-phase-aware mode modules, and a mode manager
+- modular scene-lighting code split into a dedicated controller that feeds shared lighting uniforms to the world render paths
 - audio input from shared screen or tab audio, a dedicated YouTube playlist tab, Suno Live Radio, or microphone capture with beat and peak analysis
 - a built-in `Debug Audio` synth path that generates a repeatable synthetic source without requiring screen-share permission
 
@@ -32,6 +35,7 @@ Current capabilities:
 - `index.html`: single-page app entry point and main XR logic
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
 - `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes
+- `xr-scene-lighting.js`: shared moving light presets and lighting-uniform helpers for scene geometry
 - `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
 - `xr-visualizer-source-butterchurn.js`: Butterchurn preset source, shared audio/frame analysis, and optional canvas output for canvas-driven modes
 - `xr-visualizer-manager.js`: mode registry, mode switching, and render-phase orchestration
@@ -74,14 +78,15 @@ The start page can switch between these audio inputs:
 - `Exit VR`: end the immersive session
 - audio buttons: select or stop the active audio source
 - mirrored menu overlay: visible on desktop by default for preset, mode, and movement-debug interaction outside XR
+- lighting presets: switch between calmer and more aggressive audio-reactive world-light rigs from the mirrored VR menu
 
 ## Desktop Preview Controls
 
 - click the main view: capture mouse look with pointer lock
 - mouse: look around
+- left mouse button: sprint while held
+- right mouse button: crouch while held
 - `W`, `A`, `S`, `D`: move
-- `Shift`: sprint
-- `Ctrl`: crouch
 - `Space`: jump
 - `M`: show or hide the VR menu overlay for desktop debugging
 
@@ -101,6 +106,7 @@ The start page can switch between these audio inputs:
 - Current work prioritizes XR locomotion and render-loop stability before deeper audiovisual features.
 - `toroidal` still uses the shared Butterchurn canvas, while `stereoVolume` now advances from the same shared audio/preset state without depending on that canvas render path.
 - `Debug Audio` now only provides a synthetic source signal; beat, bass, transient, and peak values are derived through the same shared analysis path as real inputs.
+- `Aurora Drift` keeps the world lighting in a slower colorful overhead sweep, while `Disco Storm` pushes faster moving beams and stronger strobes for a more aggressive disco look.
 - The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
 - The stereo mode is currently a first V2 step: it compiles preset `shapes` and `waves` into simple world-space geometry, while deeper Milkdrop/Butterchurn runtime interpretation can be layered into the same file later.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
