@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-14
+
+### Added
+- Added a modular scene-lighting controller with moving colorful top-light presets that drive shared lighting uniforms for the floor, obstacle boxes, and GLB props.
+- Added `Aurora Drift` and `Disco Storm` lighting presets, plus a new VR-menu section for cycling the active light rig in-headset or from the mirrored desktop menu.
+
+### Changed
+- Replaced the old single-direction world lighting with a shared multi-light shading path so scene geometry can react consistently to the selected moving audio-reactive light preset.
+- Changed the desktop preview controls so sprint now uses the left mouse button and crouch uses the right mouse button while pointer lock is active, removing the need to rely on `Shift` and `Ctrl` for movement modifiers.
+- Fixed desktop preview movement so forward motion stays aligned with the current look direction after turning left or right.
+
 ## [0.1.1] - 2026-03-14
 
 ### Added
