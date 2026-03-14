@@ -55,8 +55,7 @@
 			const floorAlphaMax = 1;
 			const menuWidth = 0.74;
 			const menuHeight = 0.56;
-			const menuContentMinU = 0.08;
-			const menuContentMaxU = 0.92;
+			const desktopMenuPreviewWidthPixels = 420;
 			const jumpModeButtonTopV = 0.25;
 			const jumpModeButtonBottomV = 0.35;
 			const jumpModeDoubleMinU = 0.1;
@@ -200,14 +199,14 @@
 			desktopMenuPreviewCanvas.style.position = "fixed";
 			desktopMenuPreviewCanvas.style.right = "12px";
 			desktopMenuPreviewCanvas.style.top = "12px";
-			desktopMenuPreviewCanvas.style.width = "420px";
-			desktopMenuPreviewCanvas.style.height = "315px";
+			desktopMenuPreviewCanvas.style.width = desktopMenuPreviewWidthPixels + "px";
+			desktopMenuPreviewCanvas.style.height = Math.round(desktopMenuPreviewWidthPixels * menuCanvas.height / menuCanvas.width) + "px";
 			desktopMenuPreviewCanvas.style.border = "1px solid #ffff00";
 			desktopMenuPreviewCanvas.style.backgroundColor = "rgba(0, 0, 32, 0.92)";
 			desktopMenuPreviewCanvas.style.display = "block";
 			desktopMenuPreviewCanvas.style.pointerEvents = "auto";
 			desktopMenuPreviewCanvas.style.cursor = "pointer";
-			desktopMenuPreviewCanvas.style.zIndex = "9";
+			desktopMenuPreviewCanvas.style.zIndex = "20";
 			document.body.appendChild(desktopMenuPreviewCanvas);
 			const desktopMenuPreviewCtx = desktopMenuPreviewCanvas.getContext("2d");
 
@@ -1198,6 +1197,7 @@
 				if (!menuOpenBool) {
 					return null;
 				}
+				const menuPlaneHeight = getMenuPlaneHeight();
 				const denom = dotVec3(menuNormal.x, menuNormal.y, menuNormal.z, ray.dir.x, ray.dir.y, ray.dir.z);
 				if (Math.abs(denom) < 0.0001) {
 					return null;
@@ -1216,38 +1216,159 @@
 				const relZ = point.z - menuCenter.z;
 				const localX = dotVec3(relX, relY, relZ, menuRight.x, menuRight.y, menuRight.z);
 				const localY = dotVec3(relX, relY, relZ, menuUp.x, menuUp.y, menuUp.z);
-				if (Math.abs(localX) > menuWidth * 0.5 || Math.abs(localY) > menuHeight * 0.5) {
+				if (Math.abs(localX) > menuWidth * 0.5 || Math.abs(localY) > menuPlaneHeight * 0.5) {
 					return null;
 				}
 				const u = 0.5 + localX / menuWidth;
-				const v = 0.5 - localY / menuHeight;
+				const v = 0.5 - localY / menuPlaneHeight;
 				return Object.assign({distance: distance, point: point, u: u, v: v}, getMenuInteractionAtUv(u, v));
 			};
 
+			const getMenuLayoutMetrics = function() {
+				const audioBarItems = 5;
+				const innerFrameInset = 24;
+				const audioPanelTop = 108;
+				const audioBarTop = 116;
+				const audioBarSpacing = 12;
+				const audioPanelHeight = (audioBarTop - audioPanelTop) + (audioBarItems - 1) * audioBarSpacing + 18;
+				const sectionGap = 12;
+				const jumpPanelTop = audioPanelTop + audioPanelHeight + sectionGap;
+				const jumpPanelHeight = 164;
+				const jumpPanelTitleY = jumpPanelTop + 14;
+				const jumpButtonTop = jumpPanelTop + 54;
+				const jumpButtonHeight = 70;
+				const groundPanelTop = jumpPanelTop + jumpPanelHeight + sectionGap;
+				const groundPanelHeight = 160;
+				const groundTitleY = groundPanelTop + 22;
+				const floorTrackY = groundPanelTop + 76;
+				const eyePanelTop = groundPanelTop + groundPanelHeight + sectionGap;
+				const eyePanelHeight = 156;
+				const eyeTitleY = eyePanelTop + 22;
+				const eyeTrackY = eyePanelTop + 76;
+				const modePanelTop = eyePanelTop + eyePanelHeight + sectionGap;
+				const modePanelHeight = 132;
+				const modeTitleY = modePanelTop + 26;
+				const modeRowTop = modePanelTop + 38;
+				const modeRowHeight = 78;
+				const modeArrowButtonTop = modeRowTop - 10;
+				const modeArrowButtonHeight = modeRowHeight + 10;
+				const modeValueY = modePanelTop + 58;
+				const modeMetaY = modePanelTop + 86;
+				const presetPanelTop = modePanelTop + modePanelHeight + sectionGap;
+				const presetPanelHeight = 132;
+				const presetTitleY = presetPanelTop + 26;
+				const presetRowTop = presetPanelTop + 38;
+				const presetRowHeight = 78;
+				const presetArrowButtonTop = presetRowTop - 10;
+				const presetArrowButtonHeight = presetRowHeight + 10;
+				const presetValueY = presetPanelTop + 58;
+				const presetMetaY = presetPanelTop + 86;
+				const prevX = menuCanvas.width * presetPrevMinU;
+				const prevWidth = menuCanvas.width * (presetPrevMaxU - presetPrevMinU);
+				const nextX = menuCanvas.width * presetNextMinU;
+				const nextWidth = menuCanvas.width * (presetNextMaxU - presetNextMinU);
+				const centerX = menuCanvas.width * 0.5;
+				const trackStartX = menuCanvas.width * menuSliderMinU;
+				const trackEndX = menuCanvas.width * menuSliderMaxU;
+				const canvasHeight = Math.ceil(presetPanelTop + presetPanelHeight + 30 + sectionGap);
+				const contentInset = canvasHeight - innerFrameInset - (presetPanelTop + presetPanelHeight);
+				const contentLeft = innerFrameInset + contentInset;
+				const contentRight = menuCanvas.width - innerFrameInset - contentInset;
+				const contentWidth = contentRight - contentLeft;
+				return {
+					contentLeft: contentLeft,
+					contentWidth: contentWidth,
+					contentRight: contentRight,
+					canvasHeight: canvasHeight,
+					audioPanelTop: audioPanelTop,
+					audioBarTop: audioBarTop,
+					audioBarSpacing: audioBarSpacing,
+					audioPanelHeight: audioPanelHeight,
+					jumpPanelTop: jumpPanelTop,
+					jumpPanelHeight: jumpPanelHeight,
+					jumpPanelTitleY: jumpPanelTitleY,
+					jumpButtonTop: jumpButtonTop,
+					jumpButtonHeight: jumpButtonHeight,
+					groundPanelTop: groundPanelTop,
+					groundPanelHeight: groundPanelHeight,
+					groundTitleY: groundTitleY,
+					floorTrackY: floorTrackY,
+					eyePanelTop: eyePanelTop,
+					eyePanelHeight: eyePanelHeight,
+					eyeTitleY: eyeTitleY,
+					eyeTrackY: eyeTrackY,
+					modePanelTop: modePanelTop,
+					modePanelHeight: modePanelHeight,
+					modeTitleY: modeTitleY,
+					modeRowTop: modeRowTop,
+					modeRowHeight: modeRowHeight,
+					modeArrowButtonTop: modeArrowButtonTop,
+					modeArrowButtonHeight: modeArrowButtonHeight,
+					modeValueY: modeValueY,
+					modeMetaY: modeMetaY,
+					presetPanelTop: presetPanelTop,
+					presetPanelHeight: presetPanelHeight,
+					presetTitleY: presetTitleY,
+					presetRowTop: presetRowTop,
+					presetRowHeight: presetRowHeight,
+					presetArrowButtonTop: presetArrowButtonTop,
+					presetArrowButtonHeight: presetArrowButtonHeight,
+					presetValueY: presetValueY,
+					presetMetaY: presetMetaY,
+					prevX: prevX,
+					prevWidth: prevWidth,
+					nextX: nextX,
+					nextWidth: nextWidth,
+					centerX: centerX,
+					trackStartX: trackStartX,
+					trackEndX: trackEndX,
+					sliderHalfHeightPx: menuSliderHalfHeight * canvasHeight
+				};
+			};
+
+			const syncMenuCanvasSize = function(layout) {
+				const targetHeight = layout && layout.canvasHeight ? layout.canvasHeight : menuCanvas.height;
+				if (menuCanvas.height !== targetHeight) {
+					menuCanvas.height = targetHeight;
+				}
+				if (desktopMenuPreviewCanvas.height !== targetHeight || desktopMenuPreviewCanvas.width !== menuCanvas.width) {
+					desktopMenuPreviewCanvas.width = menuCanvas.width;
+					desktopMenuPreviewCanvas.height = targetHeight;
+				}
+				desktopMenuPreviewCanvas.style.height = Math.round(desktopMenuPreviewWidthPixels * targetHeight / menuCanvas.width) + "px";
+			};
+
+			const getMenuPlaneHeight = function() {
+				return menuWidth * (getMenuLayoutMetrics().canvasHeight / menuCanvas.width);
+			};
+
 			const getMenuInteractionAtUv = function(u, v) {
-				const floorAlphaSliderBool = v >= floorAlphaSliderV - menuSliderHalfHeight && v <= floorAlphaSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
-				const eyeDistanceSliderBool = v >= eyeDistanceSliderV - menuSliderHalfHeight && v <= eyeDistanceSliderV + menuSliderHalfHeight && u >= menuSliderMinU && u <= menuSliderMaxU;
+				const layout = getMenuLayoutMetrics();
+				const x = u * menuCanvas.width;
+				const y = v * menuCanvas.height;
+				const floorAlphaSliderBool = Math.abs(y - layout.floorTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
+				const eyeDistanceSliderBool = Math.abs(y - layout.eyeTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
 				let jumpModeHit = "";
 				let shaderModeAction = "";
 				let presetAction = "";
-				if (v >= jumpModeButtonTopV && v <= jumpModeButtonBottomV) {
+				if (y >= layout.jumpButtonTop && y <= layout.jumpButtonTop + layout.jumpButtonHeight) {
 					if (u >= jumpModeDoubleMinU && u <= jumpModeDoubleMaxU) {
 						jumpModeHit = "double";
 					} else if (u >= jumpModeMultiMinU && u <= jumpModeMultiMaxU) {
 						jumpModeHit = "multi";
 					}
 				}
-				if (v >= shaderModeRowTopV && v <= shaderModeRowBottomV) {
-					if (u >= presetPrevMinU && u <= presetPrevMaxU) {
+				if (y >= layout.modeArrowButtonTop && y <= layout.modeArrowButtonTop + layout.modeArrowButtonHeight) {
+					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
 						shaderModeAction = "prev";
-					} else if (u >= presetNextMinU && u <= presetNextMaxU) {
+					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
 						shaderModeAction = "next";
 					}
 				}
-				if (v >= presetRowTopV && v <= presetRowBottomV) {
-					if (u >= presetPrevMinU && u <= presetPrevMaxU) {
+				if (y >= layout.presetArrowButtonTop && y <= layout.presetArrowButtonTop + layout.presetArrowButtonHeight) {
+					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
 						presetAction = "prev";
-					} else if (u >= presetNextMinU && u <= presetNextMaxU) {
+					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
 						presetAction = "next";
 					}
 				}
@@ -1658,14 +1779,19 @@
 
 			const renderMenuCanvasTexture = function() {
 				const reactiveColors = getAudioReactiveFloorColors();
+				const audioMetrics = visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
 				const accentRgb = hslToRgb((sceneTimeSeconds * 0.03 + 0.04) % 1, 0.85, 0.62);
 				const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
 				const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
-				const audioPercent = Math.round(reactiveColors.audioLevel * 100);
-				const peakPercent = Math.round(reactiveColors.audioPeak * 100);
-				const beatPercent = Math.round(reactiveColors.beatPulse * 100);
-				const contentLeft = menuCanvas.width * menuContentMinU;
-				const contentWidth = menuCanvas.width * (menuContentMaxU - menuContentMinU);
+				const layout = getMenuLayoutMetrics();
+				syncMenuCanvasSize(layout);
+				const audioBarItems = [
+					{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
+					{label: "Peak", value: clampNumber(audioMetrics.peak || 0, 0, 1)},
+					{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
+					{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
+					{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)}
+				];
 				const headerGradient = menuCtx.createLinearGradient(0, 0, menuCanvas.width, menuCanvas.height);
 				headerGradient.addColorStop(0, "#04111f");
 				headerGradient.addColorStop(0.55, "#071d33");
@@ -1693,70 +1819,79 @@
 				menuCtx.textBaseline = "top";
 				menuCtx.fillStyle = "#f8fbff";
 				menuCtx.font = "bold 46px Arial";
-				menuCtx.fillText("VR Control Deck", contentLeft, 34);
+				menuCtx.fillText("VR Control Deck", layout.contentLeft, 34);
 				menuCtx.fillStyle = accentSoft;
-				menuCtx.fillRect(contentLeft, 108, contentWidth, 48);
+				menuCtx.fillRect(layout.contentLeft, layout.audioPanelTop, layout.contentWidth, layout.audioPanelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
-				menuCtx.strokeRect(contentLeft, 108, contentWidth, 48);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 20px Arial";
-				menuCtx.fillText("Audio energy", contentLeft + 20, 120);
-				menuCtx.textAlign = "right";
-				menuCtx.fillStyle = accentColor;
-				menuCtx.fillText(audioPercent + "%", contentLeft + contentWidth - 20, 120);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.audioPanelTop, layout.contentWidth, layout.audioPanelHeight);
+				const audioBarStartX = layout.contentLeft + 150;
+				const audioBarWidth = layout.contentWidth - 230;
+				for (let i = 0; i < audioBarItems.length; i += 1) {
+					const item = audioBarItems[i];
+					const rowY = layout.audioBarTop + i * layout.audioBarSpacing;
+					menuCtx.textAlign = "left";
+					menuCtx.fillStyle = "#ffffff";
+					menuCtx.font = "bold 15px Arial";
+					menuCtx.fillText(item.label, layout.contentLeft + 18, rowY);
+					menuCtx.fillStyle = "rgba(255,255,255,0.14)";
+					menuCtx.fillRect(audioBarStartX, rowY + 2, audioBarWidth, 7);
+					menuCtx.fillStyle = accentColor;
+					menuCtx.fillRect(audioBarStartX, rowY + 2, audioBarWidth * item.value, 7);
+					menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
+					menuCtx.lineWidth = 1;
+					menuCtx.strokeRect(audioBarStartX, rowY + 2, audioBarWidth, 7);
+					menuCtx.textAlign = "right";
+					menuCtx.fillStyle = accentColor;
+					menuCtx.fillText(Math.round(item.value * 100) + "%", layout.contentRight - 16, rowY);
+				}
 				menuCtx.textAlign = "left";
-				menuCtx.fillStyle = "rgba(255,255,255,0.14)";
-				menuCtx.fillRect(contentLeft + 160, 125, contentWidth - 250, 14);
-				menuCtx.fillStyle = accentColor;
-				menuCtx.fillRect(contentLeft + 160, 125, (contentWidth - 250) * reactiveColors.audioLevel, 14);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.2)";
-				menuCtx.strokeRect(contentLeft + 160, 125, contentWidth - 250, 14);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "18px Arial";
-				menuCtx.fillText("Peak " + peakPercent + "%  Beat " + beatPercent + "%", contentLeft + 20, 148);
 				menuCtx.fillStyle = "rgba(6,14,24,0.78)";
-				menuCtx.fillRect(contentLeft, 182, contentWidth, 164);
+				menuCtx.fillRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.strokeRect(contentLeft, 182, contentWidth, 164);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
 				menuCtx.textAlign = "center";
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 34px Arial";
-				menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, 202);
-				const buttonTop = menuCanvas.height * jumpModeButtonTopV;
-				const buttonHeight = menuCanvas.height * (jumpModeButtonBottomV - jumpModeButtonTopV);
+				menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, layout.jumpPanelTitleY);
+				const buttonTop = layout.jumpButtonTop;
+				const buttonHeight = layout.jumpButtonHeight;
 				const doubleButtonX = menuCanvas.width * jumpModeDoubleMinU;
 				const doubleButtonWidth = menuCanvas.width * (jumpModeDoubleMaxU - jumpModeDoubleMinU);
 				const multiButtonX = menuCanvas.width * jumpModeMultiMinU;
 				const multiButtonWidth = menuCanvas.width * (jumpModeMultiMaxU - jumpModeMultiMinU);
 				menuCtx.fillStyle = jumpMode === "double" ? accentSoft : hoveredJumpMode === "double" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
 				menuCtx.fillRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
+				menuCtx.lineWidth = 2;
 				menuCtx.strokeRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
 				menuCtx.fillStyle = jumpMode === "multi" ? accentSoft : hoveredJumpMode === "multi" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
 				menuCtx.fillRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
 				menuCtx.strokeRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 24);
-				menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, buttonTop + 24);
+				menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 16);
+				menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, buttonTop + 16);
 				menuCtx.fillStyle = "rgba(255,255,255,0.7)";
 				menuCtx.font = "20px Arial";
-				menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 68);
-				menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, buttonTop + 68);
+				menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 48);
+				menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, buttonTop + 48);
 				menuCtx.textAlign = "left";
 				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(contentLeft, 370, contentWidth, 160);
+				menuCtx.fillRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.strokeRect(contentLeft, 370, contentWidth, 160);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Ground Opacity", contentLeft + 28, 392);
+				menuCtx.fillText("Ground Opacity", layout.contentLeft + 28, layout.groundTitleY);
 				menuCtx.textAlign = "right";
 				menuCtx.fillStyle = accentColor;
-				menuCtx.fillText(Math.round(floorAlpha * 100) + "%", contentLeft + contentWidth - 28, 392);
+				menuCtx.fillText(Math.round(floorAlpha * 100) + "%", layout.contentRight - 28, layout.groundTitleY);
 				menuCtx.textAlign = "left";
-				const floorTrackStartX = menuCanvas.width * menuSliderMinU;
-				const floorTrackEndX = menuCanvas.width * menuSliderMaxU;
-				const floorTrackY = menuCanvas.height * floorAlphaSliderV;
+				const floorTrackStartX = layout.trackStartX;
+				const floorTrackEndX = layout.trackEndX;
+				const floorTrackY = layout.floorTrackY;
 				const floorKnobX = menuCanvas.width * floorAlphaToSliderU(floorAlpha);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
 				menuCtx.lineWidth = 18;
@@ -1787,19 +1922,20 @@
 				menuCtx.fillText("Solid", floorTrackEndX, floorTrackY + 26);
 				menuCtx.textAlign = "left";
 				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(contentLeft, 548, contentWidth, 156);
+				menuCtx.fillRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.strokeRect(contentLeft, 548, contentWidth, 156);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Eye Distance", contentLeft + 28, 570);
+				menuCtx.fillText("Eye Distance", layout.contentLeft + 28, layout.eyeTitleY);
 				menuCtx.textAlign = "right";
 				menuCtx.fillStyle = accentColor;
-				menuCtx.fillText(Math.round(eyeDistanceMeters * 1000) + " mm", contentLeft + contentWidth - 28, 570);
+				menuCtx.fillText(Math.round(eyeDistanceMeters * 1000) + " mm", layout.contentRight - 28, layout.eyeTitleY);
 				menuCtx.textAlign = "left";
-				const trackStartX = menuCanvas.width * menuSliderMinU;
-				const trackEndX = menuCanvas.width * menuSliderMaxU;
-				const trackY = menuCanvas.height * eyeDistanceSliderV;
+				const trackStartX = layout.trackStartX;
+				const trackEndX = layout.trackEndX;
+				const trackY = layout.eyeTrackY;
 				const knobX = menuCanvas.width * eyeDistanceToSliderU(eyeDistanceMeters);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
 				menuCtx.lineWidth = 18;
@@ -1824,53 +1960,69 @@
 				menuCtx.textAlign = "right";
 				menuCtx.fillText(Math.round(eyeDistanceMax * 1000) + " mm", trackEndX, trackY + 26);
 				menuCtx.textAlign = "center";
+				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
+				menuCtx.fillRect(layout.contentLeft, layout.modePanelTop, layout.contentWidth, layout.modePanelHeight);
+				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.modePanelTop, layout.contentWidth, layout.modePanelHeight);
 				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 32px Arial";
-				menuCtx.fillText("Visualizer Mode", menuCanvas.width * 0.5, 704);
+				menuCtx.font = "bold 28px Arial";
+				menuCtx.fillText("Visualizer Mode", menuCanvas.width * 0.5, layout.modeTitleY);
 				const shaderModeNames = visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"];
 				const currentShaderModeIndex = visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0;
-				const shaderModeTop = menuCanvas.height * shaderModeRowTopV;
-				const shaderModeHeight = menuCanvas.height * (shaderModeRowBottomV - shaderModeRowTopV);
-				const prevX = menuCanvas.width * presetPrevMinU;
-				const prevWidth = menuCanvas.width * (presetPrevMaxU - presetPrevMinU);
-				const nextX = menuCanvas.width * presetNextMinU;
-				const nextWidth = menuCanvas.width * (presetNextMaxU - presetNextMinU);
-				const centerX = menuCanvas.width * 0.5;
+				const shaderModeTop = layout.modeRowTop;
+				const shaderModeHeight = layout.modeRowHeight;
+				const shaderModeArrowButtonTop = layout.modeArrowButtonTop;
+				const shaderModeArrowButtonHeight = layout.modeArrowButtonHeight;
+				const prevX = layout.prevX;
+				const prevWidth = layout.prevWidth;
+				const nextX = layout.nextX;
+				const nextWidth = layout.nextWidth;
+				const centerX = layout.centerX;
 				menuCtx.fillStyle = hoveredShaderModeAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(prevX, shaderModeTop, prevWidth, shaderModeHeight);
-				menuCtx.strokeRect(prevX, shaderModeTop, prevWidth, shaderModeHeight);
+				menuCtx.fillRect(prevX, shaderModeArrowButtonTop, prevWidth, shaderModeArrowButtonHeight);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(prevX, shaderModeArrowButtonTop, prevWidth, shaderModeArrowButtonHeight);
 				menuCtx.fillStyle = hoveredShaderModeAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(nextX, shaderModeTop, nextWidth, shaderModeHeight);
-				menuCtx.strokeRect(nextX, shaderModeTop, nextWidth, shaderModeHeight);
+				menuCtx.fillRect(nextX, shaderModeArrowButtonTop, nextWidth, shaderModeArrowButtonHeight);
+				menuCtx.strokeRect(nextX, shaderModeArrowButtonTop, nextWidth, shaderModeArrowButtonHeight);
 				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 56px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, shaderModeTop + 2);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, shaderModeTop + 2);
-				drawCenteredFittedText(shaderModeNames[currentShaderModeIndex] || "No mode", centerX, shaderModeTop + 18, menuCanvas.width * 0.48, 26, 16, "#ffffff", "bold");
+				menuCtx.font = "bold 44px Arial";
+				menuCtx.fillText("<", prevX + prevWidth * 0.5, shaderModeTop + 14);
+				menuCtx.fillText(">", nextX + nextWidth * 0.5, shaderModeTop + 14);
+				drawCenteredFittedText(shaderModeNames[currentShaderModeIndex] || "No mode", centerX, layout.modeValueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
 				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "20px Arial";
-				menuCtx.fillText((currentShaderModeIndex + 1) + " / " + shaderModeNames.length, centerX, shaderModeTop + 56);
+				menuCtx.font = "18px Arial";
+				menuCtx.fillText((currentShaderModeIndex + 1) + " / " + shaderModeNames.length, centerX, layout.modeMetaY);
+				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
+				menuCtx.fillRect(layout.contentLeft, layout.presetPanelTop, layout.contentWidth, layout.presetPanelHeight);
+				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(layout.contentLeft, layout.presetPanelTop, layout.contentWidth, layout.presetPanelHeight);
 				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 32px Arial";
-				menuCtx.fillText("Butterchurn Preset", menuCanvas.width * 0.5, 826);
+				menuCtx.font = "bold 28px Arial";
+				menuCtx.fillText("Butterchurn Preset", menuCanvas.width * 0.5, layout.presetTitleY);
 				const presetNames = visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"];
 				const currentPresetIndex = visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0;
-				const presetTop = menuCanvas.height * presetRowTopV;
-				const presetHeight = menuCanvas.height * (presetRowBottomV - presetRowTopV);
+				const presetTop = layout.presetRowTop;
+				const presetHeight = layout.presetRowHeight;
+				const presetArrowButtonTop = layout.presetArrowButtonTop;
+				const presetArrowButtonHeight = layout.presetArrowButtonHeight;
 				menuCtx.fillStyle = hoveredPresetAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(prevX, presetTop, prevWidth, presetHeight);
-				menuCtx.strokeRect(prevX, presetTop, prevWidth, presetHeight);
+				menuCtx.fillRect(prevX, presetArrowButtonTop, prevWidth, presetArrowButtonHeight);
+				menuCtx.lineWidth = 2;
+				menuCtx.strokeRect(prevX, presetArrowButtonTop, prevWidth, presetArrowButtonHeight);
 				menuCtx.fillStyle = hoveredPresetAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(nextX, presetTop, nextWidth, presetHeight);
-				menuCtx.strokeRect(nextX, presetTop, nextWidth, presetHeight);
+				menuCtx.fillRect(nextX, presetArrowButtonTop, nextWidth, presetArrowButtonHeight);
+				menuCtx.strokeRect(nextX, presetArrowButtonTop, nextWidth, presetArrowButtonHeight);
 				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 56px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 2);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 2);
-				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, presetTop + 18, menuCanvas.width * 0.48, 26, 16, "#ffffff", "bold");
+				menuCtx.font = "bold 44px Arial";
+				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 14);
+				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 14);
+				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, layout.presetValueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
 				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "20px Arial";
-				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, presetTop + 56);
+				menuCtx.font = "18px Arial";
+				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, layout.presetMetaY);
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 			};
@@ -1879,10 +2031,13 @@
 				if (!menuOpenBool) {
 					return;
 				}
+				const menuPlaneHeight = getMenuPlaneHeight();
 				renderMenuCanvasTexture();
+				gl.disable(gl.DEPTH_TEST);
 				gl.disable(gl.CULL_FACE);
-				drawTexturedPlane(basisScale(menuCenter.x, menuCenter.y, menuCenter.z, menuRight, menuUp, menuNormal, menuWidth, menuHeight, 1));
+				drawTexturedPlane(basisScale(menuCenter.x, menuCenter.y, menuCenter.z, menuRight, menuUp, menuNormal, menuWidth, menuPlaneHeight, 1));
 				gl.enable(gl.CULL_FACE);
+				gl.enable(gl.DEPTH_TEST);
 			};
 
 			const updateDesktopMenuPreview = function() {

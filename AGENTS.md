@@ -112,6 +112,7 @@ Recommended structure order:
 ## Testing Guidelines
 - when Chrome DevTools MCP is available, use it to its full extent for manual verification (console, network, storage, performance, screenshots, viewport/device emulation, and interaction automation as applicable).
 - If required to inspect external web content, prefer Chrome DevTools MCP.
+- When Chrome DevTools MCP opens a blank `about:blank` page alongside the local app page during verification, close the blank page immediately so only the relevant project pages remain open.
 - To inspect the in-VR menu without changing repository code, prefer a temporary Chrome DevTools script injection that opens the existing `menuCanvas` as a large DOM overlay or refreshes an `img` from `menuCanvas.toDataURL(...)`; use this only for manual verification and reload afterward instead of committing preview-only helpers.
 - For logic changes, add temporary console diagnostics during development and remove before commit; document manual test steps in the PR.
 
@@ -121,6 +122,8 @@ Recommended structure order:
 
 ## Commit & Pull Request Guidelines
 - Commits use short, imperative subjects (e.g., `Tighten auto-wire pacing`) with focused diffs; include a brief body when behavior shifts.
+- When the user wants to commit, explicitly suggest whether a `major`, `minor`, or `patch` version bump is appropriate under Semantic Versioning, based on how much the public behavior changed: breaking changes imply `major`, backward-compatible feature additions imply `minor`, and backward-compatible fixes or polish imply `patch`.
+- When a checkpoint visibly matches the user's intent and the worktree is in a sensible state to snapshot, proactively suggest making a commit and include the corresponding Semantic Versioning bump recommendation if a version increment is warranted.
 - PRs should explain the change, list reproduction steps, and attach before/after screenshots for UI tweaks; link issues when applicable and call out gameplay balance impacts.
 
 ## Security & Configuration Tips

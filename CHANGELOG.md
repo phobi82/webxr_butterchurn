@@ -25,7 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the shared audio source logic so stream inputs and the new synthetic debug input use the same analyser/beat pipeline and the same stop/reset path.
 - Reorganized the desktop audio controls into a source row (`Share Audio`, `Use Microphone`, `Debug Audio`, `Stop Audio`) and a separate tab-source row for `YouTube Playlist` and `Suno Live Radio`.
 - Removed the separate desktop preset section and now show the desktop menu overlay by default at startup, since preset and mode selection already live in the mirrored headset menu canvas.
+- Raised the mirrored desktop menu canvas above the start-page control panel so the same menu stays visually in the foreground on the non-XR preview as well.
 - Split the on-page controls hint into separate `VR:` and `Desktop:` lines for readability.
+- Replaced the single `Audio energy` readout in the VR menu with separate bar meters for `level`, `peak`, `bass`, `transient`, and `beatPulse`.
+- Tightened the VR menu layout so section borders use consistent stroke widths again, mode/preset rows live inside their own panels, and menu hit zones now derive from the same shared layout metrics as the drawn controls.
+- Increased the VR click height of the visualizer-mode and preset arrow buttons so they are easier to hit in-headset.
+- Made the VR menu canvas height auto-expand with its section layout so enlarged controls no longer spill out of the bottom, and scaled the in-world menu plane and desktop overlay to match the live menu aspect ratio.
 
 ## [0.0.3] - 2026-03-13
 
