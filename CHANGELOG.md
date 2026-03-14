@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-03-14
+
 ### Added
 - Added a GitHub Pages deployment workflow under `.github/workflows/deploy-pages.yml` so pushes to `main` can publish the site through GitHub Actions instead of depending on branch-based auto-deploy behavior.
 
 ### Changed
 - Documented that the repository Pages source should be switched to `GitHub Actions` to use the new workflow-based deployment path reliably.
 - Fixed the shared alpha-render paths so `Ground Opacity` works again even after switching into the `stereoVolume` world renderer, which had been leaving WebGL blending disabled for later scene draws.
+- Improved the README structure and clarified the VR control labels so sprint and airborne boost are documented on the correct triggers instead of generic face-button wording.
+- Removed the debug-only audio metric overrides so `Debug Audio` now feeds a synthetic source signal through the same derived beat, bass, transient, and peak analysis path as real inputs, and tightened the shared beat detection to respond more reliably to both live and synthetic sources.
 
 ## [0.1.0] - 2026-03-14
 

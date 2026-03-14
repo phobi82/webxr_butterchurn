@@ -20,6 +20,8 @@
 			audioNode: null,
 			audioAnalyser: null,
 			audioAnalyserData: null,
+			audioTimeDomainData: null,
+			previousFrequencyData: null,
 			audioStream: null,
 			audioSourceKind: "none",
 			debugAudioNodes: null,
@@ -35,6 +37,8 @@
 			audioPeak: 0,
 			audioBassLevel: 0,
 			audioTransientLevel: 0,
+			audioBeatBaseline: 0,
+			audioTransientBaseline: 0,
 			beatPulse: 0,
 			beatCooldownSeconds: 0,
 			presetVersion: 0,
@@ -111,17 +115,24 @@
 				this.audioPeak = 0;
 				this.audioBassLevel = 0;
 				this.audioTransientLevel = 0;
+				this.audioBeatBaseline = 0;
+				this.audioTransientBaseline = 0;
 				this.beatPulse = 0;
 				this.beatCooldownSeconds = 0;
+				if (this.previousFrequencyData) {
+					this.previousFrequencyData.fill(0);
+				}
 			},
 			ensureAudioAnalyser: function() {
 				if (this.audioAnalyser) {
 					return;
 				}
 				this.audioAnalyser = this.audioContext.createAnalyser();
-				this.audioAnalyser.fftSize = 256;
-				this.audioAnalyser.smoothingTimeConstant = 0.82;
+				this.audioAnalyser.fftSize = 512;
+				this.audioAnalyser.smoothingTimeConstant = 0.58;
 				this.audioAnalyserData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+				this.audioTimeDomainData = new Uint8Array(this.audioAnalyser.fftSize);
+				this.previousFrequencyData = new Float32Array(this.audioAnalyser.frequencyBinCount);
 			},
 			destroyDebugAudioNodes: function() {
 				if (!this.debugAudioNodes) {
@@ -263,36 +274,68 @@
 				if (this.lastFrameTimeSeconds === timeSeconds) {
 					return;
 				}
-				const tau = Math.PI * 2;
 				let elapsedTimeSeconds = 1 / 60;
 				if (this.lastFrameTimeSeconds > 0) {
 					elapsedTimeSeconds = utils.clampNumber(timeSeconds - this.lastFrameTimeSeconds, 1 / 240, 0.25);
 				}
 				this.lastFrameTimeSeconds = timeSeconds;
-				if (this.audioAnalyser && this.audioAnalyserData) {
+				if (this.audioAnalyser && this.audioAnalyserData && this.audioTimeDomainData && this.previousFrequencyData) {
 					this.audioAnalyser.getByteFrequencyData(this.audioAnalyserData);
+					this.audioAnalyser.getByteTimeDomainData(this.audioTimeDomainData);
 					let levelSum = 0;
 					let bassSum = 0;
 					let bassCount = 0;
+					let fluxSum = 0;
+					let rmsSum = 0;
+					const bassBinLimit = Math.min(14, this.audioAnalyserData.length);
+					const fluxBinLimit = Math.min(56, this.audioAnalyserData.length);
 					for (let i = 0; i < this.audioAnalyserData.length; i += 1) {
+						const currentMagnitude = this.audioAnalyserData[i] / 255;
 						levelSum += this.audioAnalyserData[i];
-						if (i < 12) {
+						if (i < bassBinLimit) {
 							bassSum += this.audioAnalyserData[i];
 							bassCount += 1;
 						}
+						if (i < fluxBinLimit) {
+							fluxSum += Math.max(0, currentMagnitude - this.previousFrequencyData[i]);
+						}
+						this.previousFrequencyData[i] = currentMagnitude;
+					}
+					for (let i = 0; i < this.audioTimeDomainData.length; i += 1) {
+						const centeredSample = (this.audioTimeDomainData[i] - 128) / 128;
+						rmsSum += centeredSample * centeredSample;
 					}
 					const averageLevel = levelSum / (this.audioAnalyserData.length * 255);
 					const bassLevel = bassCount ? bassSum / (bassCount * 255) : averageLevel;
-					const smoothedLevel = this.audioLevel + (averageLevel - this.audioLevel) * 0.16;
-					const smoothedBassLevel = this.audioBassLevel + (bassLevel - this.audioBassLevel) * 0.18;
-					const transientLevel = Math.max(0, averageLevel - smoothedLevel * 0.82);
-					const beatThreshold = Math.max(0.03, smoothedBassLevel * 0.24);
-					this.audioTransientLevel += (transientLevel - this.audioTransientLevel) * 0.35;
+					const rmsLevel = Math.sqrt(rmsSum / this.audioTimeDomainData.length);
+					const combinedLevel = Math.max(averageLevel, rmsLevel * 1.7);
+					const spectralFluxLevel = fluxBinLimit ? fluxSum / fluxBinLimit : 0;
+					const transientInstant = utils.clampNumber(spectralFluxLevel * 7.5 + Math.max(0, combinedLevel - this.audioLevel) * 1.4, 0, 1);
+					const levelBlend = Math.min(1, elapsedTimeSeconds * 10);
+					const bassBlend = Math.min(1, elapsedTimeSeconds * 12);
+					const transientBlend = Math.min(1, elapsedTimeSeconds * 16);
+					const bassBaselineBefore = this.audioBeatBaseline;
+					const transientBaselineBefore = this.audioTransientBaseline;
+					const baselineBlend = Math.min(1, elapsedTimeSeconds * 2.4);
+					const transientBaselineBlend = Math.min(1, elapsedTimeSeconds * 3.2);
+					const smoothedLevel = this.audioLevel + (combinedLevel - this.audioLevel) * levelBlend;
+					const smoothedBassLevel = this.audioBassLevel + (bassLevel - this.audioBassLevel) * bassBlend;
+					const bassRise = Math.max(0, bassLevel - bassBaselineBefore);
+					const bassRiseThreshold = Math.max(0.012, bassBaselineBefore * 0.018);
+					const transientThreshold = Math.max(0.04, transientBaselineBefore + 0.008);
+					this.audioTransientLevel += (transientInstant - this.audioTransientLevel) * transientBlend;
 					this.audioLevel = smoothedLevel;
 					this.audioBassLevel = smoothedBassLevel;
-					this.audioPeak = Math.max(averageLevel, this.audioPeak - elapsedTimeSeconds * 0.65);
+					this.audioPeak = Math.max(combinedLevel, this.audioPeak - elapsedTimeSeconds * 0.65);
+					this.audioBeatBaseline += (bassLevel - this.audioBeatBaseline) * baselineBlend;
+					this.audioTransientBaseline += (transientInstant - this.audioTransientBaseline) * transientBaselineBlend;
 					this.beatCooldownSeconds = Math.max(0, this.beatCooldownSeconds - elapsedTimeSeconds);
-					if (this.beatCooldownSeconds <= 0 && bassLevel - smoothedBassLevel > beatThreshold && transientLevel > 0.018) {
+					if (
+						this.beatCooldownSeconds <= 0 &&
+						bassRise > bassRiseThreshold &&
+						transientInstant > transientThreshold &&
+						combinedLevel > 0.035
+					) {
 						this.beatPulse = 1;
 						this.beatCooldownSeconds = 0.18;
 					} else {
@@ -303,19 +346,10 @@
 					this.audioPeak *= 0.9;
 					this.audioBassLevel *= 0.9;
 					this.audioTransientLevel *= 0.86;
+					this.audioBeatBaseline *= 0.88;
+					this.audioTransientBaseline *= 0.88;
 					this.beatPulse *= 0.82;
 					this.beatCooldownSeconds = 0;
-				}
-				if (this.audioSourceKind === "debug") {
-					const debugBeatStrength = Math.max(0, Math.sin(timeSeconds * tau * 2.05));
-					const debugTransientStrength = Math.max(0, Math.sin(timeSeconds * tau * 7.6));
-					this.audioBassLevel = Math.max(this.audioBassLevel, 0.16 + debugBeatStrength * 0.45);
-					this.audioTransientLevel = Math.max(this.audioTransientLevel, debugBeatStrength * 0.05 + debugTransientStrength * 0.035);
-					this.audioPeak = Math.max(this.audioPeak, this.audioLevel + debugBeatStrength * 0.12);
-					if (debugBeatStrength > 0.985 && this.beatCooldownSeconds <= 0.09) {
-						this.beatPulse = 1;
-						this.beatCooldownSeconds = 0.18;
-					}
 				}
 			},
 			setAudioStream: function(stream) {

@@ -1,33 +1,31 @@
 # WebXR Visualizer Foundation
 
-Local WebXR prototype in plain HTML and vanilla JavaScript. The current focus is stable VR movement, jumping, headset menu interaction, and Butterchurn-driven XR visualizer modes that can react to live audio.
+Local WebXR prototype built in plain HTML and vanilla JavaScript. The current goal is a stable movement and interaction baseline for an XR audiovisualizer: reliable locomotion, jumping, in-headset menu control, and Butterchurn-driven visuals that can respond to live audio.
 
-## Current Scope
+## Overview
 
-This repository is the foundation phase of a browser-based WebXR audiovisualizer.
+This repository is the foundation phase of a browser-based WebXR audiovisualizer. It deliberately stays small: one HTML entry point, local browser execution, and no framework or build tooling.
 
-Implemented currently:
+Current capabilities:
 
 - immersive VR startup with `local-floor` reference space
 - desktop preview rendering when no XR session is active
-- desktop preview locomotion with `WASD`, `Shift`, `Ctrl`, `Space`, and mouse-look on the main canvas
-- desktop preview toggle for the in-headset VR menu overlay via `M`
+- first-person desktop preview controls with `WASD`, `Shift`, `Ctrl`, `Space`, mouse-look, and `M` for the mirrored VR menu
 - left-stick locomotion with head-relative movement
-- right-stick smooth turning
-- right-stick crouch and tiptoe height control layered on top of relative headset movement
-- sprint on the left controller face button
+- right-stick smooth turning plus crouch and tiptoe height control
+- sprint on the left trigger
 - jump, hold-to-jump-higher variable jump physics, double-jump, and multi-jump modes
-- in-air directional boost on the right controller face button
+- in-air directional boost on the right trigger
 - simple collidable level geometry with platforms, walls, landing surfaces, ceiling checks, and smooth climbable obstacles
 - a textured goat model placed on the ground as a scene prop
 - automatic pose reset after falling out of bounds
-- redesigned in-headset menu for jump mode, ground opacity, eye distance, audio energy/peak/beat feedback, visualizer-mode switching, and preset switching
+- an in-headset menu for jump mode, ground opacity, eye distance, audio metrics, visualizer-mode switching, and preset switching
 - Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 texture sampling in canvas-driven modes
-- toroidal fullscreen visualizer pass driven by head orientation
-- stereoscopic Butterchurn world mode that turns preset `shapes` and `waves` into simple 3D scene primitives
-- modular visualizer architecture with a shared Butterchurn source, phase-aware mode modules, and a mode manager
-- audio input from shared screen/tab audio, a dedicated YouTube playlist tab, Suno Live Radio, or microphone capture with beat/peak analysis
-- a built-in `Debug Audio` synth path that simulates repeatable beat/bass/transient activity without requiring screen-share permission
+- a toroidal fullscreen visualizer pass driven by head orientation
+- a stereoscopic Butterchurn world mode that turns preset `shapes` and `waves` into simple 3D scene primitives
+- modular visualizer code split into shared Butterchurn source, render-phase-aware mode modules, and a mode manager
+- audio input from shared screen or tab audio, a dedicated YouTube playlist tab, Suno Live Radio, or microphone capture with beat and peak analysis
+- a built-in `Debug Audio` synth path that generates a repeatable synthetic source without requiring screen-share permission
 
 ## Project Files
 
@@ -57,18 +55,25 @@ There is no build step and no backend.
 1. Clone or download the repository.
 2. Open [`index.html`](./index.html) in a WebXR-capable browser.
 3. Wait for the status text to finish checking XR support.
-4. Use the desktop panel to start VR or test audio/preset behavior in preview mode.
+4. Use the desktop panel to start VR or test audio, presets, and movement in preview mode.
 
-## Desktop Panel
+## Audio Sources
 
-- `Enter VR`: start an immersive session
-- `Exit VR`: end the immersive session
+The start page can switch between these audio inputs:
+
 - `Share Audio`: capture audio from a shared display, window, or tab
 - `YouTube Playlist`: open the configured playlist tab, then capture that tab with tab audio enabled
 - `Suno Live Radio`: open Suno Live Radio in a separate tab, then capture that tab with tab audio enabled
 - `Use Microphone`: capture microphone audio
 - `Debug Audio`: start a synthetic shared audio source for visualizer debugging without screen sharing
 - `Stop Audio`: disconnect the active audio source
+
+## Desktop Panel
+
+- `Enter VR`: start an immersive session
+- `Exit VR`: end the immersive session
+- audio buttons: select or stop the active audio source
+- mirrored menu overlay: visible on desktop by default for preset, mode, and movement-debug interaction outside XR
 
 ## Desktop Preview Controls
 
@@ -88,15 +93,14 @@ There is no build step and no backend.
 - A (right controller): jump, hold briefly for extra height
 - right trigger while airborne: directional air boost
 - Y (left controller): open or close the in-headset menu
-- trigger on a menu control: activate menu buttons and drag the eye-distance slider
+- trigger on a menu control: activate buttons and drag sliders in the in-headset menu
 
 ## Notes
 
 - Everything runs locally in the browser.
-- The project intentionally stays simple: one HTML entry point, plain JavaScript, no framework, no bundler.
 - Current work prioritizes XR locomotion and render-loop stability before deeper audiovisual features.
 - `toroidal` still uses the shared Butterchurn canvas, while `stereoVolume` now advances from the same shared audio/preset state without depending on that canvas render path.
-- `Debug Audio` drives the same shared audio-analysis path as real inputs, so beat-reactive visuals can be tested locally even when browser share dialogs cannot be automated.
+- `Debug Audio` now only provides a synthetic source signal; beat, bass, transient, and peak values are derived through the same shared analysis path as real inputs.
 - The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
 - The stereo mode is currently a first V2 step: it compiles preset `shapes` and `waves` into simple world-space geometry, while deeper Milkdrop/Butterchurn runtime interpretation can be layered into the same file later.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
