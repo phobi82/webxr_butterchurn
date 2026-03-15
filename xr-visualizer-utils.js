@@ -7,6 +7,24 @@
 	};
 	const emptyAudioMetrics = Object.freeze({level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0});
 
+	const normalizeVec3 = function(x, y, z) {
+		const length = Math.sqrt(x * x + y * y + z * z) || 1;
+		return {x: x / length, y: y / length, z: z / length};
+	};
+
+	const dotVec3 = function(ax, ay, az, bx, by, bz) {
+		return ax * bx + ay * by + az * bz;
+	};
+
+	const rotateXZ = function(x, z, yaw) {
+		const cosYaw = Math.cos(yaw);
+		const sinYaw = Math.sin(yaw);
+		return {
+			x: x * cosYaw + z * sinYaw,
+			z: -x * sinYaw + z * cosYaw
+		};
+	};
+
 	const hueToRgb = function(p, q, t) {
 		if (t < 0) {
 			t += 1;
@@ -79,6 +97,14 @@
 		};
 	};
 
+	const extractForwardDirectionFromQuaternion = function(quaternion) {
+		return normalizeVec3(
+			-(2 * (quaternion.x * quaternion.z + quaternion.w * quaternion.y)),
+			-(2 * (quaternion.y * quaternion.z - quaternion.w * quaternion.x)),
+			-(1 - 2 * (quaternion.x * quaternion.x + quaternion.y * quaternion.y))
+		);
+	};
+
 	const extractProjectionFov = function(projectionMatrix) {
 		const xScale = projectionMatrix[0] || 1;
 		const yScale = projectionMatrix[5] || 1;
@@ -117,12 +143,16 @@
 	window.xrVisualizerUtils = {
 		clampNumber: clampNumber,
 		emptyAudioMetrics: emptyAudioMetrics,
+		normalizeVec3: normalizeVec3,
+		dotVec3: dotVec3,
+		rotateXZ: rotateXZ,
 		hueToRgb: hueToRgb,
 		hslToRgb: hslToRgb,
 		wrapUnit: wrapUnit,
 		unwrapAngle: unwrapAngle,
 		extractForwardYawPitch: extractForwardYawPitch,
 		extractForwardYawPitchFromQuaternion: extractForwardYawPitchFromQuaternion,
+		extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion,
 		extractProjectionFov: extractProjectionFov,
 		extractCameraPositionFromViewMatrix: extractCameraPositionFromViewMatrix
 	};

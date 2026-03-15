@@ -1,19 +1,11 @@
 (function() {
 	// Owns collision queries and movement state transitions for XR and desktop.
 	const clampNumber = window.xrVisualizerUtils.clampNumber;
+	const rotateXZ = window.xrVisualizerUtils.rotateXZ;
 
 	const normalize2d = function(x, y) {
 		const length = Math.sqrt(x * x + y * y) || 1;
 		return {x: x / length, y: y / length};
-	};
-
-	const rotateXZ = function(x, z, yaw) {
-		const cosYaw = Math.cos(yaw);
-		const sinYaw = Math.sin(yaw);
-		return {
-			x: x * cosYaw + z * sinYaw,
-			z: -x * sinYaw + z * cosYaw
-		};
 	};
 
 	const getHeadYaw = function(orientation) {

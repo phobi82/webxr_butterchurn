@@ -36,8 +36,9 @@ Current capabilities:
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
 - `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, and UI state updates
 - `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
-- `xr-menu-ui.js`: shared VR menu canvas renderer, layout math, hit testing, and mirrored desktop preview UI
-- `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes
+- `xr-menu-ui.js`: shared VR menu canvas renderer and mirrored desktop preview surface
+- `xr-menu-controller.js`: shared VR menu runtime state, XR ray handling, slider drag logic, and desktop menu interaction
+- `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes, locomotion, and menu interaction
 - `xr-scene-lighting.js`: shared moving light presets and lighting-uniform helpers for scene geometry
 - `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
 - `xr-visualizer-source-butterchurn.js`: Butterchurn preset source, shared audio/frame analysis, and optional canvas output for canvas-driven modes
@@ -114,7 +115,8 @@ The start page can switch between these audio inputs:
 - The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
 - Audio source switching, stream cleanup, external source-tab handling, and debug-audio activation now live in `xr-audio-controller.js` instead of the main page script.
 - XR collision, jump handling, eye-height adjustment, and desktop first-person movement now live in `xr-locomotion.js` instead of being spread across `index.html`.
-- The VR menu canvas, mirrored desktop preview, hit testing, and layout math now live in `xr-menu-ui.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
+- The VR menu canvas drawing stays in `xr-menu-ui.js`, while menu state, controller rays, slider drag handling, and desktop overlay interaction now live in `xr-menu-controller.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
+- Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
 

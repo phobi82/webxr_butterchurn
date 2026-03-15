@@ -11,6 +11,7 @@
 		<script src="xr-audio-controller.js"></script>
 		<script src="xr-locomotion.js"></script>
 		<script src="xr-menu-ui.js"></script>
+		<script src="xr-menu-controller.js"></script>
 		<script src="xr-scene-lighting.js"></script>
 		<script src="xr-visualizer-gl-utils.js"></script>
 		<script src="xr-visualizer-source-butterchurn.js"></script>
@@ -104,19 +105,6 @@
 			let lastRenderTime = 0;
 			let previewLastRenderTime = 0;
 			let previewTime = 0;
-			let jumpMode = "double";
-			let menuOpenBool = false;
-			let menuTogglePressedBool = false;
-			let floorAlpha = 0.72;
-			let eyeDistanceMeters = 0.064;
-			let activeSliderHand = "";
-			let activeFloorAlphaSliderHand = "";
-			let eyeDistanceHoverBool = false;
-			let floorAlphaHoverBool = false;
-			let hoveredJumpMode = "";
-			let hoveredShaderModeAction = "";
-			let hoveredLightPresetAction = "";
-			let hoveredPresetAction = "";
 			let sceneTimeSeconds = 0;
 			let colorProgram = null;
 			let litColorProgram = null;
@@ -152,22 +140,12 @@
 			let glbAssetManager = null;
 			let sceneLighting = null;
 			let visualizerRenderer = null;
-			let desktopPreviewMenuVisibleBool = true;
 			let desktopPointerLockedBool = false;
-			let desktopMenuPointerActiveBool = false;
-			let desktopMenuPointerU = 0;
-			let desktopMenuPointerV = 0;
 
 			const currentView = new Float32Array(16);
 			const currentProj = new Float32Array(16);
 			const adjustedView = new Float32Array(16);
 			const colorVec4 = new Float32Array(4);
-			const menuCenter = {x: 0, y: 1.45, z: -0.8};
-			const menuRight = {x: 1, y: 0, z: 0};
-			const menuUp = {x: 0, y: 1, z: 0};
-			const menuNormal = {x: 0, y: 0, z: 1};
-			const controllerRays = [];
-			const triggerPressedByHand = new Map();
 			const menuUi = window.createXrMenuUi({
 				desktopMenuPreviewWidthPixels: desktopMenuPreviewWidthPixels,
 				jumpModeDoubleMinU: jumpModeDoubleMinU,
@@ -182,8 +160,6 @@
 				presetNextMinU: presetNextMinU,
 				presetNextMaxU: presetNextMaxU
 			});
-			const menuCanvas = menuUi.menuCanvas;
-			const desktopMenuPreviewCanvas = menuUi.previewCanvas;
 
 			const panel = document.createElement("div");
 			panel.style.position = "fixed";
@@ -324,9 +300,12 @@
 				status.textContent = "XR: " + text;
 			};
 
-			const clampNumber = window.xrVisualizerUtils.clampNumber;
-			const hslToRgb = window.xrVisualizerUtils.hslToRgb;
-			const emptyAudioMetrics = window.xrVisualizerUtils.emptyAudioMetrics;
+			const utils = window.xrVisualizerUtils;
+			const clampNumber = utils.clampNumber;
+			const hslToRgb = utils.hslToRgb;
+			const emptyAudioMetrics = utils.emptyAudioMetrics;
+			const rotateXZ = utils.rotateXZ;
+			const extractForwardDirectionFromQuaternion = utils.extractForwardDirectionFromQuaternion;
 			const updateAudioUiState = function(audioState) {
 				audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
 				stopAudioButton.disabled = !audioState.stopEnabledBool;
@@ -378,6 +357,23 @@
 			});
 			const xrMovementState = locomotionController.createXrState();
 			const desktopMovementState = locomotionController.createDesktopState();
+			const menuController = window.createXrMenuController({
+				menuUi: menuUi,
+				menuWidth: menuWidth,
+				rayLength: rayLength,
+				menuSliderMinU: menuSliderMinU,
+				menuSliderMaxU: menuSliderMaxU,
+				eyeDistanceMin: eyeDistanceMin,
+				eyeDistanceMax: eyeDistanceMax,
+				floorAlphaMin: floorAlphaMin,
+				floorAlphaMax: floorAlphaMax,
+				initialJumpMode: "double",
+				initialFloorAlpha: 0.72,
+				initialEyeDistanceMeters: 0.064,
+				initialDesktopPreviewVisibleBool: true
+			});
+			const menuCanvas = menuController.menuCanvas;
+			const desktopMenuPreviewCanvas = menuController.previewCanvas;
 
 			const updateVisualizerLabels = function() {
 				if (!visualizerRenderer) {
@@ -398,24 +394,6 @@
 
 			const lerpNumber = function(startValue, endValue, mixValue) {
 				return startValue + (endValue - startValue) * mixValue;
-			};
-
-			const normalizeVec3 = function(x, y, z) {
-				const len = Math.sqrt(x * x + y * y + z * z) || 1;
-				return {x: x / len, y: y / len, z: z / len};
-			};
-
-			const dotVec3 = function(ax, ay, az, bx, by, bz) {
-				return ax * bx + ay * by + az * bz;
-			};
-
-			const rotateXZ = function(x, z, yaw) {
-				const cosYaw = Math.cos(yaw);
-				const sinYaw = Math.sin(yaw);
-				return {
-					x: x * cosYaw + z * sinYaw,
-					z: -x * sinYaw + z * cosYaw
-				};
 			};
 
 			// Matrix, shader, and draw helpers stay local because index.html still owns the main world render loop.
@@ -500,28 +478,12 @@
 				if (offsetLength < 0.000001) {
 					return {x: eye.x, y: eye.y, z: eye.z};
 				}
-				const scale = (eyeDistanceMeters * 0.5) / offsetLength;
+				const scale = (menuController.getEyeDistanceMeters() * 0.5) / offsetLength;
 				return {
 					x: center.x + offsetX * scale,
 					y: center.y + offsetY * scale,
 					z: center.z + offsetZ * scale
 				};
-			};
-
-			const eyeDistanceToSliderU = function(value) {
-				return menuSliderMinU + (clampNumber(value, eyeDistanceMin, eyeDistanceMax) - eyeDistanceMin) / (eyeDistanceMax - eyeDistanceMin) * (menuSliderMaxU - menuSliderMinU);
-			};
-
-			const sliderUToEyeDistance = function(value) {
-				return eyeDistanceMin + clampNumber((value - menuSliderMinU) / (menuSliderMaxU - menuSliderMinU), 0, 1) * (eyeDistanceMax - eyeDistanceMin);
-			};
-
-			const floorAlphaToSliderU = function(value) {
-				return menuSliderMinU + (clampNumber(value, floorAlphaMin, floorAlphaMax) - floorAlphaMin) / (floorAlphaMax - floorAlphaMin) * (menuSliderMaxU - menuSliderMinU);
-			};
-
-			const sliderUToFloorAlpha = function(value) {
-				return floorAlphaMin + clampNumber((value - menuSliderMinU) / (menuSliderMaxU - menuSliderMinU), 0, 1) * (floorAlphaMax - floorAlphaMin);
 			};
 
 			const getAudioReactiveFloorColors = function() {
@@ -534,6 +496,7 @@
 				const floorDrive = clampNumber(audioLevel * 0.72 + audioPeak * 0.28 + beatPulse * 0.4, 0, 1);
 				const floorRgb = hslToRgb((baseHue + beatPulse * 0.03) % 1, lerpNumber(0.45, 0.98, floorDrive), lerpNumber(0.26, 0.66, floorDrive));
 				const gridRgb = hslToRgb((baseHue + 0.08 + beatPulse * 0.05) % 1, lerpNumber(0.55, 1, floorDrive), lerpNumber(0.48, 0.82, clampNumber(floorDrive + transientLevel, 0, 1)));
+				const floorAlpha = menuController.getFloorAlpha();
 				return {
 					audioLevel: audioLevel,
 					audioPeak: audioPeak,
@@ -857,115 +820,6 @@
 				drawColor(lineBuffer, pointBool ? 1 : 2, pointBool ? gl.POINTS : gl.LINES, identityMatrix(), color);
 			};
 
-			const updateMenuPose = function(pose) {
-				const matrix = pose.transform.matrix;
-				const forward = normalizeVec3(-matrix[8], 0, -matrix[10]);
-				menuNormal.x = -forward.x;
-				menuNormal.y = 0;
-				menuNormal.z = -forward.z;
-				menuRight.x = menuNormal.z;
-				menuRight.y = 0;
-				menuRight.z = -menuNormal.x;
-				menuUp.x = 0;
-				menuUp.y = 1;
-				menuUp.z = 0;
-				menuCenter.x = matrix[12] + forward.x * 0.8;
-				menuCenter.y = matrix[13] - 0.03;
-				menuCenter.z = matrix[14] + forward.z * 0.8;
-			};
-
-			const intersectMenu = function(ray) {
-				if (!menuOpenBool) {
-					return null;
-				}
-				const menuPlaneHeight = getMenuPlaneHeight();
-				const denom = dotVec3(menuNormal.x, menuNormal.y, menuNormal.z, ray.dir.x, ray.dir.y, ray.dir.z);
-				if (Math.abs(denom) < 0.0001) {
-					return null;
-				}
-				const distance = dotVec3(menuCenter.x - ray.origin.x, menuCenter.y - ray.origin.y, menuCenter.z - ray.origin.z, menuNormal.x, menuNormal.y, menuNormal.z) / denom;
-				if (distance <= 0 || distance > rayLength) {
-					return null;
-				}
-				const point = {
-					x: ray.origin.x + ray.dir.x * distance,
-					y: ray.origin.y + ray.dir.y * distance,
-					z: ray.origin.z + ray.dir.z * distance
-				};
-				const relX = point.x - menuCenter.x;
-				const relY = point.y - menuCenter.y;
-				const relZ = point.z - menuCenter.z;
-				const localX = dotVec3(relX, relY, relZ, menuRight.x, menuRight.y, menuRight.z);
-				const localY = dotVec3(relX, relY, relZ, menuUp.x, menuUp.y, menuUp.z);
-				if (Math.abs(localX) > menuWidth * 0.5 || Math.abs(localY) > menuPlaneHeight * 0.5) {
-					return null;
-				}
-				const u = 0.5 + localX / menuWidth;
-				const v = 0.5 - localY / menuPlaneHeight;
-				return Object.assign({distance: distance, point: point, u: u, v: v}, getMenuInteractionAtUv(u, v));
-			};
-
-			const getMenuPlaneHeight = function() {
-				return menuUi.getPlaneHeight(menuWidth);
-			};
-
-			const getMenuInteractionAtUv = function(u, v) {
-				return menuUi.getInteractionAtUv(u, v);
-			};
-
-			const updateControllerRays = function(frame) {
-				controllerRays.length = 0;
-				eyeDistanceHoverBool = false;
-				floorAlphaHoverBool = false;
-				hoveredJumpMode = "";
-				hoveredShaderModeAction = "";
-				hoveredLightPresetAction = "";
-				hoveredPresetAction = "";
-				if (!xrSession || !xrRefSpace) {
-					return;
-				}
-				const sources = xrSession.inputSources || [];
-				for (let i = 0; i < sources.length; i += 1) {
-					const source = sources[i];
-					if (!source || source.targetRayMode !== "tracked-pointer") {
-						continue;
-					}
-					const pose = frame.getPose(source.targetRaySpace, xrRefSpace);
-					if (!pose) {
-						continue;
-					}
-					const q = pose.transform.orientation;
-					const ray = {
-						hand: source.handedness || "none",
-						source: source,
-						origin: {x: pose.transform.position.x, y: pose.transform.position.y, z: pose.transform.position.z},
-						dir: normalizeVec3(
-							-(2 * (q.x * q.z + q.w * q.y)),
-							-(2 * (q.y * q.z - q.w * q.x)),
-							-(1 - 2 * (q.x * q.x + q.y * q.y))
-						),
-						length: rayLength,
-						hitBool: false,
-						hitPoint: null,
-						hit: null
-					};
-					const hit = intersectMenu(ray);
-					if (hit) {
-						ray.length = hit.distance;
-						ray.hitBool = true;
-						ray.hitPoint = hit.point;
-						ray.hit = hit;
-						eyeDistanceHoverBool = hit.eyeDistanceSliderBool || eyeDistanceHoverBool;
-						floorAlphaHoverBool = hit.floorAlphaSliderBool || floorAlphaHoverBool;
-						hoveredJumpMode = hit.jumpMode || hoveredJumpMode;
-						hoveredShaderModeAction = hit.shaderModeAction || hoveredShaderModeAction;
-						hoveredLightPresetAction = hit.lightPresetAction || hoveredLightPresetAction;
-						hoveredPresetAction = hit.presetAction || hoveredPresetAction;
-					}
-					controllerRays.push(ray);
-				}
-			};
-
 			const cyclePreset = function(direction) {
 				if (!visualizerRenderer) {
 					return;
@@ -1006,49 +860,6 @@
 				let nextLightPresetIndex = sceneLighting.getCurrentPresetIndex();
 				nextLightPresetIndex = (nextLightPresetIndex + direction + lightPresetCount) % lightPresetCount;
 				sceneLighting.selectPreset(nextLightPresetIndex).then(updateVisualizerLabels);
-			};
-
-			const clearDesktopMenuPointerState = function() {
-				desktopMenuPointerActiveBool = false;
-				desktopMenuPointerU = 0;
-				desktopMenuPointerV = 0;
-				eyeDistanceHoverBool = false;
-				floorAlphaHoverBool = false;
-				hoveredJumpMode = "";
-				hoveredShaderModeAction = "";
-				hoveredLightPresetAction = "";
-				hoveredPresetAction = "";
-				if (activeSliderHand === "desktop") {
-					activeSliderHand = "";
-				}
-				if (activeFloorAlphaSliderHand === "desktop") {
-					activeFloorAlphaSliderHand = "";
-				}
-			};
-
-			const applyDesktopMenuPointerState = function() {
-				if (xrSession || !desktopPreviewMenuVisibleBool || desktopPointerLockedBool || !desktopMenuPointerActiveBool) {
-					eyeDistanceHoverBool = activeSliderHand === "desktop";
-					floorAlphaHoverBool = activeFloorAlphaSliderHand === "desktop";
-					hoveredJumpMode = "";
-					hoveredShaderModeAction = "";
-					hoveredLightPresetAction = "";
-					hoveredPresetAction = "";
-					return;
-				}
-				const hit = getMenuInteractionAtUv(desktopMenuPointerU, desktopMenuPointerV);
-				eyeDistanceHoverBool = !!hit.eyeDistanceSliderBool || activeSliderHand === "desktop";
-				floorAlphaHoverBool = !!hit.floorAlphaSliderBool || activeFloorAlphaSliderHand === "desktop";
-				hoveredJumpMode = hit.jumpMode || "";
-				hoveredShaderModeAction = hit.shaderModeAction || "";
-				hoveredLightPresetAction = hit.lightPresetAction || "";
-				hoveredPresetAction = hit.presetAction || "";
-				if (activeSliderHand === "desktop") {
-					eyeDistanceMeters = sliderUToEyeDistance(desktopMenuPointerU);
-				}
-				if (activeFloorAlphaSliderHand === "desktop") {
-					floorAlpha = sliderUToFloorAlpha(desktopMenuPointerU);
-				}
 			};
 
 			const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -1099,12 +910,7 @@
 						locomotion.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
 						const targetRayPose = xrRefSpace ? frame.getPose(source.targetRaySpace, xrRefSpace) : null;
 						if (targetRayPose) {
-							const q = targetRayPose.transform.orientation;
-							locomotion.rightControllerBoostDir = normalizeVec3(
-								-(2 * (q.x * q.z + q.w * q.y)),
-								-(2 * (q.y * q.z - q.w * q.x)),
-								-(1 - 2 * (q.x * q.x + q.y * q.y))
-							);
+							locomotion.rightControllerBoostDir = extractForwardDirectionFromQuaternion(targetRayPose.transform.orientation);
 						}
 					}
 				}
@@ -1112,58 +918,17 @@
 			};
 
 			const updateMenuInput = function(frame, pose) {
-				const sources = xrSession ? xrSession.inputSources || [] : [];
-				let togglePressedBool = false;
-				for (let i = 0; i < sources.length; i += 1) {
-					const source = sources[i];
-					if (source.handedness === "left" && source.gamepad && source.gamepad.buttons[5] && source.gamepad.buttons[5].pressed) {
-						togglePressedBool = true;
+				menuController.updateXrInput({
+					xrSession: xrSession,
+					xrRefSpace: xrRefSpace,
+					frame: frame,
+					pose: pose,
+					callbacks: {
+						onShaderModeAction: cycleShaderMode,
+						onLightPresetAction: cycleLightingPreset,
+						onPresetAction: cyclePreset
 					}
-				}
-				if (togglePressedBool && !menuTogglePressedBool) {
-					menuOpenBool = !menuOpenBool;
-					activeSliderHand = "";
-					activeFloorAlphaSliderHand = "";
-					if (menuOpenBool) {
-						updateMenuPose(pose);
-					}
-				}
-				menuTogglePressedBool = togglePressedBool;
-				updateControllerRays(frame);
-				for (let i = 0; i < controllerRays.length; i += 1) {
-					const ray = controllerRays[i];
-					const gamepad = ray.source.gamepad;
-					const hand = ray.hand;
-					const triggerPressedBool = !!(gamepad && gamepad.buttons[0] && gamepad.buttons[0].pressed);
-					const wasTriggerPressedBool = triggerPressedByHand.get(hand) || false;
-					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.jumpMode) {
-						jumpMode = ray.hit.jumpMode;
-					}
-					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.shaderModeAction) {
-						cycleShaderMode(ray.hit.shaderModeAction === "prev" ? -1 : 1);
-					}
-					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.lightPresetAction) {
-						cycleLightingPreset(ray.hit.lightPresetAction === "prev" ? -1 : 1);
-					}
-					if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.presetAction) {
-						cyclePreset(ray.hit.presetAction === "prev" ? -1 : 1);
-					}
-					if (triggerPressedBool && ray.hit && ray.hit.eyeDistanceSliderBool && (!wasTriggerPressedBool || activeSliderHand === hand)) {
-						activeSliderHand = hand;
-						eyeDistanceMeters = sliderUToEyeDistance(ray.hit.u);
-					}
-					if (triggerPressedBool && ray.hit && ray.hit.floorAlphaSliderBool && (!wasTriggerPressedBool || activeFloorAlphaSliderHand === hand)) {
-						activeFloorAlphaSliderHand = hand;
-						floorAlpha = sliderUToFloorAlpha(ray.hit.u);
-					}
-					if (!triggerPressedBool && wasTriggerPressedBool && activeSliderHand === hand) {
-						activeSliderHand = "";
-					}
-					if (!triggerPressedBool && wasTriggerPressedBool && activeFloorAlphaSliderHand === hand) {
-						activeFloorAlphaSliderHand = "";
-					}
-					triggerPressedByHand.set(hand, triggerPressedBool);
-				}
+				});
 			};
 
 			const applyLocomotion = function(delta, pose, frame) {
@@ -1178,72 +943,53 @@
 					viewerTransform: viewerTransform,
 					turnAnchorPosition: basePose ? viewerTransform.position : null,
 					locomotion: locomotion,
-					jumpMode: jumpMode,
-					menuOpenBool: menuOpenBool
+					jumpMode: menuController.getJumpMode(),
+					menuOpenBool: menuController.isMenuOpen()
 				});
 				if (locomotionStep.referenceSpaceUpdateNeededBool) {
 					updateReferenceSpace();
 				}
 			};
 
-			const getMenuRenderState = function() {
+			const getMenuContentState = function() {
 				return {
 					sceneTimeSeconds: sceneTimeSeconds,
 					audioMetrics: getAudioMetrics(),
-					jumpMode: jumpMode,
-					hoveredJumpMode: hoveredJumpMode,
-					hoveredShaderModeAction: hoveredShaderModeAction,
-					hoveredLightPresetAction: hoveredLightPresetAction,
-					hoveredPresetAction: hoveredPresetAction,
-					floorAlpha: floorAlpha,
-					eyeDistanceMeters: eyeDistanceMeters,
-					floorAlphaHoverBool: floorAlphaHoverBool,
-					eyeDistanceHoverBool: eyeDistanceHoverBool,
-					floorAlphaSliderActiveBool: !!activeFloorAlphaSliderHand,
-					eyeDistanceSliderActiveBool: !!activeSliderHand,
 					shaderModeNames: visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"],
 					currentShaderModeIndex: visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0,
 					lightPresetNames: sceneLighting ? sceneLighting.getPresetNames() : ["Aurora Drift"],
 					currentLightPresetIndex: sceneLighting ? sceneLighting.getCurrentPresetIndex() : 0,
 					currentLightPresetDescription: sceneLighting ? sceneLighting.getCurrentPresetDescription() : "Slow colorful overhead drift",
 					presetNames: visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"],
-					currentPresetIndex: visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0,
-					eyeDistanceMin: eyeDistanceMin,
-					eyeDistanceMax: eyeDistanceMax,
-					eyeDistanceSliderU: eyeDistanceToSliderU(eyeDistanceMeters),
-					floorAlphaSliderU: floorAlphaToSliderU(floorAlpha)
+					currentPresetIndex: visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0
 				};
 			};
 
-			const renderMenuCanvasTexture = function() {
-				menuUi.render(getMenuRenderState());
-				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
-			};
-
 			const drawMenu = function() {
-				if (!menuOpenBool) {
+				if (!menuController.isMenuOpen()) {
 					return;
 				}
-				const menuPlaneHeight = getMenuPlaneHeight();
-				renderMenuCanvasTexture();
+				const menuPlane = menuController.getPlane();
+				const menuPlaneHeight = menuController.getPlaneHeight();
+				menuController.renderTexture(gl, menuTexture, getMenuContentState());
 				gl.disable(gl.DEPTH_TEST);
 				gl.disable(gl.CULL_FACE);
-				drawTexturedPlane(basisScale(menuCenter.x, menuCenter.y, menuCenter.z, menuRight, menuUp, menuNormal, menuWidth, menuPlaneHeight, 1));
+				drawTexturedPlane(basisScale(menuPlane.center.x, menuPlane.center.y, menuPlane.center.z, menuPlane.right, menuPlane.up, menuPlane.normal, menuWidth, menuPlaneHeight, 1));
 				gl.enable(gl.CULL_FACE);
 				gl.enable(gl.DEPTH_TEST);
 			};
 
 			const updateDesktopMenuPreview = function() {
-				applyDesktopMenuPointerState();
-				menuUi.updateDesktopPreview({
-					visible: desktopPreviewMenuVisibleBool,
+				menuController.updateDesktopPreview({
+					xrSessionActiveBool: !!xrSession,
+					pointerLockedBool: desktopPointerLockedBool,
 					interactiveBool: !desktopPointerLockedBool && !xrSession,
-					renderState: getMenuRenderState()
+					renderState: getMenuContentState()
 				});
 			};
 
 			const drawControllerRays = function() {
+				const controllerRays = menuController.getControllerRays();
 				for (let i = 0; i < controllerRays.length; i += 1) {
 					const ray = controllerRays[i];
 					const end = {
@@ -1262,7 +1008,7 @@
 				if (visualizerRenderer) {
 					visualizerRenderer.drawPreScene();
 				}
-				if (floorAlpha > 0.001) {
+				if (menuController.getFloorAlpha() > 0.001) {
 					drawFloor();
 				}
 				if (glbAssetManager) {
@@ -1328,7 +1074,7 @@
 				const delta = previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTime - previewLastRenderTime));
 				previewLastRenderTime = previewTime;
 				sceneTimeSeconds = previewTime;
-				locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, jumpMode);
+				locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getJumpMode());
 				canvas.width = window.innerWidth * window.devicePixelRatio;
 				canvas.height = window.innerHeight * window.devicePixelRatio;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -1358,10 +1104,7 @@
 				xrRefSpace = null;
 				lastRenderTime = 0;
 				previewLastRenderTime = 0;
-				menuOpenBool = false;
-				activeSliderHand = "";
-				controllerRays.length = 0;
-				triggerPressedByHand.clear();
+				menuController.endSession();
 				exitButton.disabled = true;
 				enterButton.disabled = false;
 				setStatus(navigator.xr ? "ready" : "headset not detected.");
@@ -1393,8 +1136,7 @@
 					});
 					baseRefSpace = await xrSession.requestReferenceSpace("local-floor");
 					resetMovementState();
-					menuTogglePressedBool = false;
-					triggerPressedByHand.clear();
+					menuController.resetSessionInputState();
 					updateReferenceSpace();
 					enterButton.disabled = true;
 					exitButton.disabled = false;
@@ -1498,17 +1240,6 @@
 				}
 			});
 
-			const updateDesktopMenuPointerFromEvent = function(event) {
-				const rect = desktopMenuPreviewCanvas.getBoundingClientRect();
-				if (rect.width <= 0 || rect.height <= 0) {
-					return null;
-				}
-				desktopMenuPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
-				desktopMenuPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
-				desktopMenuPointerActiveBool = true;
-				return getMenuInteractionAtUv(desktopMenuPointerU, desktopMenuPointerV);
-			};
-
 			canvas.addEventListener("click", function() {
 				if (!xrSession && document.pointerLockElement !== canvas && canvas.requestPointerLock) {
 					canvas.requestPointerLock();
@@ -1522,64 +1253,36 @@
 			});
 
 			desktopMenuPreviewCanvas.addEventListener("mousemove", function(event) {
-				if (xrSession || desktopPointerLockedBool || !desktopPreviewMenuVisibleBool) {
-					return;
-				}
-				updateDesktopMenuPointerFromEvent(event);
+				menuController.handleDesktopPointerMove(event, {
+					xrSessionActiveBool: !!xrSession,
+					pointerLockedBool: desktopPointerLockedBool
+				});
 			});
 
 			desktopMenuPreviewCanvas.addEventListener("mouseleave", function() {
-				if (activeSliderHand === "desktop" || activeFloorAlphaSliderHand === "desktop") {
-					return;
-				}
-				clearDesktopMenuPointerState();
+				menuController.handleDesktopPointerLeave();
 			});
 
 			desktopMenuPreviewCanvas.addEventListener("mousedown", function(event) {
-				if (xrSession || desktopPointerLockedBool || !desktopPreviewMenuVisibleBool) {
-					return;
-				}
-				const hit = updateDesktopMenuPointerFromEvent(event);
-				if (!hit) {
-					return;
-				}
-				if (hit.jumpMode) {
-					jumpMode = hit.jumpMode;
-				}
-				if (hit.shaderModeAction) {
-					cycleShaderMode(hit.shaderModeAction === "prev" ? -1 : 1);
-				}
-				if (hit.lightPresetAction) {
-					cycleLightingPreset(hit.lightPresetAction === "prev" ? -1 : 1);
-				}
-				if (hit.presetAction) {
-					audioController.activate();
-					cyclePreset(hit.presetAction === "prev" ? -1 : 1);
-				}
-				if (hit.eyeDistanceSliderBool) {
-					activeSliderHand = "desktop";
-					eyeDistanceMeters = sliderUToEyeDistance(desktopMenuPointerU);
-				}
-				if (hit.floorAlphaSliderBool) {
-					activeFloorAlphaSliderHand = "desktop";
-					floorAlpha = sliderUToFloorAlpha(desktopMenuPointerU);
-				}
-				event.preventDefault();
-			});
-
-			desktopMenuPreviewCanvas.addEventListener("mouseup", function() {
-				if (activeSliderHand === "desktop") {
-					activeSliderHand = "";
-				}
-				if (activeFloorAlphaSliderHand === "desktop") {
-					activeFloorAlphaSliderHand = "";
+				if (menuController.handleDesktopPointerDown(event, {
+					onShaderModeAction: cycleShaderMode,
+					onLightPresetAction: cycleLightingPreset,
+					onPresetAction: function(direction) {
+						audioController.activate();
+						cyclePreset(direction);
+					}
+				}, {
+					xrSessionActiveBool: !!xrSession,
+					pointerLockedBool: desktopPointerLockedBool
+				})) {
+					event.preventDefault();
 				}
 			});
 
 			document.addEventListener("pointerlockchange", function() {
 				desktopPointerLockedBool = document.pointerLockElement === canvas;
 				if (desktopPointerLockedBool) {
-					clearDesktopMenuPointerState();
+					menuController.clearDesktopPointerState();
 				} else {
 					desktopMovementState.sprintBool = false;
 					desktopMovementState.crouchBool = false;
@@ -1634,11 +1337,7 @@
 					return;
 				}
 				if (event.code === "KeyM" && !event.repeat) {
-					desktopPreviewMenuVisibleBool = !desktopPreviewMenuVisibleBool;
-					if (!desktopPreviewMenuVisibleBool) {
-						clearDesktopMenuPointerState();
-						desktopMenuPreviewCanvas.style.display = "none";
-					}
+					menuController.setDesktopPreviewVisibleBool(!menuController.isDesktopPreviewVisible());
 					event.preventDefault();
 					return;
 				}
@@ -1654,17 +1353,12 @@
 			});
 
 			document.addEventListener("mouseup", function() {
-				if (activeSliderHand === "desktop") {
-					activeSliderHand = "";
-				}
-				if (activeFloorAlphaSliderHand === "desktop") {
-					activeFloorAlphaSliderHand = "";
-				}
+				menuController.handleDesktopPointerUp();
 			});
 
 			window.addEventListener("blur", function() {
 				releaseDesktopMovementKeys();
-				clearDesktopMenuPointerState();
+				menuController.clearDesktopPointerState();
 			});
 
 			// Startup wires the modules together, loads scene assets, and starts the desktop preview loop.
