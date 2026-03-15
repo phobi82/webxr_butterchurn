@@ -68,40 +68,42 @@
 		};
 
 		// Stream sources share the same attach path and ended handling.
-		const setStreamSource = function(stream, sourceName) {
+		const setStreamSource = async function(stream, sourceName) {
 			clearActiveStream();
 			controller.activeStream = stream;
 			controller.sourceKind = stream ? "stream" : "none";
 			controller.sourceName = stream ? sourceName || "shared surface" : "";
 			updateUiState();
-			return applyRendererAudioState().then(function() {
-				if (!stream) {
-					return;
-				}
-				const tracks = stream.getTracks();
-				for (let i = 0; i < tracks.length; i += 1) {
-					tracks[i].addEventListener("ended", function() {
-						if (controller.activeStream === stream) {
-							controller.activeStream = null;
-							resetSourceState();
-							applyRendererAudioState();
-						}
-					});
-				}
-			});
+			await applyRendererAudioState();
+			if (!stream) {
+				return;
+			}
+			const tracks = stream.getTracks();
+			for (let i = 0; i < tracks.length; i += 1) {
+				tracks[i].addEventListener("ended", function() {
+					if (controller.activeStream === stream) {
+						controller.activeStream = null;
+						resetSourceState();
+						applyRendererAudioState();
+					}
+				});
+			}
 		};
 
-		const activateAudio = function() {
+		const activateAudio = async function() {
 			const renderer = getRenderer();
 			if (!renderer || !renderer.activateAudio) {
-				return Promise.resolve();
+				return;
 			}
-			return renderer.activateAudio().catch(function() {
-			});
+			try {
+				await renderer.activateAudio();
+			} catch (error) {
+			}
 		};
 
-		const runActivated = function(action) {
-			return activateAudio().then(action);
+		const runActivated = async function(action) {
+			await activateAudio();
+			return action();
 		};
 
 		// Display capture is reused for generic sharing and tab-audio flows.
@@ -177,14 +179,10 @@
 				return applyRendererAudioState();
 			},
 			requestSharedAudio: function() {
-				return runActivated(function() {
-					return requestDisplayAudio();
-				});
+				return runActivated(requestDisplayAudio);
 			},
 			requestMicrophoneAudio: function() {
-				return runActivated(function() {
-					return requestMicrophoneAudio();
-				});
+				return runActivated(requestMicrophoneAudio);
 			},
 			requestYoutubePlaylistAudio: function() {
 				return runActivated(async function() {
@@ -204,16 +202,15 @@
 			},
 			startDebugAudio: function() {
 				clearActiveStream();
-				return runActivated(function() {
+				return runActivated(async function() {
 					const renderer = getRenderer();
 					if (!renderer || !renderer.startDebugAudio) {
 						return;
 					}
-					return renderer.startDebugAudio().then(function() {
-						controller.sourceKind = "debug";
-						controller.sourceName = "debug signal";
-						updateUiState();
-					});
+					await renderer.startDebugAudio();
+					controller.sourceKind = "debug";
+					controller.sourceName = "debug signal";
+					updateUiState();
 				});
 			}
 		};

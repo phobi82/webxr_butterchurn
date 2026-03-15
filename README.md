@@ -38,6 +38,7 @@ Current capabilities:
 - `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
 - `xr-menu-ui.js`: shared VR menu canvas renderer and mirrored desktop preview surface
 - `xr-menu-controller.js`: shared VR menu runtime state, XR ray handling, slider drag logic, and desktop menu interaction
+- `xr-scene-renderer.js`: shared WebGL setup plus the common XR and desktop scene-render pipeline
 - `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes, locomotion, and menu interaction
 - `xr-scene-lighting.js`: shared moving light presets and lighting-uniform helpers for scene geometry
 - `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
@@ -116,6 +117,7 @@ The start page can switch between these audio inputs:
 - Audio source switching, stream cleanup, external source-tab handling, and debug-audio activation now live in `xr-audio-controller.js` instead of the main page script.
 - XR collision, jump handling, eye-height adjustment, and desktop first-person movement now live in `xr-locomotion.js` instead of being spread across `index.html`.
 - The VR menu canvas drawing stays in `xr-menu-ui.js`, while menu state, controller rays, slider drag handling, and desktop overlay interaction now live in `xr-menu-controller.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
+- The shared WebGL setup, scene draw order, floor and menu rendering, and XR/desktop view rendering now live in `xr-scene-renderer.js`, so `index.html` no longer carries the whole render pipeline inline.
 - Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.

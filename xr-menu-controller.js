@@ -69,14 +69,6 @@
 			}
 		};
 
-		const getMenuInteractionAtUv = function(u, v) {
-			return options.menuUi.getInteractionAtUv(u, v);
-		};
-
-		const getMenuPlaneHeight = function() {
-			return options.menuUi.getPlaneHeight(options.menuWidth);
-		};
-
 		const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
 			if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
 				state.eyeDistanceHoverBool = state.activeSliderHand === "desktop";
@@ -87,7 +79,7 @@
 				state.hoveredPresetAction = "";
 				return;
 			}
-			const hit = getMenuInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
+			const hit = options.menuUi.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
 			state.eyeDistanceHoverBool = !!hit.eyeDistanceSliderBool || state.activeSliderHand === "desktop";
 			state.floorAlphaHoverBool = !!hit.floorAlphaSliderBool || state.activeFloorAlphaSliderHand === "desktop";
 			state.hoveredJumpMode = hit.jumpMode || "";
@@ -106,7 +98,7 @@
 			if (!state.menuOpenBool) {
 				return null;
 			}
-			const menuPlaneHeight = getMenuPlaneHeight();
+			const menuPlaneHeight = options.menuUi.getPlaneHeight(options.menuWidth);
 			const denom = dotVec3(menuPlane.normal.x, menuPlane.normal.y, menuPlane.normal.z, ray.dir.x, ray.dir.y, ray.dir.z);
 			if (Math.abs(denom) < 0.0001) {
 				return null;
@@ -130,7 +122,7 @@
 			}
 			const u = 0.5 + localX / options.menuWidth;
 			const v = 0.5 - localY / menuPlaneHeight;
-			return Object.assign({distance: distance, point: point, u: u, v: v}, getMenuInteractionAtUv(u, v));
+			return Object.assign({distance: distance, point: point, u: u, v: v}, options.menuUi.getInteractionAtUv(u, v));
 		};
 
 		// XR rays reuse the same hit decoding as desktop so sliders and buttons behave identically.
@@ -198,7 +190,9 @@
 			getPlane: function() {
 				return menuPlane;
 			},
-			getPlaneHeight: getMenuPlaneHeight,
+			getPlaneHeight: function() {
+				return options.menuUi.getPlaneHeight(options.menuWidth);
+			},
 			getRenderState: function(externalState) {
 				externalState = externalState || {};
 				return {
@@ -269,7 +263,7 @@
 				state.desktopPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
 				state.desktopPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
 				state.desktopPointerActiveBool = true;
-				return getMenuInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
+				return options.menuUi.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
 			},
 			handleDesktopPointerMove: function(event, args) {
 				args = args || {};

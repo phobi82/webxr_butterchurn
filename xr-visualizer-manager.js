@@ -165,10 +165,9 @@
 				this.source.setAudioStream(stream);
 				this.notifyModes("onAudioChanged");
 			},
-			startDebugAudio: function() {
-				return this.source.startDebugAudio().then(function() {
-					this.notifyModes("onAudioChanged");
-				}.bind(this));
+			startDebugAudio: async function() {
+				await this.source.startDebugAudio();
+				this.notifyModes("onAudioChanged");
 			},
 			activateAudio: function() {
 				return this.source.activate();
@@ -197,11 +196,10 @@
 			getAudioMetrics: function() {
 				return this.source.getAudioMetrics ? this.source.getAudioMetrics() : emptyAudioMetrics;
 			},
-			selectPreset: function(index) {
-				return this.source.selectPreset(index, 1.2).then(function() {
-					this.source.lastCanvasRenderTimeSeconds = 0;
-					this.notifyModes("onPresetChanged");
-				}.bind(this));
+			selectPreset: async function(index) {
+				await this.source.selectPreset(index, 1.2);
+				this.source.lastCanvasRenderTimeSeconds = 0;
+				this.notifyModes("onPresetChanged");
 			},
 			selectMode: function(index) {
 				if (!this.modeNames.length) {
