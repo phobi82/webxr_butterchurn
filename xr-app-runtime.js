@@ -2,6 +2,12 @@
 	// Coordinates session lifecycle, frame loops, browser input, and feature modules as one runtime layer.
 	window.createXrAppRuntime = function(options) {
 		options = options || {};
+		const browser = options.browser || {};
+		const windowRef = browser.windowRef || window;
+		const documentRef = browser.documentRef || document;
+		const xrApi = browser.xrApi || options.xrApi || null;
+		const xrWebGLLayer = browser.xrWebGLLayer || windowRef.XRWebGLLayer || null;
+		const xrRigidTransform = browser.xrRigidTransform || windowRef.XRRigidTransform || null;
 		const shell = options.shell;
 		const audioController = options.audioController;
 		const locomotionController = options.locomotionController;
@@ -73,7 +79,7 @@
 				return;
 			}
 			const offset = math.rotateXZ(-xrMovementState.origin.x, -xrMovementState.origin.z, -xrMovementState.heading);
-			state.xrRefSpace = state.baseRefSpace.getOffsetReferenceSpace(new XRRigidTransform(
+			state.xrRefSpace = state.baseRefSpace.getOffsetReferenceSpace(new xrRigidTransform(
 				{x: offset.x, y: -(xrMovementState.origin.y + xrMovementState.effectiveEyeHeightMeters - xrMovementState.currentBaseEyeHeightMeters), z: offset.z},
 				{x: 0, y: Math.sin(-xrMovementState.heading * 0.5), z: 0, w: Math.cos(-xrMovementState.heading * 0.5)}
 			));
@@ -297,7 +303,7 @@
 				getReactiveFloorColors: getAudioReactiveFloorColors
 			});
 			updateDesktopMenuPreview();
-			window.requestAnimationFrame(renderPreview);
+			windowRef.requestAnimationFrame(renderPreview);
 		};
 
 		const endSession = function() {
@@ -311,32 +317,40 @@
 			state.lastRenderTime = 0;
 			state.previewLastRenderTime = 0;
 			menuController.endSession();
-			shell.exitButton.disabled = true;
-			shell.enterButton.disabled = false;
-			shell.setStatus(options.xrApi ? "ready" : "headset not detected.");
+			shell.setXrState({
+				statusText: xrApi ? "ready" : "headset not detected.",
+				enterEnabledBool: !!xrApi,
+				exitEnabledBool: false
+			});
 			if (sharedResources.visualizerRenderer) {
 				sharedResources.visualizerRenderer.onSessionEnd();
 			}
 			xrMovementState.horizontalVelocityX = 0;
 			xrMovementState.horizontalVelocityZ = 0;
-			window.requestAnimationFrame(renderPreview);
+			updateDesktopMenuPreview();
+			windowRef.requestAnimationFrame(renderPreview);
 		};
 
 		const startSession = async function() {
 			try {
-				if (document.pointerLockElement === shell.canvas && document.exitPointerLock) {
-					document.exitPointerLock();
+				if (documentRef.pointerLockElement === shell.canvas && documentRef.exitPointerLock) {
+					documentRef.exitPointerLock();
 				}
-				menuController.previewCanvas.style.display = "none";
-				state.xrSession = await options.xrApi.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
+				menuController.updateDesktopPreview({
+					xrSessionActiveBool: true,
+					pointerLockedBool: state.desktopPointerLockedBool,
+					interactiveBool: false,
+					renderState: getMenuContentState()
+				});
+				state.xrSession = await xrApi.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
 				state.xrSession.addEventListener("end", endSession);
 				await state.gl.makeXRCompatible();
 				let framebufferScaleFactor = 1;
-				if (window.XRWebGLLayer && typeof XRWebGLLayer.getNativeFramebufferScaleFactor === "function") {
-					framebufferScaleFactor = XRWebGLLayer.getNativeFramebufferScaleFactor(state.xrSession) || 1;
+				if (xrWebGLLayer && typeof xrWebGLLayer.getNativeFramebufferScaleFactor === "function") {
+					framebufferScaleFactor = xrWebGLLayer.getNativeFramebufferScaleFactor(state.xrSession) || 1;
 				}
 				state.xrSession.updateRenderState({
-					baseLayer: new XRWebGLLayer(state.xrSession, state.gl, {
+					baseLayer: new xrWebGLLayer(state.xrSession, state.gl, {
 						framebufferScaleFactor: framebufferScaleFactor
 					})
 				});
@@ -344,17 +358,24 @@
 				locomotionController.resetXrState(xrMovementState);
 				menuController.resetSessionInputState();
 				updateReferenceSpace();
-				shell.enterButton.disabled = true;
-				shell.exitButton.disabled = false;
-				shell.setStatus("session running");
+				shell.setXrState({
+					statusText: "session running",
+					enterEnabledBool: false,
+					exitEnabledBool: true
+				});
 				state.lastRenderTime = 0;
 				if (sharedResources.visualizerRenderer) {
 					sharedResources.visualizerRenderer.onSessionStart();
 				}
 				state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 			} catch (error) {
-				shell.setStatus(error.message || "session failed");
+				shell.setXrState({
+					statusText: error.message || "session failed",
+					enterEnabledBool: !!xrApi,
+					exitEnabledBool: false
+				});
 				state.xrSession = null;
+				updateDesktopMenuPreview();
 			}
 		};
 
@@ -393,8 +414,18 @@
 		};
 
 		const registerEventHandlers = function() {
+			menuController.registerDesktopPreviewEvents({
+				callbacks: desktopMenuActionCallbacks,
+				getInteractionState: function() {
+					return {
+						xrSessionActiveBool: !!state.xrSession,
+						pointerLockedBool: state.desktopPointerLockedBool
+					};
+				}
+			});
+
 			shell.enterButton.addEventListener("click", function() {
-				if (options.xrApi && state.gl && !state.xrSession) {
+				if (xrApi && state.gl && !state.xrSession) {
 					audioController.activate();
 					startSession();
 				}
@@ -430,15 +461,15 @@
 				}
 			});
 
-			window.addEventListener("resize", function() {
+			windowRef.addEventListener("resize", function() {
 				if (!state.xrSession) {
-					shell.canvas.width = window.innerWidth * window.devicePixelRatio;
-					shell.canvas.height = window.innerHeight * window.devicePixelRatio;
+					shell.canvas.width = windowRef.innerWidth * windowRef.devicePixelRatio;
+					shell.canvas.height = windowRef.innerHeight * windowRef.devicePixelRatio;
 				}
 			});
 
 			shell.canvas.addEventListener("click", function() {
-				if (!state.xrSession && document.pointerLockElement !== shell.canvas && shell.canvas.requestPointerLock) {
+				if (!state.xrSession && documentRef.pointerLockElement !== shell.canvas && shell.canvas.requestPointerLock) {
 					shell.canvas.requestPointerLock();
 				}
 			});
@@ -449,28 +480,8 @@
 				}
 			});
 
-			menuController.previewCanvas.addEventListener("mousemove", function(event) {
-				menuController.handleDesktopPointerMove(event, {
-					xrSessionActiveBool: !!state.xrSession,
-					pointerLockedBool: state.desktopPointerLockedBool
-				});
-			});
-
-			menuController.previewCanvas.addEventListener("mouseleave", function() {
-				menuController.handleDesktopPointerLeave();
-			});
-
-			menuController.previewCanvas.addEventListener("mousedown", function(event) {
-				if (menuController.handleDesktopPointerDown(event, desktopMenuActionCallbacks, {
-					xrSessionActiveBool: !!state.xrSession,
-					pointerLockedBool: state.desktopPointerLockedBool
-				})) {
-					event.preventDefault();
-				}
-			});
-
-			document.addEventListener("pointerlockchange", function() {
-				state.desktopPointerLockedBool = document.pointerLockElement === shell.canvas;
+			documentRef.addEventListener("pointerlockchange", function() {
+				state.desktopPointerLockedBool = documentRef.pointerLockElement === shell.canvas;
 				if (state.desktopPointerLockedBool) {
 					menuController.clearDesktopPointerState();
 					return;
@@ -479,7 +490,7 @@
 				desktopMovementState.crouchBool = false;
 			});
 
-			document.addEventListener("mousedown", function(event) {
+			documentRef.addEventListener("mousedown", function(event) {
 				if (state.xrSession || !state.desktopPointerLockedBool) {
 					return;
 				}
@@ -493,7 +504,7 @@
 				}
 			}, true);
 
-			document.addEventListener("mouseup", function(event) {
+			documentRef.addEventListener("mouseup", function(event) {
 				if (event.button === 0) {
 					desktopMovementState.sprintBool = false;
 				}
@@ -508,7 +519,7 @@
 				}
 			}, true);
 
-			document.addEventListener("mousemove", function(event) {
+			documentRef.addEventListener("mousemove", function(event) {
 				if (!state.desktopPointerLockedBool || state.xrSession) {
 					return;
 				}
@@ -516,13 +527,13 @@
 				desktopMovementState.lookPitch = math.clampNumber(desktopMovementState.lookPitch - event.movementY * config.desktopMouseSensitivity, -1.35, 1.35);
 			});
 
-			document.addEventListener("pointerdown", function() {
+			documentRef.addEventListener("pointerdown", function() {
 				audioController.activate();
 			}, {passive: true});
-			document.addEventListener("keydown", function() {
+			documentRef.addEventListener("keydown", function() {
 				audioController.activate();
 			});
-			document.addEventListener("keydown", function(event) {
+			documentRef.addEventListener("keydown", function(event) {
 				if (state.xrSession) {
 					return;
 				}
@@ -536,17 +547,17 @@
 				}
 			});
 
-			document.addEventListener("keyup", function(event) {
+			documentRef.addEventListener("keyup", function(event) {
 				if (setDesktopMovementKeyState(event.code, false)) {
 					event.preventDefault();
 				}
 			});
 
-			document.addEventListener("mouseup", function() {
+			documentRef.addEventListener("mouseup", function() {
 				menuController.handleDesktopPointerUp();
 			});
 
-			window.addEventListener("blur", function() {
+			windowRef.addEventListener("blur", function() {
 				releaseDesktopMovementKeys();
 				menuController.clearDesktopPointerState();
 			});
@@ -591,15 +602,21 @@
 					sharedResources.visualizerRenderer.init({gl: state.gl});
 					audioController.setVisualizerRenderer(sharedResources.visualizerRenderer);
 				}
-				if (!options.xrApi) {
-					shell.enterButton.disabled = true;
-					shell.setStatus("WebXR not available.");
+				if (!xrApi) {
+					shell.setXrState({
+						statusText: "WebXR not available.",
+						enterEnabledBool: false,
+						exitEnabledBool: false
+					});
 				} else {
-					const supported = await options.xrApi.isSessionSupported("immersive-vr");
-					shell.enterButton.disabled = !supported;
-					shell.setStatus(supported ? "ready" : "headset not detected.");
+					const supported = await xrApi.isSessionSupported("immersive-vr");
+					shell.setXrState({
+						statusText: supported ? "ready" : "headset not detected.",
+						enterEnabledBool: supported,
+						exitEnabledBool: false
+					});
 				}
-				window.requestAnimationFrame(renderPreview);
+				windowRef.requestAnimationFrame(renderPreview);
 			}
 		};
 	};

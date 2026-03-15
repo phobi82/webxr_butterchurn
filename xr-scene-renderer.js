@@ -2,6 +2,7 @@
 	// Owns WebGL setup and the shared scene draw pipeline for XR and desktop preview.
 	window.createXrSceneRenderer = function(options) {
 		const canvas = options.canvas;
+		const windowRef = options.windowRef || window;
 		let gl = null;
 		let colorProgram = null;
 		let litColorProgram = null;
@@ -363,8 +364,8 @@
 				return gl;
 			},
 			renderPreviewFrame: function(args) {
-				canvas.width = window.innerWidth * window.devicePixelRatio;
-				canvas.height = window.innerHeight * window.devicePixelRatio;
+				canvas.width = windowRef.innerWidth * windowRef.devicePixelRatio;
+				canvas.height = windowRef.innerHeight * windowRef.devicePixelRatio;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.viewport(0, 0, canvas.width, canvas.height);
 				gl.clearColor(0.01, 0.01, 0.08, 1);

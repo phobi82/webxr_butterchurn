@@ -7,6 +7,9 @@
 
 	window.createXrMenuController = function(options) {
 		options = options || {};
+		const menuUi = options.menuUi;
+		const menuCanvas = menuUi.menuCanvas;
+		const previewCanvas = menuUi.previewCanvas;
 		const controllerRays = [];
 		const triggerPressedByHand = new Map();
 		const state = {
@@ -26,7 +29,8 @@
 			desktopPreviewVisibleBool: options.initialDesktopPreviewVisibleBool !== false,
 			desktopPointerActiveBool: false,
 			desktopPointerU: 0,
-			desktopPointerV: 0
+			desktopPointerV: 0,
+			desktopPreviewEventsRegisteredBool: false
 		};
 		const menuPlane = {
 			center: {x: 0, y: 1.45, z: -0.8},
@@ -98,7 +102,7 @@
 			if (!state.menuOpenBool) {
 				return null;
 			}
-			const menuPlaneHeight = options.menuUi.getPlaneHeight(options.menuWidth);
+			const menuPlaneHeight = menuUi.getPlaneHeight(options.menuWidth);
 			const denom = dotVec3(menuPlane.normal.x, menuPlane.normal.y, menuPlane.normal.z, ray.dir.x, ray.dir.y, ray.dir.z);
 			if (Math.abs(denom) < 0.0001) {
 				return null;
@@ -177,13 +181,13 @@
 				eyeDistanceMeters: state.eyeDistanceMeters,
 				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
 				plane: menuPlane,
-				planeHeight: options.menuUi.getPlaneHeight(options.menuWidth)
+				planeHeight: menuUi.getPlaneHeight(options.menuWidth)
 			};
 		};
 
 		return {
-			menuCanvas: options.menuUi.menuCanvas,
-			previewCanvas: options.menuUi.previewCanvas,
+			menuCanvas: menuCanvas,
+			previewCanvas: previewCanvas,
 			getState: getStateSnapshot,
 			getControllerRays: function() {
 				return controllerRays;
@@ -239,7 +243,7 @@
 			renderTexture: function(gl, menuTexture, externalState) {
 				options.menuUi.render(this.getRenderState(externalState));
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
-				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, options.menuUi.menuCanvas);
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 			},
 			updateDesktopPreview: function(args) {
 				args = args || {};
@@ -251,14 +255,38 @@
 				});
 			},
 			updateDesktopPointerFromEvent: function(event) {
-				const rect = options.menuUi.previewCanvas.getBoundingClientRect();
+				const rect = previewCanvas.getBoundingClientRect();
 				if (rect.width <= 0 || rect.height <= 0) {
 					return null;
 				}
 				state.desktopPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
 				state.desktopPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
 				state.desktopPointerActiveBool = true;
-				return options.menuUi.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
+				return menuUi.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
+			},
+			// Owns desktop preview pointer wiring so runtime only supplies callbacks and state.
+			registerDesktopPreviewEvents: function(args) {
+				args = args || {};
+				if (state.desktopPreviewEventsRegisteredBool) {
+					return;
+				}
+				const controller = this;
+				const callbacks = args.callbacks || {};
+				const getInteractionState = args.getInteractionState || function() {
+					return {};
+				};
+				previewCanvas.addEventListener("mousemove", function(event) {
+					controller.handleDesktopPointerMove(event, getInteractionState());
+				});
+				previewCanvas.addEventListener("mouseleave", function() {
+					controller.handleDesktopPointerLeave();
+				});
+				previewCanvas.addEventListener("mousedown", function(event) {
+					if (controller.handleDesktopPointerDown(event, callbacks, getInteractionState())) {
+						event.preventDefault();
+					}
+				});
+				state.desktopPreviewEventsRegisteredBool = true;
 			},
 			handleDesktopPointerMove: function(event, args) {
 				args = args || {};
@@ -319,10 +347,10 @@
 				state.desktopPreviewVisibleBool = !!visibleBool;
 				if (!state.desktopPreviewVisibleBool) {
 					this.clearDesktopPointerState();
-					options.menuUi.previewCanvas.style.display = "none";
+					previewCanvas.style.display = "none";
 					return;
 				}
-				options.menuUi.previewCanvas.style.display = "block";
+				previewCanvas.style.display = "block";
 			},
 			isDesktopPreviewVisible: function() {
 				return state.desktopPreviewVisibleBool;

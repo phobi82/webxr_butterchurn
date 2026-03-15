@@ -126,10 +126,17 @@
 				sceneLighting: null,
 				visualizerRenderer: null
 			};
-			const appShell = window.createXrAppShell(shellConfig);
+			const appShell = window.createXrAppShell({
+				title: shellConfig.title,
+				xrHintText: shellConfig.xrHintText,
+				desktopHintText: shellConfig.desktopHintText,
+				audioHintText: shellConfig.audioHintText,
+				documentRef: document
+			});
 			const canvas = appShell.canvas;
 			const setStatus = appShell.setStatus;
 			const menuUi = window.createXrMenuUi({
+				documentRef: document,
 				desktopMenuPreviewWidthPixels: menuConfig.desktopMenuPreviewWidthPixels,
 				jumpModeDoubleMinU: menuConfig.jumpModeDoubleMinU,
 				jumpModeDoubleMaxU: menuConfig.jumpModeDoubleMaxU,
@@ -210,9 +217,13 @@
 
 			const sceneRenderer = window.createXrSceneRenderer({
 				canvas: canvas,
+				windowRef: window,
 				onInitFailure: function() {
-					appShell.enterButton.disabled = true;
-					setStatus("WebGL not available.");
+					appShell.setXrState({
+						statusText: "WebGL not available.",
+						enterEnabledBool: false,
+						exitEnabledBool: false
+					});
 				},
 				clampNumber: clampNumber,
 				levelBoxes: sceneConfig.levelBoxes,
@@ -250,6 +261,13 @@
 					getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
 					applySceneLightingUniforms: window.applySceneLightingUniforms
 				},
+				browser: {
+					windowRef: window,
+					documentRef: document,
+					xrApi: navigator.xr || null,
+					xrWebGLLayer: window.XRWebGLLayer || null,
+					xrRigidTransform: window.XRRigidTransform || null
+				},
 				config: {
 					desktopMouseSensitivity: runtimeConfig.desktopMouseSensitivity,
 					stickDeadzone: runtimeConfig.stickDeadzone,
@@ -258,8 +276,7 @@
 					maxSceneLights: sceneConfig.maxSceneLights,
 					sceneGlbAssets: sceneConfig.sceneGlbAssets,
 					emptyAudioMetrics: emptyAudioMetrics
-				},
-				xrApi: navigator.xr || null
+				}
 			});
 
 			appRuntime.init();

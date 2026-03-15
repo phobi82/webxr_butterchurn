@@ -67,6 +67,8 @@ Completed items stay checked. Open items remain unchecked until they are impleme
     - [ ] Remove redundant public getters if a clearer shared state or config boundary exists.
   - [ ] Standardize state access patterns.
     - [x] Introduce a consolidated `getState()` path for menu runtime state and move runtime and renderer call sites away from multiple narrow menu getters.
+    - [x] Route XR button-state changes through the shell API so runtime and entry wiring stop mutating XR control elements directly.
+    - [x] Move desktop preview event registration into the menu controller so runtime no longer binds directly to preview-canvas internals.
     - [ ] Decide where `getState()` is better than multiple narrow getters.
     - [ ] Keep narrow getters only when they make call sites significantly clearer or reduce coupling.
 
@@ -91,7 +93,7 @@ Completed items stay checked. Open items remain unchecked until they are impleme
 
 - [ ] Review module reusability with the goal of making feature modules usable in other projects.
   - [ ] Check whether modules depend on browser globals more than necessary.
-  - [ ] Reduce coupling to `window.*` where a dependency can be passed explicitly.
+  - [x] Reduce coupling to `window.*` where a dependency can be passed explicitly in reusable browser-facing modules such as the shell, runtime, menu UI, and scene renderer.
   - [ ] Verify that modules do not assume this specific app layout unless that is their explicit responsibility.
   - [ ] Keep each module large enough to stay coherent, but generic enough to be reused.
 

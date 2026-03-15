@@ -6,11 +6,12 @@
 
 	window.createXrMenuUi = function(options) {
 		options = options || {};
-		const menuCanvas = document.createElement("canvas");
+		const documentRef = options.documentRef || document;
+		const menuCanvas = documentRef.createElement("canvas");
 		menuCanvas.width = options.canvasWidth || 1280;
 		menuCanvas.height = options.canvasHeight || 960;
 		const menuCtx = menuCanvas.getContext("2d");
-		const previewCanvas = document.createElement("canvas");
+		const previewCanvas = documentRef.createElement("canvas");
 		const previewCtx = previewCanvas.getContext("2d");
 		const previewWidthPixels = options.desktopMenuPreviewWidthPixels || 420;
 		previewCanvas.width = menuCanvas.width;
@@ -26,7 +27,7 @@
 		previewCanvas.style.pointerEvents = "auto";
 		previewCanvas.style.cursor = "pointer";
 		previewCanvas.style.zIndex = "20";
-		(options.parentElement || document.body).appendChild(previewCanvas);
+		(options.parentElement || documentRef.body).appendChild(previewCanvas);
 
 		// Layout metrics drive both drawing and interaction so the menu stays in sync.
 		const getLayoutMetrics = function() {

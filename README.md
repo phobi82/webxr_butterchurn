@@ -122,6 +122,7 @@ The start page can switch between these audio inputs:
 - The shared WebGL setup, scene draw order, floor and menu rendering, and XR/desktop view rendering now live in `xr-scene-renderer.js`, so `index.html` no longer carries the whole render pipeline inline.
 - The browser-side shell for the control panel, status labels, audio buttons, and main canvas now lives in `xr-app-shell.js`, which is the first step toward a clearer top-level hierarchy of shell, runtime orchestration, and reusable feature modules.
 - XR session setup, desktop and XR render loops, browser input listeners, and feature-module coordination now live in `xr-app-runtime.js`, keeping `index.html` closer to a composition root instead of a mixed control-flow file.
+- XR button-state updates now flow through the shell API, and desktop menu-preview event wiring now lives in `xr-menu-controller.js`, which reduces direct DOM coupling between the runtime layer and feature modules.
 - Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
