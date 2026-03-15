@@ -77,7 +77,8 @@ Use this as default when the user does not specify other styles:
 
 - Use `const` and `let`, never `var`.
 - **Indentation** must use **tabs**, not spaces.
-- **All comments must be in English.**
+- Add comments where they meaningfully improve orientation or readability.
+- **All comments must be in English and stay short but useful.**
 - Keep code concise and contained; avoid sprawl and unnecessary variables while staying efficient, maintainable, and well-structured.
 - Prefer **straight-line code** over unnecessary abstractions:
   - Do **not** introduce tiny helper functions (“mini-functions”) that are only used once, if the inline code is clear and short.

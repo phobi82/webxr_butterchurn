@@ -1,4 +1,5 @@
 (function() {
+	// Shared WebGL helpers for fullscreen passes and small mode-specific shader programs.
 	const fullscreenVertexSource = [
 		"attribute vec2 position;",
 		"varying vec2 vScreenUv;",

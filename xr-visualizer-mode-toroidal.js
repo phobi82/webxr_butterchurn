@@ -1,4 +1,5 @@
 (function() {
+	// Simple fullscreen mode that remaps the Butterchurn canvas with head-driven toroidal offsets.
 	const utils = window.xrVisualizerUtils;
 	const headYawBufferShiftFactor = 0.8;
 	const headPitchBufferShiftFactor = 0.8;

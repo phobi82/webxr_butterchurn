@@ -1,4 +1,5 @@
 (function() {
+	// Reusable fullscreen textured-mode wrapper for modes that sample the shared Butterchurn canvas directly.
 	const glUtils = window.xrVisualizerGlUtils;
 
 	window.createXrVisualizerFullscreenTextureMode = function(spec) {

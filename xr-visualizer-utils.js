@@ -1,4 +1,5 @@
 (function() {
+	// Shared XR math helpers used by the visualizer manager, modes, and main page render loop.
 	const tau = Math.PI * 2;
 
 	const clampNumber = function(value, minValue, maxValue) {

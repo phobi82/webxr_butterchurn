@@ -1,4 +1,5 @@
 (function() {
+	// Generates the moving world-light presets used by the floor, boxes, and GLB props.
 	const utils = window.xrVisualizerUtils || {};
 	const clampNumber = utils.clampNumber || function(value, minValue, maxValue) {
 		return Math.max(minValue, Math.min(maxValue, value));
