@@ -7,6 +7,8 @@
 	<body>
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
+		<script src="xr-app-shell.js"></script>
+		<script src="xr-app-runtime.js"></script>
 		<script src="xr-visualizer-utils.js"></script>
 		<script src="xr-audio-controller.js"></script>
 		<script src="xr-locomotion.js"></script>
@@ -29,57 +31,12 @@
 			document.body.style.overflow = "hidden";
 			document.body.style.fontFamily = "Arial, sans-serif";
 
-			// Core gameplay, menu, and preview tuning live here so the baseline stays easy to audit.
-			const walkSpeed = 4;
-			const sprintMultiplier = 2;
-			const turnSpeed = 2;
-			const desktopMouseSensitivity = 0.0024;
-			const jumpSpeed = 3.55;
-			const jumpHoldBoostSpeed = 6.5;
-			const jumpHoldMaxSeconds = 0.22;
-			const airBoostSpeed = 14;
-			const airMomentumDrag = 0.35;
-			const groundMomentumDrag = 10;
-			const doubleJumpMaxCount = 2;
-			const gravity = -9.81;
-			const jumpGravity = -8.6;
-			const floorHalfSize = 40;
-			const fallResetY = -25;
-			const rayLength = 4;
-			const playerRadius = 0.32;
-			const playerHeadClearance = 0.12;
-			const defaultEyeHeight = 1.7; // Body height minus 10 cm.
-			const tiptoeEyeHeightBoost = 0.3;
-			const crouchMinEyeHeight = 0.5;
-			const crouchSpeed = 1.8;
-			const climbSpeed = 2.4;
-			const stickDeadzone = 0.08;
-			const stanceStickDeadzone = 0.22;
-			const stanceVerticalDominanceMargin = 0.12;
-			const stepHeight = 0.5;
-			const eyeDistanceMin = 0.02;
-			const eyeDistanceMax = 0.2;
-			const floorAlphaMin = 0;
-			const floorAlphaMax = 1;
-			const maxSceneLights = window.xrSceneLighting && window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS ? window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS : 4;
-			const menuWidth = 0.74;
-			const desktopMenuPreviewWidthPixels = 420;
-			const jumpModeDoubleMinU = 0.1;
-			const jumpModeDoubleMaxU = 0.45;
-			const jumpModeMultiMinU = 0.55;
-			const jumpModeMultiMaxU = 0.9;
-			const menuSliderMinU = 0.18;
-			const menuSliderMaxU = 0.82;
-			const menuSliderHalfHeight = 0.055;
-			const presetPrevMinU = 0.08;
-			const presetPrevMaxU = 0.22;
-			const presetNextMinU = 0.78;
-			const presetNextMaxU = 0.92;
-			const youtubePlaylistUrl = "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1";
-			const youtubeWindowName = "webxrYoutubePlaylist";
-			const sunoLiveRadioUrl = "https://suno.com/labs/live-radio";
-			const sunoLiveRadioWindowName = "webxrSunoLiveRadio";
-			const sceneGlbAssets = [
+			// Group related tuning together so each module is wired with one coherent config object.
+			const sceneConfig = {
+				floorHalfSize: 40,
+				maxSceneLights: window.xrSceneLighting && window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS ? window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS : 4,
+				menuWidth: 0.74,
+				sceneGlbAssets: [
 				{
 					url: "https://phobi82.github.io/Phobis-Crystal-Lake/goat.glb",
 					position: {x: -1.4, y: 0.256, z: -2.6},
@@ -87,183 +44,105 @@
 					rotationY: -0.55,
 					collisionBool: true
 				}
-			];
-			const levelBoxes = [
+				],
+				levelBoxes: [
 				{x: 0, y: 0.6, z: -6, width: 2.4, height: 1.2, depth: 2.4, color: [0.2, 0.72, 1, 0.72]},
 				{x: -3.6, y: 0.9, z: -10.5, width: 2.6, height: 1.8, depth: 2.6, color: [1, 0.55, 0.2, 0.72]},
 				{x: 4.2, y: 1.3, z: -13.5, width: 3, height: 2.6, depth: 3, color: [0.3, 1, 0.55, 0.72]},
 				{x: 0, y: 1.2, z: -18, width: 8, height: 2.4, depth: 1.3, color: [1, 0.28, 0.42, 0.68]},
 				{x: -8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.95, 0.2, 0.8, 0.48]},
 				{x: 8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.1, 0.95, 0.9, 0.48]}
-			];
-
-			// Mutable runtime state for XR, desktop controls, audio, scene resources, and menu interaction.
-			let gl = null;
-			let xrSession = null;
-			let baseRefSpace = null;
-			let xrRefSpace = null;
-			let frameHandle = null;
-			let lastRenderTime = 0;
-			let previewLastRenderTime = 0;
-			let previewTime = 0;
-			let sceneTimeSeconds = 0;
-			let glbAssetManager = null;
-			let sceneLighting = null;
-			let visualizerRenderer = null;
-			let desktopPointerLockedBool = false;
-			const menuUi = window.createXrMenuUi({
-				desktopMenuPreviewWidthPixels: desktopMenuPreviewWidthPixels,
-				jumpModeDoubleMinU: jumpModeDoubleMinU,
-				jumpModeDoubleMaxU: jumpModeDoubleMaxU,
-				jumpModeMultiMinU: jumpModeMultiMinU,
-				jumpModeMultiMaxU: jumpModeMultiMaxU,
-				menuSliderMinU: menuSliderMinU,
-				menuSliderMaxU: menuSliderMaxU,
-				menuSliderHalfHeight: menuSliderHalfHeight,
-				presetPrevMinU: presetPrevMinU,
-				presetPrevMaxU: presetPrevMaxU,
-				presetNextMinU: presetNextMinU,
-				presetNextMaxU: presetNextMaxU
-			});
-
-			const panel = document.createElement("div");
-			panel.style.position = "fixed";
-			panel.style.left = "12px";
-			panel.style.top = "12px";
-			panel.style.display = "flex";
-			panel.style.flexDirection = "column";
-			panel.style.gap = "8px";
-			panel.style.padding = "10px";
-			panel.style.backgroundColor = "rgba(0, 0, 32, 0.88)";
-			panel.style.border = "1px solid #ffff00";
-			panel.style.zIndex = "10";
-			document.body.appendChild(panel);
-
-			const title = document.createElement("div");
-			title.textContent = "WebXR Visualizer Foundation";
-			title.style.fontWeight = "bold";
-			panel.appendChild(title);
-
-			const status = document.createElement("div");
-			status.textContent = "XR: checking support...";
-			status.style.fontSize = "14px";
-			panel.appendChild(status);
-
-			const vrHint = document.createElement("div");
-			vrHint.textContent = "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.";
-			vrHint.style.fontSize = "13px";
-			vrHint.style.color = "#00ff00";
-			panel.appendChild(vrHint);
-
-			const desktopHint = document.createElement("div");
-			desktopHint.textContent = "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.";
-			desktopHint.style.fontSize = "13px";
-			desktopHint.style.color = "#00ff00";
-			panel.appendChild(desktopHint);
-
-			const xrSection = document.createElement("div");
-			xrSection.style.display = "flex";
-			xrSection.style.flexDirection = "column";
-			xrSection.style.gap = "6px";
-			xrSection.style.padding = "8px";
-			xrSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
-			panel.appendChild(xrSection);
-
-			const xrSectionLabel = document.createElement("div");
-			xrSectionLabel.textContent = "XR";
-			xrSectionLabel.style.fontSize = "12px";
-			xrSectionLabel.style.fontWeight = "bold";
-			xrSectionLabel.style.color = "#00ff00";
-			xrSection.appendChild(xrSectionLabel);
-
-			const xrButtonRow = document.createElement("div");
-			xrButtonRow.style.display = "flex";
-			xrButtonRow.style.flexWrap = "wrap";
-			xrButtonRow.style.gap = "8px";
-			xrSection.appendChild(xrButtonRow);
-
-			const enterButton = document.createElement("button");
-			enterButton.textContent = "Enter VR";
-			xrButtonRow.appendChild(enterButton);
-
-			const exitButton = document.createElement("button");
-			exitButton.textContent = "Exit VR";
-			exitButton.disabled = true;
-			xrButtonRow.appendChild(exitButton);
-
-			const audioSection = document.createElement("div");
-			audioSection.style.display = "flex";
-			audioSection.style.flexDirection = "column";
-			audioSection.style.gap = "6px";
-			audioSection.style.padding = "8px";
-			audioSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
-			panel.appendChild(audioSection);
-
-			const audioSectionLabel = document.createElement("div");
-			audioSectionLabel.textContent = "Audio";
-			audioSectionLabel.style.fontSize = "12px";
-			audioSectionLabel.style.fontWeight = "bold";
-			audioSectionLabel.style.color = "#00ff00";
-			audioSection.appendChild(audioSectionLabel);
-
-			const audioSourceRow = document.createElement("div");
-			audioSourceRow.style.display = "flex";
-			audioSourceRow.style.flexWrap = "wrap";
-			audioSourceRow.style.gap = "8px";
-			audioSection.appendChild(audioSourceRow);
-
-			const audioButton = document.createElement("button");
-			audioButton.textContent = "Share Audio";
-			audioSourceRow.appendChild(audioButton);
-
-			const microphoneButton = document.createElement("button");
-			microphoneButton.textContent = "Use Microphone";
-			audioSourceRow.appendChild(microphoneButton);
-
-			const debugAudioButton = document.createElement("button");
-			debugAudioButton.textContent = "Debug Audio";
-			audioSourceRow.appendChild(debugAudioButton);
-
-			const stopAudioButton = document.createElement("button");
-			stopAudioButton.textContent = "Stop Audio";
-			stopAudioButton.disabled = true;
-			audioSourceRow.appendChild(stopAudioButton);
-
-			const audioPlaylistRow = document.createElement("div");
-			audioPlaylistRow.style.display = "flex";
-			audioPlaylistRow.style.flexWrap = "wrap";
-			audioPlaylistRow.style.gap = "8px";
-			audioSection.appendChild(audioPlaylistRow);
-
-			const youtubeAudioButton = document.createElement("button");
-			youtubeAudioButton.textContent = "YouTube Playlist";
-			audioPlaylistRow.appendChild(youtubeAudioButton);
-
-			const sunoLiveRadioButton = document.createElement("button");
-			sunoLiveRadioButton.textContent = "Suno Live Radio";
-			audioPlaylistRow.appendChild(sunoLiveRadioButton);
-
-			const audioLabel = document.createElement("div");
-			audioLabel.textContent = "Audio: none";
-			audioLabel.style.fontSize = "13px";
-			audioSection.appendChild(audioLabel);
-
-			const audioHint = document.createElement("div");
-			audioHint.textContent = "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.";
-			audioHint.style.fontSize = "12px";
-			audioHint.style.maxWidth = "360px";
-			audioHint.style.color = "#00ff00";
-			audioSection.appendChild(audioHint);
-
-			const canvas = document.createElement("canvas");
-			canvas.style.display = "block";
-			canvas.style.width = "100vw";
-			canvas.style.height = "100vh";
-			document.body.appendChild(canvas);
-
-			const setStatus = function(text) {
-				status.textContent = "XR: " + text;
+				]
 			};
+			const shellConfig = {
+				title: "WebXR Visualizer Foundation",
+				xrHintText: "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.",
+				desktopHintText: "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.",
+				audioHintText: "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio."
+			};
+			const audioConfig = {
+				youtubePlaylistUrl: "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1",
+				youtubeWindowName: "webxrYoutubePlaylist",
+				sunoLiveRadioUrl: "https://suno.com/labs/live-radio",
+				sunoWindowName: "webxrSunoLiveRadio"
+			};
+			const locomotionConfig = {
+				walkSpeed: 4,
+				sprintMultiplier: 2,
+				turnSpeed: 2,
+				jumpSpeed: 3.55,
+				jumpHoldBoostSpeed: 6.5,
+				jumpHoldMaxSeconds: 0.22,
+				airBoostSpeed: 14,
+				airMomentumDrag: 0.35,
+				groundMomentumDrag: 10,
+				doubleJumpMaxCount: 2,
+				jumpGravity: -8.6,
+				fallResetY: -25,
+				playerRadius: 0.32,
+				playerHeadClearance: 0.12,
+				defaultEyeHeight: 1.7, // Body height minus 10 cm.
+				tiptoeEyeHeightBoost: 0.3,
+				crouchMinEyeHeight: 0.5,
+				crouchSpeed: 1.8,
+				climbSpeed: 2.4,
+				stepHeight: 0.5,
+				desktopStartZ: 5.6,
+				desktopStartPitch: -0.16
+			};
+			const menuConfig = {
+				rayLength: 4,
+				eyeDistanceMin: 0.02,
+				eyeDistanceMax: 0.2,
+				floorAlphaMin: 0,
+				floorAlphaMax: 1,
+				desktopMenuPreviewWidthPixels: 420,
+				jumpModeDoubleMinU: 0.1,
+				jumpModeDoubleMaxU: 0.45,
+				jumpModeMultiMinU: 0.55,
+				jumpModeMultiMaxU: 0.9,
+				menuSliderMinU: 0.18,
+				menuSliderMaxU: 0.82,
+				menuSliderHalfHeight: 0.055,
+				presetPrevMinU: 0.08,
+				presetPrevMaxU: 0.22,
+				presetNextMinU: 0.78,
+				presetNextMaxU: 0.92,
+				initialJumpMode: "double",
+				initialFloorAlpha: 0.72,
+				initialEyeDistanceMeters: 0.064,
+				initialDesktopPreviewVisibleBool: true
+			};
+			const runtimeConfig = {
+				desktopMouseSensitivity: 0.0024,
+				stickDeadzone: 0.08,
+				stanceStickDeadzone: 0.22,
+				stanceVerticalDominanceMargin: 0.12
+			};
+
+			// Shared resources keep cross-module links explicit without spreading runtime globals.
+			const sharedResources = {
+				glbAssetManager: null,
+				sceneLighting: null,
+				visualizerRenderer: null
+			};
+			const appShell = window.createXrAppShell(shellConfig);
+			const canvas = appShell.canvas;
+			const setStatus = appShell.setStatus;
+			const menuUi = window.createXrMenuUi({
+				desktopMenuPreviewWidthPixels: menuConfig.desktopMenuPreviewWidthPixels,
+				jumpModeDoubleMinU: menuConfig.jumpModeDoubleMinU,
+				jumpModeDoubleMaxU: menuConfig.jumpModeDoubleMaxU,
+				jumpModeMultiMinU: menuConfig.jumpModeMultiMinU,
+				jumpModeMultiMaxU: menuConfig.jumpModeMultiMaxU,
+				menuSliderMinU: menuConfig.menuSliderMinU,
+				menuSliderMaxU: menuConfig.menuSliderMaxU,
+				menuSliderHalfHeight: menuConfig.menuSliderHalfHeight,
+				presetPrevMinU: menuConfig.presetPrevMinU,
+				presetPrevMaxU: menuConfig.presetPrevMaxU,
+				presetNextMinU: menuConfig.presetNextMinU,
+				presetNextMaxU: menuConfig.presetNextMaxU
+			});
 
 			const utils = window.xrVisualizerUtils;
 			const clampNumber = utils.clampNumber;
@@ -271,711 +150,119 @@
 			const emptyAudioMetrics = utils.emptyAudioMetrics;
 			const rotateXZ = utils.rotateXZ;
 			const extractForwardDirectionFromQuaternion = utils.extractForwardDirectionFromQuaternion;
-			const updateAudioUiState = function(audioState) {
-				audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
-				stopAudioButton.disabled = !audioState.stopEnabledBool;
-			};
+			const identityMatrix = utils.identityMatrix;
+			const multiplyMatrices = utils.multiplyMatrices;
+			const translateScale = utils.translateScale;
+			const translateRotateYScale = utils.translateRotateYScale;
+			const basisScale = utils.basisScale;
 			const audioController = window.createXrAudioController({
 				setStatus: setStatus,
-				youtubePlaylistUrl: youtubePlaylistUrl,
-				youtubeWindowName: youtubeWindowName,
-				sunoLiveRadioUrl: sunoLiveRadioUrl,
-				sunoWindowName: sunoLiveRadioWindowName,
-				onStateChange: updateAudioUiState
+				youtubePlaylistUrl: audioConfig.youtubePlaylistUrl,
+				youtubeWindowName: audioConfig.youtubeWindowName,
+				sunoLiveRadioUrl: audioConfig.sunoLiveRadioUrl,
+				sunoWindowName: audioConfig.sunoWindowName,
+				onStateChange: appShell.setAudioState
 			});
-			const runAudioAction = function(actionPromise, fallbackMessage) {
-				actionPromise.catch(function(error) {
-					setStatus(error.message || fallbackMessage);
-				});
-			};
-			const getAudioMetrics = function() {
-				return visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : emptyAudioMetrics;
-			};
 			const locomotionController = window.createXrLocomotionController({
-				defaultEyeHeight: defaultEyeHeight,
-				playerHeadClearance: playerHeadClearance,
-				floorHalfSize: floorHalfSize,
-				playerRadius: playerRadius,
-				stepHeight: stepHeight,
-				crouchMinEyeHeight: crouchMinEyeHeight,
-				tiptoeEyeHeightBoost: tiptoeEyeHeightBoost,
-				crouchSpeed: crouchSpeed,
-				walkSpeed: walkSpeed,
-				sprintMultiplier: sprintMultiplier,
-				climbSpeed: climbSpeed,
-				jumpGravity: jumpGravity,
-				jumpSpeed: jumpSpeed,
-				jumpHoldBoostSpeed: jumpHoldBoostSpeed,
-				jumpHoldMaxSeconds: jumpHoldMaxSeconds,
-				doubleJumpMaxCount: doubleJumpMaxCount,
-				airBoostSpeed: airBoostSpeed,
-				airMomentumDrag: airMomentumDrag,
-				groundMomentumDrag: groundMomentumDrag,
-				fallResetY: fallResetY,
-				turnSpeed: turnSpeed,
-				desktopStartZ: 5.6,
-				desktopStartPitch: -0.16,
-				levelBoxes: levelBoxes,
+				defaultEyeHeight: locomotionConfig.defaultEyeHeight,
+				playerHeadClearance: locomotionConfig.playerHeadClearance,
+				floorHalfSize: sceneConfig.floorHalfSize,
+				playerRadius: locomotionConfig.playerRadius,
+				stepHeight: locomotionConfig.stepHeight,
+				crouchMinEyeHeight: locomotionConfig.crouchMinEyeHeight,
+				tiptoeEyeHeightBoost: locomotionConfig.tiptoeEyeHeightBoost,
+				crouchSpeed: locomotionConfig.crouchSpeed,
+				walkSpeed: locomotionConfig.walkSpeed,
+				sprintMultiplier: locomotionConfig.sprintMultiplier,
+				climbSpeed: locomotionConfig.climbSpeed,
+				jumpGravity: locomotionConfig.jumpGravity,
+				jumpSpeed: locomotionConfig.jumpSpeed,
+				jumpHoldBoostSpeed: locomotionConfig.jumpHoldBoostSpeed,
+				jumpHoldMaxSeconds: locomotionConfig.jumpHoldMaxSeconds,
+				doubleJumpMaxCount: locomotionConfig.doubleJumpMaxCount,
+				airBoostSpeed: locomotionConfig.airBoostSpeed,
+				airMomentumDrag: locomotionConfig.airMomentumDrag,
+				groundMomentumDrag: locomotionConfig.groundMomentumDrag,
+				fallResetY: locomotionConfig.fallResetY,
+				turnSpeed: locomotionConfig.turnSpeed,
+				desktopStartZ: locomotionConfig.desktopStartZ,
+				desktopStartPitch: locomotionConfig.desktopStartPitch,
+				levelBoxes: sceneConfig.levelBoxes,
 				getGlbCollisionBoxes: function() {
-					return glbAssetManager && glbAssetManager.getCollisionBoxes ? glbAssetManager.getCollisionBoxes() : [];
+					return sharedResources.glbAssetManager && sharedResources.glbAssetManager.getCollisionBoxes ? sharedResources.glbAssetManager.getCollisionBoxes() : [];
 				}
 			});
-			const xrMovementState = locomotionController.createXrState();
-			const desktopMovementState = locomotionController.createDesktopState();
 			const menuController = window.createXrMenuController({
 				menuUi: menuUi,
-				menuWidth: menuWidth,
-				rayLength: rayLength,
-				menuSliderMinU: menuSliderMinU,
-				menuSliderMaxU: menuSliderMaxU,
-				eyeDistanceMin: eyeDistanceMin,
-				eyeDistanceMax: eyeDistanceMax,
-				floorAlphaMin: floorAlphaMin,
-				floorAlphaMax: floorAlphaMax,
-				initialJumpMode: "double",
-				initialFloorAlpha: 0.72,
-				initialEyeDistanceMeters: 0.064,
-				initialDesktopPreviewVisibleBool: true
+				menuWidth: sceneConfig.menuWidth,
+				rayLength: menuConfig.rayLength,
+				menuSliderMinU: menuConfig.menuSliderMinU,
+				menuSliderMaxU: menuConfig.menuSliderMaxU,
+				eyeDistanceMin: menuConfig.eyeDistanceMin,
+				eyeDistanceMax: menuConfig.eyeDistanceMax,
+				floorAlphaMin: menuConfig.floorAlphaMin,
+				floorAlphaMax: menuConfig.floorAlphaMax,
+				initialJumpMode: menuConfig.initialJumpMode,
+				initialFloorAlpha: menuConfig.initialFloorAlpha,
+				initialEyeDistanceMeters: menuConfig.initialEyeDistanceMeters,
+				initialDesktopPreviewVisibleBool: menuConfig.initialDesktopPreviewVisibleBool
 			});
-			const desktopMenuPreviewCanvas = menuController.previewCanvas;
-
-			const updateSceneLighting = function(timeSeconds) {
-				if (!sceneLighting) {
-					return;
-				}
-				sceneLighting.update(timeSeconds, getAudioMetrics());
-			};
-
-			const lerpNumber = function(startValue, endValue, mixValue) {
-				return startValue + (endValue - startValue) * mixValue;
-			};
-
-			// Shared matrix helpers stay here because GLB loading and scene rendering both depend on them.
-			const identityMatrix = function() {
-				return new Float32Array([
-					1, 0, 0, 0,
-					0, 1, 0, 0,
-					0, 0, 1, 0,
-					0, 0, 0, 1
-				]);
-			};
-
-			const multiplyMatrices = function(a, b) {
-				const out = new Float32Array(16);
-				for (let column = 0; column < 4; column += 1) {
-					for (let row = 0; row < 4; row += 1) {
-						out[column * 4 + row] =
-							a[0 * 4 + row] * b[column * 4 + 0] +
-							a[1 * 4 + row] * b[column * 4 + 1] +
-							a[2 * 4 + row] * b[column * 4 + 2] +
-							a[3 * 4 + row] * b[column * 4 + 3];
-					}
-				}
-				return out;
-			};
-
-			const translateScale = function(tx, ty, tz, sx, sy, sz) {
-				return new Float32Array([
-					sx, 0, 0, 0,
-					0, sy, 0, 0,
-					0, 0, sz, 0,
-					tx, ty, tz, 1
-				]);
-			};
-
-			const translateRotateYScale = function(tx, ty, tz, yaw, sx, sy, sz) {
-				const cosYaw = Math.cos(yaw);
-				const sinYaw = Math.sin(yaw);
-				return new Float32Array([
-					cosYaw * sx, 0, -sinYaw * sx, 0,
-					0, sy, 0, 0,
-					sinYaw * sz, 0, cosYaw * sz, 0,
-					tx, ty, tz, 1
-				]);
-			};
-
-			const basisScale = function(tx, ty, tz, right, up, forward, sx, sy, sz) {
-				return new Float32Array([
-					right.x * sx, right.y * sx, right.z * sx, 0,
-					up.x * sy, up.y * sy, up.z * sy, 0,
-					forward.x * sz, forward.y * sz, forward.z * sz, 0,
-					tx, ty, tz, 1
-				]);
-			};
-
-			const getAudioReactiveFloorColors = function() {
-				const audioMetrics = getAudioMetrics();
-				const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
-				const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
-				const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
-				const transientLevel = clampNumber(audioMetrics.transient || 0, 0, 1);
-				const baseHue = (sceneTimeSeconds * 0.03) % 1;
-				const floorDrive = clampNumber(audioLevel * 0.72 + audioPeak * 0.28 + beatPulse * 0.4, 0, 1);
-				const floorRgb = hslToRgb((baseHue + beatPulse * 0.03) % 1, lerpNumber(0.45, 0.98, floorDrive), lerpNumber(0.26, 0.66, floorDrive));
-				const gridRgb = hslToRgb((baseHue + 0.08 + beatPulse * 0.05) % 1, lerpNumber(0.55, 1, floorDrive), lerpNumber(0.48, 0.82, clampNumber(floorDrive + transientLevel, 0, 1)));
-				const floorAlpha = menuController.getFloorAlpha();
-				return {
-					audioLevel: audioLevel,
-					audioPeak: audioPeak,
-					beatPulse: beatPulse,
-					transient: transientLevel,
-					floor: [floorRgb[0], floorRgb[1], floorRgb[2], floorAlpha],
-					grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(floorAlpha * 0.72, floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
-				};
-			};
 
 			const sceneRenderer = window.createXrSceneRenderer({
 				canvas: canvas,
 				onInitFailure: function() {
-					enterButton.disabled = true;
+					appShell.enterButton.disabled = true;
 					setStatus("WebGL not available.");
 				},
 				clampNumber: clampNumber,
-				levelBoxes: levelBoxes,
-				floorHalfSize: floorHalfSize,
-				menuWidth: menuWidth,
+				levelBoxes: sceneConfig.levelBoxes,
+				floorHalfSize: sceneConfig.floorHalfSize,
+				menuWidth: sceneConfig.menuWidth,
 				identityMatrix: identityMatrix,
 				translateScale: translateScale,
 				basisScale: basisScale,
-				maxSceneLights: maxSceneLights,
+				maxSceneLights: sceneConfig.maxSceneLights,
 				getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
 				applySceneLightingUniforms: window.applySceneLightingUniforms
 			});
-
-			const updateReferenceSpace = function() {
-				if (!baseRefSpace) {
-					return;
-				}
-				const offset = rotateXZ(-xrMovementState.origin.x, -xrMovementState.origin.z, -xrMovementState.heading);
-				xrRefSpace = baseRefSpace.getOffsetReferenceSpace(new XRRigidTransform(
-					{x: offset.x, y: -(xrMovementState.origin.y + xrMovementState.effectiveEyeHeightMeters - xrMovementState.currentBaseEyeHeightMeters), z: offset.z},
-					{x: 0, y: Math.sin(-xrMovementState.heading * 0.5), z: 0, w: Math.cos(-xrMovementState.heading * 0.5)}
-				));
-			};
-
-			const resetPlayerPose = function() {
-				locomotionController.resetXrState(xrMovementState);
-				updateReferenceSpace();
-			};
-
-			const cyclePreset = function(direction) {
-				if (!visualizerRenderer) {
-					return;
-				}
-				const presetNames = visualizerRenderer.getPresetNames();
-				const presetCount = presetNames.length;
-				if (!presetCount) {
-					return;
-				}
-				let nextPresetIndex = visualizerRenderer.getCurrentPresetIndex();
-				nextPresetIndex = (nextPresetIndex + direction + presetCount) % presetCount;
-				visualizerRenderer.selectPreset(nextPresetIndex);
-			};
-
-			const cycleShaderMode = function(direction) {
-				if (!visualizerRenderer || !visualizerRenderer.getModeNames || !visualizerRenderer.selectMode) {
-					return;
-				}
-				const shaderModeNames = visualizerRenderer.getModeNames();
-				const shaderModeCount = shaderModeNames.length;
-				if (!shaderModeCount) {
-					return;
-				}
-				let nextShaderModeIndex = visualizerRenderer.getCurrentModeIndex();
-				nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
-				visualizerRenderer.selectMode(nextShaderModeIndex);
-			};
-
-			const cycleLightingPreset = function(direction) {
-				if (!sceneLighting) {
-					return;
-				}
-				const lightPresetNames = sceneLighting.getPresetNames();
-				const lightPresetCount = lightPresetNames.length;
-				if (!lightPresetCount) {
-					return;
-				}
-				let nextLightPresetIndex = sceneLighting.getCurrentPresetIndex();
-				nextLightPresetIndex = (nextLightPresetIndex + direction + lightPresetCount) % lightPresetCount;
-				sceneLighting.selectPreset(nextLightPresetIndex);
-			};
-
-			const pickAxes = function(gamepad, preferSecondaryBool) {
-				const primaryX = gamepad.axes[0] || 0;
-				const primaryY = gamepad.axes[1] || 0;
-				const secondaryX = gamepad.axes[2] || 0;
-				const secondaryY = gamepad.axes[3] || 0;
-				if (gamepad.axes.length < 4) {
-					return {x: primaryX, y: primaryY};
-				}
-				const primaryStrength = Math.abs(primaryX) + Math.abs(primaryY);
-				const secondaryStrength = Math.abs(secondaryX) + Math.abs(secondaryY);
-				if (preferSecondaryBool) {
-					return secondaryStrength > 0.01 ? {x: secondaryX, y: secondaryY} : {x: primaryX, y: primaryY};
-				}
-				return primaryStrength > 0.01 ? {x: primaryX, y: primaryY} : {x: secondaryX, y: secondaryY};
-			};
-
-			const readLocomotionInput = function(frame) {
-				const locomotion = {
-					moveX: 0,
-					moveY: 0,
-					turnX: 0,
-					stanceInputY: 0,
-					jumpRequestBool: false,
-					airBoostActiveBool: false,
-					rightControllerBoostDir: null,
-					sprintActiveBool: false
-				};
-				const sources = xrSession ? xrSession.inputSources || [] : [];
-				for (let i = 0; i < sources.length; i += 1) {
-					const source = sources[i];
-					const gamepad = source.gamepad;
-					if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) {
-						continue;
-					}
-					if (source.handedness === "left") {
-						const moveAxes = pickAxes(gamepad, false);
-						locomotion.moveX = Math.abs(moveAxes.x) > stickDeadzone ? moveAxes.x : 0;
-						locomotion.moveY = Math.abs(moveAxes.y) > stickDeadzone ? moveAxes.y : 0;
-						locomotion.sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-					}
-					if (source.handedness === "right") {
-						const turnAxes = pickAxes(gamepad, true);
-						locomotion.turnX = Math.abs(turnAxes.x) > stickDeadzone ? turnAxes.x : 0;
-						locomotion.stanceInputY = Math.abs(turnAxes.y) > stanceStickDeadzone && Math.abs(turnAxes.y) > Math.abs(turnAxes.x) + stanceVerticalDominanceMargin ? -turnAxes.y : 0;
-						locomotion.jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
-						locomotion.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-						const targetRayPose = xrRefSpace ? frame.getPose(source.targetRaySpace, xrRefSpace) : null;
-						if (targetRayPose) {
-							locomotion.rightControllerBoostDir = extractForwardDirectionFromQuaternion(targetRayPose.transform.orientation);
-						}
-					}
-				}
-				return locomotion;
-			};
-
-			const updateMenuInput = function(frame, pose) {
-				menuController.updateXrInput({
-					xrSession: xrSession,
-					xrRefSpace: xrRefSpace,
-					frame: frame,
-					pose: pose,
-					callbacks: {
-						onShaderModeAction: cycleShaderMode,
-						onLightPresetAction: cycleLightingPreset,
-						onPresetAction: cyclePreset
-					}
-				});
-			};
-
-			const applyLocomotion = function(delta, pose, frame) {
-				if (!xrSession || !pose || !frame) {
-					return;
-				}
-				const basePose = baseRefSpace ? frame.getViewerPose(baseRefSpace) : null;
-				const viewerTransform = basePose ? basePose.transform : pose.transform;
-				const locomotion = readLocomotionInput(frame);
-				const locomotionStep = locomotionController.applyXrLocomotion(xrMovementState, {
-					delta: delta,
-					viewerTransform: viewerTransform,
-					turnAnchorPosition: basePose ? viewerTransform.position : null,
-					locomotion: locomotion,
-					jumpMode: menuController.getJumpMode(),
-					menuOpenBool: menuController.isMenuOpen()
-				});
-				if (locomotionStep.referenceSpaceUpdateNeededBool) {
-					updateReferenceSpace();
-				}
-			};
-
-			const getMenuContentState = function() {
-				return {
-					sceneTimeSeconds: sceneTimeSeconds,
-					audioMetrics: getAudioMetrics(),
-					shaderModeNames: visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"],
-					currentShaderModeIndex: visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0,
-					lightPresetNames: sceneLighting ? sceneLighting.getPresetNames() : ["Aurora Drift"],
-					currentLightPresetIndex: sceneLighting ? sceneLighting.getCurrentPresetIndex() : 0,
-					currentLightPresetDescription: sceneLighting ? sceneLighting.getCurrentPresetDescription() : "Slow colorful overhead drift",
-					presetNames: visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"],
-					currentPresetIndex: visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0
-				};
-			};
-
-			const updateDesktopMenuPreview = function() {
-				menuController.updateDesktopPreview({
-					xrSessionActiveBool: !!xrSession,
-					pointerLockedBool: desktopPointerLockedBool,
-					interactiveBool: !desktopPointerLockedBool && !xrSession,
-					renderState: getMenuContentState()
-				});
-			};
-
-			const renderXr = function(time, frame) {
-				frameHandle = xrSession.requestAnimationFrame(renderXr);
-				const pose = frame.getViewerPose(xrRefSpace);
-				if (!pose) {
-					return;
-				}
-				const delta = lastRenderTime === 0 ? 0 : (time - lastRenderTime) / 1000;
-				lastRenderTime = time;
-				sceneTimeSeconds = time * 0.001;
-				applyLocomotion(delta, pose, frame);
-				const renderPose = frame.getViewerPose(xrRefSpace) || pose;
-				updateMenuInput(frame, renderPose);
-				if (visualizerRenderer) {
-					if (renderPose.transform && renderPose.views.length) {
-						visualizerRenderer.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
-						visualizerRenderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
-					}
-					visualizerRenderer.update(time * 0.001);
-				}
-				updateSceneLighting(time * 0.001);
-				sceneRenderer.renderXrViews({
-					baseLayer: xrSession.renderState.baseLayer,
-					pose: renderPose,
-					eyeDistanceMeters: menuController.getEyeDistanceMeters(),
-					visualizerRenderer: visualizerRenderer,
-					glbAssetManager: glbAssetManager,
-					sceneLighting: sceneLighting,
-					menuController: menuController,
-					menuContentState: getMenuContentState(),
-					getReactiveFloorColors: getAudioReactiveFloorColors
-				});
-			};
-
-			const renderPreview = function(time) {
-				if (xrSession) {
-					return;
-				}
-				previewTime = time * 0.001;
-				const delta = previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTime - previewLastRenderTime));
-				previewLastRenderTime = previewTime;
-				sceneTimeSeconds = previewTime;
-				locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getJumpMode());
-				updateSceneLighting(previewTime);
-				sceneRenderer.renderPreviewFrame({
-					previewTimeSeconds: previewTime,
-					desktopMovementState: desktopMovementState,
-					visualizerRenderer: visualizerRenderer,
-					glbAssetManager: glbAssetManager,
-					sceneLighting: sceneLighting,
-					menuController: menuController,
-					menuContentState: getMenuContentState(),
-					getReactiveFloorColors: getAudioReactiveFloorColors
-				});
-				updateDesktopMenuPreview();
-				window.requestAnimationFrame(renderPreview);
-			};
-
-			const endSession = function() {
-				if (frameHandle !== null && xrSession) {
-					xrSession.cancelAnimationFrame(frameHandle);
-				}
-				frameHandle = null;
-				xrSession = null;
-				baseRefSpace = null;
-				xrRefSpace = null;
-				lastRenderTime = 0;
-				previewLastRenderTime = 0;
-				menuController.endSession();
-				exitButton.disabled = true;
-				enterButton.disabled = false;
-				setStatus(navigator.xr ? "ready" : "headset not detected.");
-				if (visualizerRenderer) {
-					visualizerRenderer.onSessionEnd();
-				}
-				xrMovementState.horizontalVelocityX = 0;
-				xrMovementState.horizontalVelocityZ = 0;
-				window.requestAnimationFrame(renderPreview);
-			};
-
-			const startSession = async function() {
-				try {
-					if (document.pointerLockElement === canvas && document.exitPointerLock) {
-						document.exitPointerLock();
-					}
-					desktopMenuPreviewCanvas.style.display = "none";
-					xrSession = await navigator.xr.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
-					xrSession.addEventListener("end", endSession);
-					await gl.makeXRCompatible();
-					let framebufferScaleFactor = 1;
-					if (window.XRWebGLLayer && typeof XRWebGLLayer.getNativeFramebufferScaleFactor === "function") {
-						framebufferScaleFactor = XRWebGLLayer.getNativeFramebufferScaleFactor(xrSession) || 1;
-					}
-					xrSession.updateRenderState({
-						baseLayer: new XRWebGLLayer(xrSession, gl, {
-							framebufferScaleFactor: framebufferScaleFactor
-						})
-					});
-					baseRefSpace = await xrSession.requestReferenceSpace("local-floor");
-					locomotionController.resetXrState(xrMovementState);
-					menuController.resetSessionInputState();
-					updateReferenceSpace();
-					enterButton.disabled = true;
-					exitButton.disabled = false;
-					setStatus("session running");
-					lastRenderTime = 0;
-					if (visualizerRenderer) {
-						visualizerRenderer.onSessionStart();
-					}
-					frameHandle = xrSession.requestAnimationFrame(renderXr);
-				} catch (error) {
-					setStatus(error.message || "session failed");
-					xrSession = null;
-				}
-			};
-
-			enterButton.addEventListener("click", function() {
-				if (navigator.xr && gl && !xrSession) {
-					audioController.activate();
-					startSession();
-				}
+			const appRuntime = window.createXrAppRuntime({
+				shell: appShell,
+				audioController: audioController,
+				locomotionController: locomotionController,
+				menuController: menuController,
+				sceneRenderer: sceneRenderer,
+				sharedResources: sharedResources,
+				factories: {
+					createSceneLightingController: window.createSceneLightingController,
+					createGlbAssetManager: window.createGlbAssetManager,
+					createXrVisualizerManager: window.createXrVisualizerManager
+				},
+				math: {
+					clampNumber: clampNumber,
+					hslToRgb: hslToRgb,
+					rotateXZ: rotateXZ,
+					extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion
+				},
+				sceneMath: {
+					identityMatrix: identityMatrix,
+					multiplyMatrices: multiplyMatrices,
+					translateRotateYScale: translateRotateYScale,
+					getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
+					applySceneLightingUniforms: window.applySceneLightingUniforms
+				},
+				config: {
+					desktopMouseSensitivity: runtimeConfig.desktopMouseSensitivity,
+					stickDeadzone: runtimeConfig.stickDeadzone,
+					stanceStickDeadzone: runtimeConfig.stanceStickDeadzone,
+					stanceVerticalDominanceMargin: runtimeConfig.stanceVerticalDominanceMargin,
+					maxSceneLights: sceneConfig.maxSceneLights,
+					sceneGlbAssets: sceneConfig.sceneGlbAssets,
+					emptyAudioMetrics: emptyAudioMetrics
+				},
+				xrApi: navigator.xr || null
 			});
 
-			audioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestSharedAudio(), "audio capture failed");
-			});
-
-			youtubeAudioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestYoutubePlaylistAudio(), "youtube audio failed");
-			});
-
-			sunoLiveRadioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestSunoLiveRadioAudio(), "suno live radio audio failed");
-			});
-
-			microphoneButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestMicrophoneAudio(), "microphone capture failed");
-			});
-
-			debugAudioButton.addEventListener("click", function() {
-				runAudioAction(audioController.startDebugAudio(), "debug audio failed");
-			});
-
-			stopAudioButton.addEventListener("click", function() {
-				audioController.stop();
-			});
-
-			exitButton.addEventListener("click", function() {
-				if (xrSession) {
-					xrSession.end();
-				}
-			});
-
-			const setDesktopMovementKeyState = function(code, pressedBool) {
-				if (code === "KeyW") {
-					desktopMovementState.moveForwardBool = pressedBool;
-					return true;
-				}
-				if (code === "KeyS") {
-					desktopMovementState.moveBackwardBool = pressedBool;
-					return true;
-				}
-				if (code === "KeyA") {
-					desktopMovementState.moveLeftBool = pressedBool;
-					return true;
-				}
-				if (code === "KeyD") {
-					desktopMovementState.moveRightBool = pressedBool;
-					return true;
-				}
-				if (code === "Space") {
-					desktopMovementState.jumpHeldBool = pressedBool;
-					return true;
-				}
-				return false;
-			};
-
-			const releaseDesktopMovementKeys = function() {
-				desktopMovementState.moveForwardBool = false;
-				desktopMovementState.moveBackwardBool = false;
-				desktopMovementState.moveLeftBool = false;
-				desktopMovementState.moveRightBool = false;
-				desktopMovementState.sprintBool = false;
-				desktopMovementState.crouchBool = false;
-				desktopMovementState.jumpHeldBool = false;
-			};
-
-			window.addEventListener("resize", function() {
-				if (!xrSession) {
-					canvas.width = window.innerWidth * window.devicePixelRatio;
-					canvas.height = window.innerHeight * window.devicePixelRatio;
-				}
-			});
-
-			canvas.addEventListener("click", function() {
-				if (!xrSession && document.pointerLockElement !== canvas && canvas.requestPointerLock) {
-					canvas.requestPointerLock();
-				}
-			});
-
-			canvas.addEventListener("contextmenu", function(event) {
-				if (!xrSession) {
-					event.preventDefault();
-				}
-			});
-
-			desktopMenuPreviewCanvas.addEventListener("mousemove", function(event) {
-				menuController.handleDesktopPointerMove(event, {
-					xrSessionActiveBool: !!xrSession,
-					pointerLockedBool: desktopPointerLockedBool
-				});
-			});
-
-			desktopMenuPreviewCanvas.addEventListener("mouseleave", function() {
-				menuController.handleDesktopPointerLeave();
-			});
-
-			desktopMenuPreviewCanvas.addEventListener("mousedown", function(event) {
-				if (menuController.handleDesktopPointerDown(event, {
-					onShaderModeAction: cycleShaderMode,
-					onLightPresetAction: cycleLightingPreset,
-					onPresetAction: function(direction) {
-						audioController.activate();
-						cyclePreset(direction);
-					}
-				}, {
-					xrSessionActiveBool: !!xrSession,
-					pointerLockedBool: desktopPointerLockedBool
-				})) {
-					event.preventDefault();
-				}
-			});
-
-			document.addEventListener("pointerlockchange", function() {
-				desktopPointerLockedBool = document.pointerLockElement === canvas;
-				if (desktopPointerLockedBool) {
-					menuController.clearDesktopPointerState();
-				} else {
-					desktopMovementState.sprintBool = false;
-					desktopMovementState.crouchBool = false;
-				}
-			});
-
-			document.addEventListener("mousedown", function(event) {
-				if (xrSession || !desktopPointerLockedBool) {
-					return;
-				}
-				if (event.button === 0) {
-					desktopMovementState.sprintBool = true;
-					event.preventDefault();
-				}
-				if (event.button === 2) {
-					desktopMovementState.crouchBool = true;
-					event.preventDefault();
-				}
-			}, true);
-
-			document.addEventListener("mouseup", function(event) {
-				if (event.button === 0) {
-					desktopMovementState.sprintBool = false;
-				}
-				if (event.button === 2) {
-					desktopMovementState.crouchBool = false;
-				}
-				if (xrSession || !desktopPointerLockedBool) {
-					return;
-				}
-				if (event.button === 0 || event.button === 2) {
-					event.preventDefault();
-				}
-			}, true);
-
-			document.addEventListener("mousemove", function(event) {
-				if (!desktopPointerLockedBool || xrSession) {
-					return;
-				}
-				desktopMovementState.lookYaw += event.movementX * desktopMouseSensitivity;
-				desktopMovementState.lookPitch = clampNumber(desktopMovementState.lookPitch - event.movementY * desktopMouseSensitivity, -1.35, 1.35);
-			});
-
-			document.addEventListener("pointerdown", function() {
-				audioController.activate();
-			}, {passive: true});
-			document.addEventListener("keydown", function() {
-				audioController.activate();
-			});
-			document.addEventListener("keydown", function(event) {
-				if (xrSession) {
-					return;
-				}
-				if (event.code === "KeyM" && !event.repeat) {
-					menuController.setDesktopPreviewVisibleBool(!menuController.isDesktopPreviewVisible());
-					event.preventDefault();
-					return;
-				}
-				if (setDesktopMovementKeyState(event.code, true)) {
-					event.preventDefault();
-				}
-			});
-
-			document.addEventListener("keyup", function(event) {
-				if (setDesktopMovementKeyState(event.code, false)) {
-					event.preventDefault();
-				}
-			});
-
-			document.addEventListener("mouseup", function() {
-				menuController.handleDesktopPointerUp();
-			});
-
-			window.addEventListener("blur", function() {
-				releaseDesktopMovementKeys();
-				menuController.clearDesktopPointerState();
-			});
-
-			// Startup wires the modules together, loads scene assets, and starts the desktop preview loop.
-			const init = async function() {
-				gl = sceneRenderer.init();
-				if (!gl) {
-					return;
-				}
-				locomotionController.resetDesktopState(desktopMovementState);
-				if (window.createSceneLightingController) {
-					sceneLighting = window.createSceneLightingController();
-					sceneLighting.update(0, emptyAudioMetrics);
-				}
-				if (window.createGlbAssetManager) {
-					try {
-						glbAssetManager = window.createGlbAssetManager({
-							gl: gl,
-							createProgram: sceneRenderer.createProgram,
-							getLightingState: function() {
-								return sceneLighting ? sceneLighting.getState() : null;
-							},
-							getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
-							applySceneLightingUniforms: window.applySceneLightingUniforms,
-							maxSceneLights: maxSceneLights,
-							identityMatrix: identityMatrix,
-							multiplyMatrices: multiplyMatrices,
-							translateRotateYScale: translateRotateYScale,
-							setStatus: setStatus
-						});
-						glbAssetManager.init();
-						await glbAssetManager.loadAssets(sceneGlbAssets);
-					} catch (error) {
-						setStatus(error.message || "glb init failed");
-					}
-				}
-				if (window.createXrVisualizerManager) {
-					visualizerRenderer = window.createXrVisualizerManager();
-					visualizerRenderer.init({gl: gl});
-					audioController.setVisualizerRenderer(visualizerRenderer);
-				}
-				if (!navigator.xr) {
-					enterButton.disabled = true;
-					setStatus("WebXR not available.");
-				} else {
-					const supported = await navigator.xr.isSessionSupported("immersive-vr");
-					enterButton.disabled = !supported;
-					setStatus(supported ? "ready" : "headset not detected.");
-				}
-				window.requestAnimationFrame(renderPreview);
-			};
-
-			init();
+			appRuntime.init();
 		</script>
 	</body>
 </html>

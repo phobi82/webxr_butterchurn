@@ -1,5 +1,5 @@
 (function() {
-	// Shared XR math helpers used by the visualizer manager, modes, and main page render loop.
+	// Shared XR math helpers used by the visualizer manager, renderer, and app runtime.
 	const tau = Math.PI * 2;
 
 	const clampNumber = function(value, minValue, maxValue) {
@@ -140,6 +140,58 @@
 		};
 	};
 
+	const identityMatrix = function() {
+		return new Float32Array([
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1
+		]);
+	};
+
+	const multiplyMatrices = function(a, b) {
+		const out = new Float32Array(16);
+		for (let column = 0; column < 4; column += 1) {
+			for (let row = 0; row < 4; row += 1) {
+				out[column * 4 + row] =
+					a[0 * 4 + row] * b[column * 4 + 0] +
+					a[1 * 4 + row] * b[column * 4 + 1] +
+					a[2 * 4 + row] * b[column * 4 + 2] +
+					a[3 * 4 + row] * b[column * 4 + 3];
+			}
+		}
+		return out;
+	};
+
+	const translateScale = function(tx, ty, tz, sx, sy, sz) {
+		return new Float32Array([
+			sx, 0, 0, 0,
+			0, sy, 0, 0,
+			0, 0, sz, 0,
+			tx, ty, tz, 1
+		]);
+	};
+
+	const translateRotateYScale = function(tx, ty, tz, yaw, sx, sy, sz) {
+		const cosYaw = Math.cos(yaw);
+		const sinYaw = Math.sin(yaw);
+		return new Float32Array([
+			cosYaw * sx, 0, -sinYaw * sx, 0,
+			0, sy, 0, 0,
+			sinYaw * sz, 0, cosYaw * sz, 0,
+			tx, ty, tz, 1
+		]);
+	};
+
+	const basisScale = function(tx, ty, tz, right, up, forward, sx, sy, sz) {
+		return new Float32Array([
+			right.x * sx, right.y * sx, right.z * sx, 0,
+			up.x * sy, up.y * sy, up.z * sy, 0,
+			forward.x * sz, forward.y * sz, forward.z * sz, 0,
+			tx, ty, tz, 1
+		]);
+	};
+
 	window.xrVisualizerUtils = {
 		clampNumber: clampNumber,
 		emptyAudioMetrics: emptyAudioMetrics,
@@ -154,6 +206,11 @@
 		extractForwardYawPitchFromQuaternion: extractForwardYawPitchFromQuaternion,
 		extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion,
 		extractProjectionFov: extractProjectionFov,
-		extractCameraPositionFromViewMatrix: extractCameraPositionFromViewMatrix
+		extractCameraPositionFromViewMatrix: extractCameraPositionFromViewMatrix,
+		identityMatrix: identityMatrix,
+		multiplyMatrices: multiplyMatrices,
+		translateScale: translateScale,
+		translateRotateYScale: translateRotateYScale,
+		basisScale: basisScale
 	};
 })();

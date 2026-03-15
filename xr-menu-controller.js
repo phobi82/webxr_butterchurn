@@ -169,29 +169,24 @@
 			}
 		};
 
+		const getStateSnapshot = function() {
+			return {
+				jumpMode: state.jumpMode,
+				menuOpenBool: state.menuOpenBool,
+				floorAlpha: state.floorAlpha,
+				eyeDistanceMeters: state.eyeDistanceMeters,
+				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
+				plane: menuPlane,
+				planeHeight: options.menuUi.getPlaneHeight(options.menuWidth)
+			};
+		};
+
 		return {
 			menuCanvas: options.menuUi.menuCanvas,
 			previewCanvas: options.menuUi.previewCanvas,
-			isMenuOpen: function() {
-				return state.menuOpenBool;
-			},
-			getJumpMode: function() {
-				return state.jumpMode;
-			},
-			getFloorAlpha: function() {
-				return state.floorAlpha;
-			},
-			getEyeDistanceMeters: function() {
-				return state.eyeDistanceMeters;
-			},
+			getState: getStateSnapshot,
 			getControllerRays: function() {
 				return controllerRays;
-			},
-			getPlane: function() {
-				return menuPlane;
-			},
-			getPlaneHeight: function() {
-				return options.menuUi.getPlaneHeight(options.menuWidth);
 			},
 			getRenderState: function(externalState) {
 				externalState = externalState || {};

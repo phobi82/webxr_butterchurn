@@ -33,6 +33,8 @@ Current capabilities:
 ## Project Files
 
 - `index.html`: single-page app entry point and main XR logic
+- `xr-app-shell.js`: shared browser UI shell for the desktop control panel, status text, audio controls, and main canvas
+- `xr-app-runtime.js`: shared runtime layer for XR session lifecycle, desktop and XR frame loops, browser input wiring, and module orchestration
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
 - `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, and UI state updates
 - `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
@@ -118,6 +120,8 @@ The start page can switch between these audio inputs:
 - XR collision, jump handling, eye-height adjustment, and desktop first-person movement now live in `xr-locomotion.js` instead of being spread across `index.html`.
 - The VR menu canvas drawing stays in `xr-menu-ui.js`, while menu state, controller rays, slider drag handling, and desktop overlay interaction now live in `xr-menu-controller.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
 - The shared WebGL setup, scene draw order, floor and menu rendering, and XR/desktop view rendering now live in `xr-scene-renderer.js`, so `index.html` no longer carries the whole render pipeline inline.
+- The browser-side shell for the control panel, status labels, audio buttons, and main canvas now lives in `xr-app-shell.js`, which is the first step toward a clearer top-level hierarchy of shell, runtime orchestration, and reusable feature modules.
+- XR session setup, desktop and XR render loops, browser input listeners, and feature-module coordination now live in `xr-app-runtime.js`, keeping `index.html` closer to a composition root instead of a mixed control-flow file.
 - Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.

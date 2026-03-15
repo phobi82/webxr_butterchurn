@@ -222,10 +222,11 @@
 
 		// The scene order stays centralized here so preview and XR use the same draw sequence.
 		const renderScene = function(args) {
+			const menuState = args.menuController.getState();
 			if (args.visualizerRenderer) {
 				args.visualizerRenderer.drawPreScene();
 			}
-			if (args.menuController.getFloorAlpha() > 0.001) {
+			if (menuState.floorAlpha > 0.001) {
 				drawFloor(args.sceneLighting, args.getReactiveFloorColors());
 			}
 			if (args.glbAssetManager) {
@@ -234,13 +235,11 @@
 			if (args.visualizerRenderer) {
 				args.visualizerRenderer.drawWorld();
 			}
-			if (args.menuController.isMenuOpen()) {
-				const menuPlane = args.menuController.getPlane();
-				const menuPlaneHeight = args.menuController.getPlaneHeight();
+			if (menuState.menuOpenBool) {
 				args.menuController.renderTexture(gl, menuTexture, args.menuContentState);
 				gl.disable(gl.DEPTH_TEST);
 				gl.disable(gl.CULL_FACE);
-				drawTexturedPlane(options.basisScale(menuPlane.center.x, menuPlane.center.y, menuPlane.center.z, menuPlane.right, menuPlane.up, menuPlane.normal, options.menuWidth, menuPlaneHeight, 1));
+				drawTexturedPlane(options.basisScale(menuState.plane.center.x, menuState.plane.center.y, menuState.plane.center.z, menuState.plane.right, menuState.plane.up, menuState.plane.normal, options.menuWidth, menuState.planeHeight, 1));
 				gl.enable(gl.CULL_FACE);
 				gl.enable(gl.DEPTH_TEST);
 			}
