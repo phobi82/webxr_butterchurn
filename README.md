@@ -10,7 +10,7 @@ Current capabilities:
 
 - immersive VR startup with `local-floor` reference space
 - desktop preview rendering when no XR session is active
-- first-person desktop preview controls with `WASD`, `Shift`, `Ctrl`, `Space`, mouse-look, and `M` for the mirrored VR menu
+- first-person desktop preview controls with `WASD`, left mouse sprint, right mouse crouch, `Space`, mouse-look, and `M` for the mirrored VR menu
 - left-stick locomotion with head-relative movement
 - right-stick smooth turning plus crouch and tiptoe height control
 - sprint on the left trigger
@@ -34,6 +34,9 @@ Current capabilities:
 
 - `index.html`: single-page app entry point and main XR logic
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
+- `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, and UI state updates
+- `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
+- `xr-menu-ui.js`: shared VR menu canvas renderer, layout math, hit testing, and mirrored desktop preview UI
 - `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes
 - `xr-scene-lighting.js`: shared moving light presets and lighting-uniform helpers for scene geometry
 - `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
@@ -109,6 +112,9 @@ The start page can switch between these audio inputs:
 - Shared audio analysis now exposes stereo-aware metrics such as left/right level, stereo balance, and stereo width, while mono-style inputs are auto-centered so they do not collapse into a false hard-left spatial bias.
 - `Aurora Drift` keeps the world lighting in a slower colorful overhead sweep, while `Disco Storm` pushes faster moving beams and stronger strobes for a more aggressive disco look.
 - The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
+- Audio source switching, stream cleanup, external source-tab handling, and debug-audio activation now live in `xr-audio-controller.js` instead of the main page script.
+- XR collision, jump handling, eye-height adjustment, and desktop first-person movement now live in `xr-locomotion.js` instead of being spread across `index.html`.
+- The VR menu canvas, mirrored desktop preview, hit testing, and layout math now live in `xr-menu-ui.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
 

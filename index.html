@@ -8,6 +8,9 @@
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
 		<script src="xr-visualizer-utils.js"></script>
+		<script src="xr-audio-controller.js"></script>
+		<script src="xr-locomotion.js"></script>
+		<script src="xr-menu-ui.js"></script>
 		<script src="xr-scene-lighting.js"></script>
 		<script src="xr-visualizer-gl-utils.js"></script>
 		<script src="xr-visualizer-source-butterchurn.js"></script>
@@ -58,23 +61,14 @@
 			const floorAlphaMax = 1;
 			const maxSceneLights = window.xrSceneLighting && window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS ? window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS : 4;
 			const menuWidth = 0.74;
-			const menuHeight = 0.56;
 			const desktopMenuPreviewWidthPixels = 420;
-			const jumpModeButtonTopV = 0.25;
-			const jumpModeButtonBottomV = 0.35;
 			const jumpModeDoubleMinU = 0.1;
 			const jumpModeDoubleMaxU = 0.45;
 			const jumpModeMultiMinU = 0.55;
 			const jumpModeMultiMaxU = 0.9;
-			const floorAlphaSliderV = 0.47;
-			const eyeDistanceSliderV = 0.66;
 			const menuSliderMinU = 0.18;
 			const menuSliderMaxU = 0.82;
 			const menuSliderHalfHeight = 0.055;
-			const shaderModeRowTopV = 0.75;
-			const shaderModeRowBottomV = 0.83;
-			const presetRowTopV = 0.87;
-			const presetRowBottomV = 0.95;
 			const presetPrevMinU = 0.08;
 			const presetPrevMaxU = 0.22;
 			const presetNextMinU = 0.78;
@@ -110,19 +104,7 @@
 			let lastRenderTime = 0;
 			let previewLastRenderTime = 0;
 			let previewTime = 0;
-			let trackingHeading = 0;
-			let jumpVelocity = 0;
-			let horizontalVelocityX = 0;
-			let horizontalVelocityZ = 0;
-			let currentBaseEyeHeightMeters = defaultEyeHeight;
-			let calibratedStandingEyeHeightMeters = defaultEyeHeight;
-			let standingEyeHeightCalibratedBool = false;
-			let stickEyeHeightOffsetMeters = 0;
-			let effectiveEyeHeightMeters = defaultEyeHeight;
-			let jumpCount = 0;
 			let jumpMode = "double";
-			let jumpPressedBool = false;
-			let jumpHoldTimeSeconds = 0;
 			let menuOpenBool = false;
 			let menuTogglePressedBool = false;
 			let floorAlpha = 0.72;
@@ -170,25 +152,7 @@
 			let glbAssetManager = null;
 			let sceneLighting = null;
 			let visualizerRenderer = null;
-			let activeAudioStream = null;
-			let activeAudioSourceName = "";
-			let youtubeWindowHandle = null;
-			let sunoLiveRadioWindowHandle = null;
 			let desktopPreviewMenuVisibleBool = true;
-			let desktopLookYaw = 0;
-			let desktopLookPitch = -0.16;
-			let desktopJumpVelocity = 0;
-			let desktopJumpCount = 0;
-			let desktopJumpPressedBool = false;
-			let desktopJumpHoldTimeSeconds = 0;
-			let desktopEyeHeightMeters = defaultEyeHeight;
-			let desktopJumpHeldBool = false;
-			let desktopMoveForwardBool = false;
-			let desktopMoveBackwardBool = false;
-			let desktopMoveLeftBool = false;
-			let desktopMoveRightBool = false;
-			let desktopSprintBool = false;
-			let desktopCrouchBool = false;
 			let desktopPointerLockedBool = false;
 			let desktopMenuPointerActiveBool = false;
 			let desktopMenuPointerU = 0;
@@ -198,34 +162,28 @@
 			const currentProj = new Float32Array(16);
 			const adjustedView = new Float32Array(16);
 			const colorVec4 = new Float32Array(4);
-			const trackingOrigin = {x: 0, y: 0, z: 0};
 			const menuCenter = {x: 0, y: 1.45, z: -0.8};
 			const menuRight = {x: 1, y: 0, z: 0};
 			const menuUp = {x: 0, y: 1, z: 0};
 			const menuNormal = {x: 0, y: 0, z: 1};
 			const controllerRays = [];
 			const triggerPressedByHand = new Map();
-			const desktopTrackingOrigin = {x: 0, y: 0, z: 5.6};
-			const menuCanvas = document.createElement("canvas");
-			menuCanvas.width = 1280;
-			menuCanvas.height = 960;
-			const menuCtx = menuCanvas.getContext("2d");
-			const desktopMenuPreviewCanvas = document.createElement("canvas");
-			desktopMenuPreviewCanvas.width = menuCanvas.width;
-			desktopMenuPreviewCanvas.height = menuCanvas.height;
-			desktopMenuPreviewCanvas.style.position = "fixed";
-			desktopMenuPreviewCanvas.style.right = "12px";
-			desktopMenuPreviewCanvas.style.top = "12px";
-			desktopMenuPreviewCanvas.style.width = desktopMenuPreviewWidthPixels + "px";
-			desktopMenuPreviewCanvas.style.height = Math.round(desktopMenuPreviewWidthPixels * menuCanvas.height / menuCanvas.width) + "px";
-			desktopMenuPreviewCanvas.style.border = "1px solid #ffff00";
-			desktopMenuPreviewCanvas.style.backgroundColor = "rgba(0, 0, 32, 0.92)";
-			desktopMenuPreviewCanvas.style.display = "block";
-			desktopMenuPreviewCanvas.style.pointerEvents = "auto";
-			desktopMenuPreviewCanvas.style.cursor = "pointer";
-			desktopMenuPreviewCanvas.style.zIndex = "20";
-			document.body.appendChild(desktopMenuPreviewCanvas);
-			const desktopMenuPreviewCtx = desktopMenuPreviewCanvas.getContext("2d");
+			const menuUi = window.createXrMenuUi({
+				desktopMenuPreviewWidthPixels: desktopMenuPreviewWidthPixels,
+				jumpModeDoubleMinU: jumpModeDoubleMinU,
+				jumpModeDoubleMaxU: jumpModeDoubleMaxU,
+				jumpModeMultiMinU: jumpModeMultiMinU,
+				jumpModeMultiMaxU: jumpModeMultiMaxU,
+				menuSliderMinU: menuSliderMinU,
+				menuSliderMaxU: menuSliderMaxU,
+				menuSliderHalfHeight: menuSliderHalfHeight,
+				presetPrevMinU: presetPrevMinU,
+				presetPrevMaxU: presetPrevMaxU,
+				presetNextMinU: presetNextMinU,
+				presetNextMaxU: presetNextMaxU
+			});
+			const menuCanvas = menuUi.menuCanvas;
+			const desktopMenuPreviewCanvas = menuUi.previewCanvas;
 
 			const panel = document.createElement("div");
 			panel.style.position = "fixed";
@@ -366,6 +324,61 @@
 				status.textContent = "XR: " + text;
 			};
 
+			const clampNumber = window.xrVisualizerUtils.clampNumber;
+			const hslToRgb = window.xrVisualizerUtils.hslToRgb;
+			const emptyAudioMetrics = window.xrVisualizerUtils.emptyAudioMetrics;
+			const updateAudioUiState = function(audioState) {
+				audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
+				stopAudioButton.disabled = !audioState.stopEnabledBool;
+			};
+			const audioController = window.createXrAudioController({
+				setStatus: setStatus,
+				youtubePlaylistUrl: youtubePlaylistUrl,
+				youtubeWindowName: youtubeWindowName,
+				sunoLiveRadioUrl: sunoLiveRadioUrl,
+				sunoWindowName: sunoLiveRadioWindowName,
+				onStateChange: updateAudioUiState
+			});
+			const runAudioAction = function(action, fallbackMessage) {
+				action().catch(function(error) {
+					setStatus(error.message || fallbackMessage);
+				});
+			};
+			const getAudioMetrics = function() {
+				return visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : emptyAudioMetrics;
+			};
+			const locomotionController = window.createXrLocomotionController({
+				defaultEyeHeight: defaultEyeHeight,
+				playerHeadClearance: playerHeadClearance,
+				floorHalfSize: floorHalfSize,
+				playerRadius: playerRadius,
+				stepHeight: stepHeight,
+				crouchMinEyeHeight: crouchMinEyeHeight,
+				tiptoeEyeHeightBoost: tiptoeEyeHeightBoost,
+				crouchSpeed: crouchSpeed,
+				walkSpeed: walkSpeed,
+				sprintMultiplier: sprintMultiplier,
+				climbSpeed: climbSpeed,
+				jumpGravity: jumpGravity,
+				jumpSpeed: jumpSpeed,
+				jumpHoldBoostSpeed: jumpHoldBoostSpeed,
+				jumpHoldMaxSeconds: jumpHoldMaxSeconds,
+				doubleJumpMaxCount: doubleJumpMaxCount,
+				airBoostSpeed: airBoostSpeed,
+				airMomentumDrag: airMomentumDrag,
+				groundMomentumDrag: groundMomentumDrag,
+				fallResetY: fallResetY,
+				turnSpeed: turnSpeed,
+				desktopStartZ: 5.6,
+				desktopStartPitch: -0.16,
+				levelBoxes: levelBoxes,
+				getGlbCollisionBoxes: function() {
+					return glbAssetManager && glbAssetManager.getCollisionBoxes ? glbAssetManager.getCollisionBoxes() : [];
+				}
+			});
+			const xrMovementState = locomotionController.createXrState();
+			const desktopMovementState = locomotionController.createDesktopState();
+
 			const updateVisualizerLabels = function() {
 				if (!visualizerRenderer) {
 					return;
@@ -376,327 +389,21 @@
 				if (!sceneLighting) {
 					return;
 				}
-				const audioMetrics = visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
-				sceneLighting.update(timeSeconds, audioMetrics);
-			};
-
-			const activateVisualizerAudio = function() {
-				if (!visualizerRenderer || !visualizerRenderer.activateAudio) {
-					return Promise.resolve();
-				}
-				return visualizerRenderer.activateAudio().catch(function() {
-				});
-			};
-
-			const clearActiveAudioStream = function() {
-				if (!activeAudioStream) {
-					return;
-				}
-				const oldStream = activeAudioStream;
-				activeAudioStream = null;
-				const oldTracks = oldStream.getTracks();
-				for (let i = 0; i < oldTracks.length; i += 1) {
-					oldTracks[i].stop();
-				}
-			};
-
-			const setActiveAudioStream = function(stream, sourceName) {
-				clearActiveAudioStream();
-				activeAudioStream = stream;
-				activeAudioSourceName = sourceName || "";
-				audioLabel.textContent = "Audio: " + (sourceName || "none");
-				stopAudioButton.disabled = !stream;
-				if (visualizerRenderer) {
-					visualizerRenderer.setAudioStream(stream);
-				}
-				if (!stream) {
-					return;
-				}
-				const tracks = stream.getTracks();
-				for (let i = 0; i < tracks.length; i += 1) {
-					tracks[i].addEventListener("ended", function() {
-						if (activeAudioStream === stream) {
-							activeAudioStream = null;
-							activeAudioSourceName = "";
-							audioLabel.textContent = "Audio: none";
-							stopAudioButton.disabled = true;
-							if (visualizerRenderer) {
-								visualizerRenderer.setAudioStream(null);
-							}
-						}
-					});
-				}
-			};
-
-			const startDebugAudio = function() {
-				clearActiveAudioStream();
-				return activateVisualizerAudio().then(function() {
-					if (!visualizerRenderer || !visualizerRenderer.startDebugAudio) {
-						return;
-					}
-					return visualizerRenderer.startDebugAudio().then(function() {
-						activeAudioSourceName = "debug signal";
-						audioLabel.textContent = "Audio: debug signal";
-						stopAudioButton.disabled = false;
-					});
-				});
-			};
-
-			const requestDisplayAudio = async function(sourceName, optionOverrides) {
-				const options = {
-					video: true,
-					audio: {
-						echoCancellation: false,
-						noiseSuppression: false,
-						autoGainControl: false
-					}
-				};
-				options.surfaceSwitching = "include";
-				options.monitorTypeSurfaces = "include";
-				options.systemAudio = "include";
-				options.selfBrowserSurface = "exclude";
-				if (optionOverrides) {
-					const overrideKeys = Object.keys(optionOverrides);
-					for (let i = 0; i < overrideKeys.length; i += 1) {
-						options[overrideKeys[i]] = optionOverrides[overrideKeys[i]];
-					}
-				}
-				const stream = await navigator.mediaDevices.getDisplayMedia(options);
-				if (!stream.getAudioTracks().length) {
-					const tracks = stream.getTracks();
-					for (let i = 0; i < tracks.length; i += 1) {
-						tracks[i].stop();
-					}
-					throw new Error("shared source has no audio track");
-				}
-				setActiveAudioStream(stream, sourceName || "shared surface");
-			};
-
-			const requestMicrophoneAudio = async function() {
-				const stream = await navigator.mediaDevices.getUserMedia({
-					audio: {
-						echoCancellation: false,
-						noiseSuppression: false,
-						autoGainControl: false
-					},
-					video: false
-				});
-				setActiveAudioStream(stream, "microphone");
-			};
-
-			const requestYoutubePlaylistAudio = async function() {
-				if (!youtubeWindowHandle || youtubeWindowHandle.closed) {
-					youtubeWindowHandle = window.open(youtubePlaylistUrl, youtubeWindowName);
-				} else {
-					youtubeWindowHandle.location.href = youtubePlaylistUrl;
-				}
-				if (!youtubeWindowHandle) {
-					throw new Error("youtube tab blocked");
-				}
-				try {
-					youtubeWindowHandle.focus();
-				} catch (error) {
-				}
-				setStatus("select the YouTube tab and enable tab audio");
-				await requestDisplayAudio("YouTube playlist", {preferCurrentTab: false});
-				setStatus("youtube tab audio active");
-			};
-
-			const requestSunoLiveRadioAudio = async function() {
-				if (!sunoLiveRadioWindowHandle || sunoLiveRadioWindowHandle.closed) {
-					sunoLiveRadioWindowHandle = window.open(sunoLiveRadioUrl, sunoLiveRadioWindowName);
-				} else {
-					sunoLiveRadioWindowHandle.location.href = sunoLiveRadioUrl;
-				}
-				if (!sunoLiveRadioWindowHandle) {
-					throw new Error("suno live radio tab blocked");
-				}
-				try {
-					sunoLiveRadioWindowHandle.focus();
-				} catch (error) {
-				}
-				setStatus("select the Suno Live Radio tab and enable tab audio");
-				await requestDisplayAudio("Suno Live Radio", {preferCurrentTab: false});
-				setStatus("suno live radio tab audio active");
+				sceneLighting.update(timeSeconds, getAudioMetrics());
 			};
 
 			const copyMatrix = function(target, source) {
 				target.set(source);
 			};
 
-			const clampNumber = function(value, minValue, maxValue) {
-				return Math.max(minValue, Math.min(maxValue, value));
-			};
-
 			const lerpNumber = function(startValue, endValue, mixValue) {
 				return startValue + (endValue - startValue) * mixValue;
-			};
-
-			const hueToRgb = function(p, q, t) {
-				if (t < 0) {
-					t += 1;
-				}
-				if (t > 1) {
-					t -= 1;
-				}
-				if (t < 1 / 6) {
-					return p + (q - p) * 6 * t;
-				}
-				if (t < 0.5) {
-					return q;
-				}
-				if (t < 2 / 3) {
-					return p + (q - p) * (2 / 3 - t) * 6;
-				}
-				return p;
-			};
-
-			const hslToRgb = function(h, s, l) {
-				h = ((h % 1) + 1) % 1;
-				s = clampNumber(s, 0, 1);
-				l = clampNumber(l, 0, 1);
-				if (s <= 0.0001) {
-					return [l, l, l];
-				}
-				const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-				const p = 2 * l - q;
-				return [
-					hueToRgb(p, q, h + 1 / 3),
-					hueToRgb(p, q, h),
-					hueToRgb(p, q, h - 1 / 3)
-				];
 			};
 
 			const normalizeVec3 = function(x, y, z) {
 				const len = Math.sqrt(x * x + y * y + z * z) || 1;
 				return {x: x / len, y: y / len, z: z / len};
 			};
-
-			const getPlayerHeight = function(viewerTransform) {
-				return effectiveEyeHeightMeters + playerHeadClearance;
-			};
-
-			const getBoxBounds = function(box) {
-				return {
-					minX: box.x - box.width * 0.5,
-					maxX: box.x + box.width * 0.5,
-					minY: box.y - box.height * 0.5,
-					maxY: box.y + box.height * 0.5,
-					minZ: box.z - box.depth * 0.5,
-					maxZ: box.z + box.depth * 0.5
-				};
-			};
-
-			const getCollisionBoxes = function() {
-				const boxes = levelBoxes.slice();
-				if (glbAssetManager && glbAssetManager.getCollisionBoxes) {
-					const glbCollisionBoxes = glbAssetManager.getCollisionBoxes();
-					for (let i = 0; i < glbCollisionBoxes.length; i += 1) {
-						boxes.push(glbCollisionBoxes[i]);
-					}
-				}
-				return boxes;
-			};
-
-			const rangesOverlap = function(minA, maxA, minB, maxB) {
-				return maxA > minB && minA < maxB;
-			};
-
-			const getFloorHeightAtPosition = function(x, z, maxY) {
-				let surfaceY = Math.abs(x) <= floorHalfSize && Math.abs(z) <= floorHalfSize && 0 <= maxY ? 0 : -Infinity;
-				const collisionBoxes = getCollisionBoxes();
-				for (let i = 0; i < collisionBoxes.length; i += 1) {
-					const bounds = getBoxBounds(collisionBoxes[i]);
-					if (bounds.maxY <= maxY && x >= bounds.minX - playerRadius && x <= bounds.maxX + playerRadius && z >= bounds.minZ - playerRadius && z <= bounds.maxZ + playerRadius) {
-						surfaceY = Math.max(surfaceY, bounds.maxY);
-					}
-				}
-				return surfaceY;
-			};
-
-			const getMaxClimbSurfaceY = function(currentY) {
-				return currentY + Math.max(stepHeight, effectiveEyeHeightMeters - 0.5);
-			};
-
-			const resolveHorizontalMovement = function(currentX, currentY, currentZ, nextX, nextZ, playerHeight) {
-				const bodyMinY = currentY + 0.02;
-				const bodyMaxY = currentY + playerHeight;
-				const currentSurfaceY = getFloorHeightAtPosition(currentX, currentZ, currentY + 0.05);
-				const maxClimbSurfaceY = getMaxClimbSurfaceY(currentY);
-				const collisionBoxes = getCollisionBoxes();
-				const canOccupyPosition = function(testX, testZ) {
-					const testSurfaceY = getFloorHeightAtPosition(testX, testZ, maxClimbSurfaceY);
-					let targetY = currentY;
-					for (let i = 0; i < collisionBoxes.length; i += 1) {
-						const bounds = getBoxBounds(collisionBoxes[i]);
-						if (!rangesOverlap(bodyMinY, bodyMaxY, bounds.minY, bounds.maxY)) {
-							continue;
-						}
-						if (testSurfaceY > currentSurfaceY + 0.001 && testSurfaceY <= maxClimbSurfaceY && testX >= bounds.minX - playerRadius && testX <= bounds.maxX + playerRadius && testZ >= bounds.minZ - playerRadius && testZ <= bounds.maxZ + playerRadius) {
-							targetY = Math.max(targetY, testSurfaceY);
-							continue;
-						}
-						if (testX >= bounds.minX - playerRadius && testX <= bounds.maxX + playerRadius && testZ >= bounds.minZ - playerRadius && testZ <= bounds.maxZ + playerRadius) {
-							return null;
-						}
-					}
-					return {x: testX, y: targetY, z: testZ};
-				};
-				const fullStep = canOccupyPosition(nextX, nextZ);
-				if (fullStep) {
-					return fullStep;
-				}
-				const xOnlyStep = canOccupyPosition(nextX, currentZ);
-				if (xOnlyStep) {
-					horizontalVelocityZ = 0;
-					return xOnlyStep;
-				}
-				const zOnlyStep = canOccupyPosition(currentX, nextZ);
-				if (zOnlyStep) {
-					horizontalVelocityX = 0;
-					return zOnlyStep;
-				}
-				horizontalVelocityX = 0;
-				horizontalVelocityZ = 0;
-				return {x: currentX, y: currentY, z: currentZ};
-			};
-
-			const resolveVerticalMovement = function(previousY, nextY, x, z, playerHeight) {
-				let resolvedY = nextY;
-				let groundedBool = false;
-				let hitCeilingBool = false;
-				let supportingSurfaceY = getFloorHeightAtPosition(x, z, getMaxClimbSurfaceY(Math.max(previousY, resolvedY)));
-				const collisionBoxes = getCollisionBoxes();
-				for (let i = 0; i < collisionBoxes.length; i += 1) {
-					const bounds = getBoxBounds(collisionBoxes[i]);
-					if (x < bounds.minX - playerRadius || x > bounds.maxX + playerRadius || z < bounds.minZ - playerRadius || z > bounds.maxZ + playerRadius) {
-						continue;
-					}
-					if (jumpVelocity <= 0 && previousY >= bounds.maxY && resolvedY <= bounds.maxY) {
-						resolvedY = bounds.maxY;
-						groundedBool = true;
-						supportingSurfaceY = Math.max(supportingSurfaceY, bounds.maxY);
-					}
-					if (jumpVelocity > 0) {
-						const currentHeadY = previousY + playerHeight;
-						const nextHeadY = resolvedY + playerHeight;
-						if (currentHeadY <= bounds.minY && nextHeadY >= bounds.minY) {
-							resolvedY = Math.min(resolvedY, bounds.minY - playerHeight);
-							hitCeilingBool = true;
-						}
-					}
-				}
-				if (supportingSurfaceY > -Infinity && jumpVelocity <= 0 && resolvedY <= supportingSurfaceY) {
-					resolvedY = supportingSurfaceY;
-					groundedBool = true;
-				}
-				return {
-					y: resolvedY,
-					groundedBool: groundedBool,
-					hitCeilingBool: hitCeilingBool
-				};
-			};
-
 
 			const dotVec3 = function(ax, ay, az, bx, by, bz) {
 				return ax * bx + ay * by + az * bz;
@@ -818,7 +525,7 @@
 			};
 
 			const getAudioReactiveFloorColors = function() {
-				const audioMetrics = visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : {level: 0, peak: 0, transient: 0, beatPulse: 0};
+				const audioMetrics = getAudioMetrics();
 				const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
 				const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
 				const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
@@ -841,29 +548,15 @@
 				if (!baseRefSpace) {
 					return;
 				}
-				const offset = rotateXZ(-trackingOrigin.x, -trackingOrigin.z, -trackingHeading);
+				const offset = rotateXZ(-xrMovementState.origin.x, -xrMovementState.origin.z, -xrMovementState.heading);
 				xrRefSpace = baseRefSpace.getOffsetReferenceSpace(new XRRigidTransform(
-					{x: offset.x, y: -(trackingOrigin.y + effectiveEyeHeightMeters - currentBaseEyeHeightMeters), z: offset.z},
-					{x: 0, y: Math.sin(-trackingHeading * 0.5), z: 0, w: Math.cos(-trackingHeading * 0.5)}
+					{x: offset.x, y: -(xrMovementState.origin.y + xrMovementState.effectiveEyeHeightMeters - xrMovementState.currentBaseEyeHeightMeters), z: offset.z},
+					{x: 0, y: Math.sin(-xrMovementState.heading * 0.5), z: 0, w: Math.cos(-xrMovementState.heading * 0.5)}
 				));
 			};
 
 			const resetMovementState = function() {
-				trackingOrigin.x = 0;
-				trackingOrigin.y = 0;
-				trackingOrigin.z = 0;
-				trackingHeading = 0;
-				jumpVelocity = 0;
-				horizontalVelocityX = 0;
-				horizontalVelocityZ = 0;
-				currentBaseEyeHeightMeters = defaultEyeHeight;
-				calibratedStandingEyeHeightMeters = defaultEyeHeight;
-				standingEyeHeightCalibratedBool = false;
-				stickEyeHeightOffsetMeters = 0;
-				effectiveEyeHeightMeters = defaultEyeHeight;
-				jumpCount = 0;
-				jumpPressedBool = false;
-				jumpHoldTimeSeconds = 0;
+				locomotionController.resetXrState(xrMovementState);
 			};
 
 			const resetPlayerPose = function() {
@@ -872,23 +565,7 @@
 			};
 
 			const resetDesktopPreviewState = function() {
-				desktopTrackingOrigin.x = 0;
-				desktopTrackingOrigin.y = 0;
-				desktopTrackingOrigin.z = 5.6;
-				desktopLookYaw = 0;
-				desktopLookPitch = -0.16;
-				desktopJumpVelocity = 0;
-				desktopJumpCount = 0;
-				desktopJumpPressedBool = false;
-				desktopJumpHoldTimeSeconds = 0;
-				desktopEyeHeightMeters = defaultEyeHeight;
-				desktopMoveForwardBool = false;
-				desktopMoveBackwardBool = false;
-				desktopMoveLeftBool = false;
-				desktopMoveRightBool = false;
-				desktopSprintBool = false;
-				desktopCrouchBool = false;
-				desktopJumpHeldBool = false;
+				locomotionController.resetDesktopState(desktopMovementState);
 			};
 
 			const createShader = function(type, source) {
@@ -956,98 +633,12 @@
 
 			const previewCameraMatrix = function() {
 				return createViewMatrixFromYawPitch(
-					desktopTrackingOrigin.x,
-					desktopTrackingOrigin.y + desktopEyeHeightMeters,
-					desktopTrackingOrigin.z,
-					desktopLookYaw,
-					desktopLookPitch
+					desktopMovementState.origin.x,
+					desktopMovementState.origin.y + desktopMovementState.eyeHeightMeters,
+					desktopMovementState.origin.z,
+					desktopMovementState.lookYaw,
+					desktopMovementState.lookPitch
 				);
-			};
-
-			const applyDesktopPreviewMovement = function(delta) {
-				const playerHeight = desktopEyeHeightMeters + playerHeadClearance;
-				const targetEyeHeightMeters = desktopCrouchBool ? crouchMinEyeHeight : defaultEyeHeight;
-				if (desktopEyeHeightMeters < targetEyeHeightMeters) {
-					desktopEyeHeightMeters = Math.min(targetEyeHeightMeters, desktopEyeHeightMeters + crouchSpeed * delta);
-				} else if (desktopEyeHeightMeters > targetEyeHeightMeters) {
-					desktopEyeHeightMeters = Math.max(targetEyeHeightMeters, desktopEyeHeightMeters - crouchSpeed * delta);
-				}
-
-				let moveX = 0;
-				let moveY = 0;
-				if (desktopMoveLeftBool) {
-					moveX -= 1;
-				}
-				if (desktopMoveRightBool) {
-					moveX += 1;
-				}
-				if (desktopMoveForwardBool) {
-					moveY -= 1;
-				}
-				if (desktopMoveBackwardBool) {
-					moveY += 1;
-				}
-				if (moveX !== 0 || moveY !== 0) {
-					const moveLength = Math.sqrt(moveX * moveX + moveY * moveY) || 1;
-					moveX /= moveLength;
-					moveY /= moveLength;
-					const movementSpeed = walkSpeed * (desktopSprintBool ? sprintMultiplier : 1);
-					const moveStep = resolveHorizontalMovement(
-						desktopTrackingOrigin.x,
-						desktopTrackingOrigin.y,
-						desktopTrackingOrigin.z,
-						desktopTrackingOrigin.x + ((-moveY) * Math.sin(desktopLookYaw) + moveX * Math.cos(desktopLookYaw)) * movementSpeed * delta,
-						desktopTrackingOrigin.z + (moveY * Math.cos(desktopLookYaw) + moveX * Math.sin(desktopLookYaw)) * movementSpeed * delta,
-						playerHeight
-					);
-					desktopTrackingOrigin.x = moveStep.x;
-					desktopTrackingOrigin.y = moveStep.y > desktopTrackingOrigin.y ? Math.min(moveStep.y, desktopTrackingOrigin.y + climbSpeed * delta) : moveStep.y;
-					desktopTrackingOrigin.z = moveStep.z;
-				}
-
-				const floorHeight = getFloorHeightAtPosition(desktopTrackingOrigin.x, desktopTrackingOrigin.z, getMaxClimbSurfaceY(desktopTrackingOrigin.y));
-				const groundedBool = floorHeight > -Infinity && desktopTrackingOrigin.y <= floorHeight + 0.001 && desktopJumpVelocity <= 0;
-				if (groundedBool) {
-					desktopTrackingOrigin.y = floorHeight > desktopTrackingOrigin.y ? Math.min(floorHeight, desktopTrackingOrigin.y + climbSpeed * delta) : floorHeight;
-					desktopJumpCount = 0;
-				}
-				if (desktopJumpHeldBool && !desktopJumpPressedBool && (jumpMode === "multi" || desktopJumpCount < doubleJumpMaxCount)) {
-					desktopJumpVelocity = jumpSpeed;
-					desktopJumpHoldTimeSeconds = jumpHoldMaxSeconds;
-					if (jumpMode === "double") {
-						desktopJumpCount += 1;
-					}
-				}
-				if (desktopJumpHeldBool && desktopJumpVelocity > 0 && desktopJumpHoldTimeSeconds > 0) {
-					desktopJumpVelocity += jumpHoldBoostSpeed * delta;
-					desktopJumpHoldTimeSeconds = Math.max(0, desktopJumpHoldTimeSeconds - delta);
-				}
-				if (!desktopJumpHeldBool) {
-					desktopJumpHoldTimeSeconds = 0;
-				}
-				desktopJumpPressedBool = desktopJumpHeldBool;
-
-				const supportHeight = getFloorHeightAtPosition(desktopTrackingOrigin.x, desktopTrackingOrigin.z, getMaxClimbSurfaceY(Math.max(desktopTrackingOrigin.y, desktopTrackingOrigin.y + desktopJumpVelocity * delta)));
-				if (desktopJumpVelocity !== 0 || desktopTrackingOrigin.y > supportHeight || supportHeight === -Infinity) {
-					const previousY = desktopTrackingOrigin.y;
-					desktopJumpVelocity += jumpGravity * delta;
-					desktopTrackingOrigin.y += desktopJumpVelocity * delta;
-					const resolvedVertical = resolveVerticalMovement(previousY, desktopTrackingOrigin.y, desktopTrackingOrigin.x, desktopTrackingOrigin.z, playerHeight);
-					desktopTrackingOrigin.y = resolvedVertical.y;
-					if (resolvedVertical.hitCeilingBool && desktopJumpVelocity > 0) {
-						desktopJumpVelocity = 0;
-						desktopJumpHoldTimeSeconds = 0;
-					}
-					if (desktopTrackingOrigin.y <= fallResetY) {
-						resetDesktopPreviewState();
-						return;
-					}
-					if (resolvedVertical.groundedBool) {
-						desktopJumpVelocity = 0;
-						desktopJumpHoldTimeSeconds = 0;
-						desktopJumpCount = 0;
-					}
-				}
 			};
 
 			const initGl = function() {
@@ -1314,181 +905,12 @@
 				return Object.assign({distance: distance, point: point, u: u, v: v}, getMenuInteractionAtUv(u, v));
 			};
 
-			const getMenuLayoutMetrics = function() {
-				const audioBarItems = 5;
-				const innerFrameInset = 24;
-				const audioPanelTop = 108;
-				const audioBarTop = 116;
-				const audioBarSpacing = 12;
-				const audioPanelHeight = (audioBarTop - audioPanelTop) + (audioBarItems - 1) * audioBarSpacing + 18;
-				const sectionGap = 12;
-				const jumpPanelTop = audioPanelTop + audioPanelHeight + sectionGap;
-				const jumpPanelHeight = 164;
-				const jumpPanelTitleY = jumpPanelTop + 14;
-				const jumpButtonTop = jumpPanelTop + 54;
-				const jumpButtonHeight = 70;
-				const groundPanelTop = jumpPanelTop + jumpPanelHeight + sectionGap;
-				const groundPanelHeight = 160;
-				const groundTitleY = groundPanelTop + 22;
-				const floorTrackY = groundPanelTop + 76;
-				const eyePanelTop = groundPanelTop + groundPanelHeight + sectionGap;
-				const eyePanelHeight = 156;
-				const eyeTitleY = eyePanelTop + 22;
-				const eyeTrackY = eyePanelTop + 76;
-				const modePanelTop = eyePanelTop + eyePanelHeight + sectionGap;
-				const modePanelHeight = 132;
-				const modeTitleY = modePanelTop + 26;
-				const modeRowTop = modePanelTop + 38;
-				const modeRowHeight = 78;
-				const modeArrowButtonTop = modeRowTop - 10;
-				const modeArrowButtonHeight = modeRowHeight + 10;
-				const modeValueY = modePanelTop + 58;
-				const modeMetaY = modePanelTop + 86;
-				const lightPanelTop = modePanelTop + modePanelHeight + sectionGap;
-				const lightPanelHeight = 132;
-				const lightTitleY = lightPanelTop + 26;
-				const lightRowTop = lightPanelTop + 38;
-				const lightRowHeight = 78;
-				const lightArrowButtonTop = lightRowTop - 10;
-				const lightArrowButtonHeight = lightRowHeight + 10;
-				const lightValueY = lightPanelTop + 58;
-				const lightMetaY = lightPanelTop + 86;
-				const presetPanelTop = lightPanelTop + lightPanelHeight + sectionGap;
-				const presetPanelHeight = 132;
-				const presetTitleY = presetPanelTop + 26;
-				const presetRowTop = presetPanelTop + 38;
-				const presetRowHeight = 78;
-				const presetArrowButtonTop = presetRowTop - 10;
-				const presetArrowButtonHeight = presetRowHeight + 10;
-				const presetValueY = presetPanelTop + 58;
-				const presetMetaY = presetPanelTop + 86;
-				const prevX = menuCanvas.width * presetPrevMinU;
-				const prevWidth = menuCanvas.width * (presetPrevMaxU - presetPrevMinU);
-				const nextX = menuCanvas.width * presetNextMinU;
-				const nextWidth = menuCanvas.width * (presetNextMaxU - presetNextMinU);
-				const centerX = menuCanvas.width * 0.5;
-				const trackStartX = menuCanvas.width * menuSliderMinU;
-				const trackEndX = menuCanvas.width * menuSliderMaxU;
-				const canvasHeight = Math.ceil(presetPanelTop + presetPanelHeight + 30 + sectionGap);
-				const contentInset = canvasHeight - innerFrameInset - (presetPanelTop + presetPanelHeight);
-				const contentLeft = innerFrameInset + contentInset;
-				const contentRight = menuCanvas.width - innerFrameInset - contentInset;
-				const contentWidth = contentRight - contentLeft;
-				return {
-					contentLeft: contentLeft,
-					contentWidth: contentWidth,
-					contentRight: contentRight,
-					canvasHeight: canvasHeight,
-					audioPanelTop: audioPanelTop,
-					audioBarTop: audioBarTop,
-					audioBarSpacing: audioBarSpacing,
-					audioPanelHeight: audioPanelHeight,
-					jumpPanelTop: jumpPanelTop,
-					jumpPanelHeight: jumpPanelHeight,
-					jumpPanelTitleY: jumpPanelTitleY,
-					jumpButtonTop: jumpButtonTop,
-					jumpButtonHeight: jumpButtonHeight,
-					groundPanelTop: groundPanelTop,
-					groundPanelHeight: groundPanelHeight,
-					groundTitleY: groundTitleY,
-					floorTrackY: floorTrackY,
-					eyePanelTop: eyePanelTop,
-					eyePanelHeight: eyePanelHeight,
-					eyeTitleY: eyeTitleY,
-					eyeTrackY: eyeTrackY,
-					modePanelTop: modePanelTop,
-					modePanelHeight: modePanelHeight,
-					modeTitleY: modeTitleY,
-					modeRowTop: modeRowTop,
-					modeRowHeight: modeRowHeight,
-					modeArrowButtonTop: modeArrowButtonTop,
-					modeArrowButtonHeight: modeArrowButtonHeight,
-					modeValueY: modeValueY,
-					modeMetaY: modeMetaY,
-					lightPanelTop: lightPanelTop,
-					lightPanelHeight: lightPanelHeight,
-					lightTitleY: lightTitleY,
-					lightRowTop: lightRowTop,
-					lightRowHeight: lightRowHeight,
-					lightArrowButtonTop: lightArrowButtonTop,
-					lightArrowButtonHeight: lightArrowButtonHeight,
-					lightValueY: lightValueY,
-					lightMetaY: lightMetaY,
-					presetPanelTop: presetPanelTop,
-					presetPanelHeight: presetPanelHeight,
-					presetTitleY: presetTitleY,
-					presetRowTop: presetRowTop,
-					presetRowHeight: presetRowHeight,
-					presetArrowButtonTop: presetArrowButtonTop,
-					presetArrowButtonHeight: presetArrowButtonHeight,
-					presetValueY: presetValueY,
-					presetMetaY: presetMetaY,
-					prevX: prevX,
-					prevWidth: prevWidth,
-					nextX: nextX,
-					nextWidth: nextWidth,
-					centerX: centerX,
-					trackStartX: trackStartX,
-					trackEndX: trackEndX,
-					sliderHalfHeightPx: menuSliderHalfHeight * canvasHeight
-				};
-			};
-
-			const syncMenuCanvasSize = function(layout) {
-				const targetHeight = layout && layout.canvasHeight ? layout.canvasHeight : menuCanvas.height;
-				if (menuCanvas.height !== targetHeight) {
-					menuCanvas.height = targetHeight;
-				}
-				if (desktopMenuPreviewCanvas.height !== targetHeight || desktopMenuPreviewCanvas.width !== menuCanvas.width) {
-					desktopMenuPreviewCanvas.width = menuCanvas.width;
-					desktopMenuPreviewCanvas.height = targetHeight;
-				}
-				desktopMenuPreviewCanvas.style.height = Math.round(desktopMenuPreviewWidthPixels * targetHeight / menuCanvas.width) + "px";
-			};
-
 			const getMenuPlaneHeight = function() {
-				return menuWidth * (getMenuLayoutMetrics().canvasHeight / menuCanvas.width);
+				return menuUi.getPlaneHeight(menuWidth);
 			};
 
 			const getMenuInteractionAtUv = function(u, v) {
-				const layout = getMenuLayoutMetrics();
-				const x = u * menuCanvas.width;
-				const y = v * menuCanvas.height;
-				const floorAlphaSliderBool = Math.abs(y - layout.floorTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
-				const eyeDistanceSliderBool = Math.abs(y - layout.eyeTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
-				let jumpModeHit = "";
-				let shaderModeAction = "";
-				let lightPresetAction = "";
-				let presetAction = "";
-				if (y >= layout.jumpButtonTop && y <= layout.jumpButtonTop + layout.jumpButtonHeight) {
-					if (u >= jumpModeDoubleMinU && u <= jumpModeDoubleMaxU) {
-						jumpModeHit = "double";
-					} else if (u >= jumpModeMultiMinU && u <= jumpModeMultiMaxU) {
-						jumpModeHit = "multi";
-					}
-				}
-				if (y >= layout.modeArrowButtonTop && y <= layout.modeArrowButtonTop + layout.modeArrowButtonHeight) {
-					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-						shaderModeAction = "prev";
-					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-						shaderModeAction = "next";
-					}
-				}
-				if (y >= layout.lightArrowButtonTop && y <= layout.lightArrowButtonTop + layout.lightArrowButtonHeight) {
-					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-						lightPresetAction = "prev";
-					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-						lightPresetAction = "next";
-					}
-				}
-				if (y >= layout.presetArrowButtonTop && y <= layout.presetArrowButtonTop + layout.presetArrowButtonHeight) {
-					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-						presetAction = "prev";
-					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-						presetAction = "next";
-					}
-				}
-				return {floorAlphaSliderBool: floorAlphaSliderBool, eyeDistanceSliderBool: eyeDistanceSliderBool, jumpMode: jumpModeHit, shaderModeAction: shaderModeAction, lightPresetAction: lightPresetAction, presetAction: presetAction};
+				return menuUi.getInteractionAtUv(u, v);
 			};
 
 			const updateControllerRays = function(frame) {
@@ -1689,57 +1111,6 @@
 				return locomotion;
 			};
 
-			const updateEyeHeightFromInput = function(delta, viewerTransform, stanceInputY) {
-				const previousEffectiveEyeHeightMeters = effectiveEyeHeightMeters;
-				const previousStickEyeHeightOffsetMeters = stickEyeHeightOffsetMeters;
-				const previousBaseEyeHeightMeters = currentBaseEyeHeightMeters;
-				currentBaseEyeHeightMeters = viewerTransform.position && viewerTransform.position.y ? viewerTransform.position.y : defaultEyeHeight;
-				if (!standingEyeHeightCalibratedBool) {
-					calibratedStandingEyeHeightMeters = currentBaseEyeHeightMeters;
-					standingEyeHeightCalibratedBool = true;
-				}
-				const physicalEyeHeightMeters = defaultEyeHeight + (currentBaseEyeHeightMeters - calibratedStandingEyeHeightMeters);
-				const neutralEyeHeightMeters = Math.max(defaultEyeHeight, physicalEyeHeightMeters);
-				const minEyeHeightMeters = crouchMinEyeHeight;
-				const maxEyeHeightMeters = defaultEyeHeight + tiptoeEyeHeightBoost;
-				let nextEyeHeightMeters = clampNumber(physicalEyeHeightMeters + stickEyeHeightOffsetMeters, minEyeHeightMeters, maxEyeHeightMeters);
-				if (stanceInputY > 0) {
-					nextEyeHeightMeters = Math.min(maxEyeHeightMeters, nextEyeHeightMeters + stanceInputY * crouchSpeed * delta);
-				} else if (stanceInputY < 0) {
-					nextEyeHeightMeters = Math.max(minEyeHeightMeters, nextEyeHeightMeters + stanceInputY * crouchSpeed * delta);
-				} else if (nextEyeHeightMeters > neutralEyeHeightMeters) {
-					nextEyeHeightMeters = Math.max(neutralEyeHeightMeters, nextEyeHeightMeters - crouchSpeed * delta);
-				}
-				effectiveEyeHeightMeters = nextEyeHeightMeters;
-				stickEyeHeightOffsetMeters = effectiveEyeHeightMeters - physicalEyeHeightMeters;
-				return {
-					heightChangedBool: Math.abs(effectiveEyeHeightMeters - previousEffectiveEyeHeightMeters) > 0.0001,
-					offsetChangedBool: Math.abs(stickEyeHeightOffsetMeters - previousStickEyeHeightOffsetMeters) > 0.0001,
-					baseHeightChangedBool: Math.abs(currentBaseEyeHeightMeters - previousBaseEyeHeightMeters) > 0.0001
-				};
-			};
-
-			const applyWalkingMovement = function(delta, moveX, moveY, worldYaw, playerHeight, sprintActiveBool) {
-				if (moveX === 0 && moveY === 0) {
-					return false;
-				}
-				const cosYaw = Math.cos(worldYaw);
-				const sinYaw = Math.sin(worldYaw);
-				const movementSpeed = walkSpeed * (sprintActiveBool ? sprintMultiplier : 1);
-				const moveStep = resolveHorizontalMovement(
-					trackingOrigin.x,
-					trackingOrigin.y,
-					trackingOrigin.z,
-					trackingOrigin.x + (moveY * sinYaw + moveX * cosYaw) * movementSpeed * delta,
-					trackingOrigin.z + (moveY * cosYaw - moveX * sinYaw) * movementSpeed * delta,
-					playerHeight
-				);
-				trackingOrigin.x = moveStep.x;
-				trackingOrigin.y = moveStep.y > trackingOrigin.y ? Math.min(moveStep.y, trackingOrigin.y + climbSpeed * delta) : moveStep.y;
-				trackingOrigin.z = moveStep.z;
-				return true;
-			};
-
 			const updateMenuInput = function(frame, pose) {
 				const sources = xrSession ? xrSession.inputSources || [] : [];
 				let togglePressedBool = false;
@@ -1802,394 +1173,50 @@
 				const basePose = baseRefSpace ? frame.getViewerPose(baseRefSpace) : null;
 				const viewerTransform = basePose ? basePose.transform : pose.transform;
 				const locomotion = readLocomotionInput(frame);
-				if (locomotion.turnX !== 0 && basePose) {
-					const offsetWorld = rotateXZ(viewerTransform.position.x, viewerTransform.position.z, trackingHeading);
-					const worldX = trackingOrigin.x + offsetWorld.x;
-					const worldZ = trackingOrigin.z + offsetWorld.z;
-					trackingHeading -= locomotion.turnX * turnSpeed * delta;
-					const offsetWorldNext = rotateXZ(viewerTransform.position.x, viewerTransform.position.z, trackingHeading);
-					trackingOrigin.x = worldX - offsetWorldNext.x;
-					trackingOrigin.z = worldZ - offsetWorldNext.z;
-					updateReferenceSpace();
-				}
-				const orientation = viewerTransform.orientation;
-				const headYaw = Math.atan2(
-					2 * (orientation.w * orientation.y + orientation.x * orientation.z),
-					1 - 2 * (orientation.y * orientation.y + orientation.z * orientation.z)
-				);
-				const eyeHeightState = updateEyeHeightFromInput(delta, viewerTransform, locomotion.stanceInputY);
-				const worldYaw = headYaw + trackingHeading;
-				const playerHeight = getPlayerHeight(viewerTransform);
-				const walkedBool = applyWalkingMovement(delta, locomotion.moveX, locomotion.moveY, worldYaw, playerHeight, locomotion.sprintActiveBool);
-				if (walkedBool) {
-					updateReferenceSpace();
-				}
-				const floorHeight = getFloorHeightAtPosition(trackingOrigin.x, trackingOrigin.z, getMaxClimbSurfaceY(trackingOrigin.y));
-				const groundedBool = floorHeight > -Infinity && trackingOrigin.y <= floorHeight + 0.001 && jumpVelocity <= 0;
-				if (groundedBool) {
-					trackingOrigin.y = floorHeight > trackingOrigin.y ? Math.min(floorHeight, trackingOrigin.y + climbSpeed * delta) : floorHeight;
-				}
-				if (groundedBool) {
-					jumpCount = 0;
-				}
-				if (locomotion.jumpRequestBool && !jumpPressedBool && (jumpMode === "multi" || jumpCount < doubleJumpMaxCount)) {
-					jumpVelocity = jumpSpeed;
-					jumpHoldTimeSeconds = jumpHoldMaxSeconds;
-					if (jumpMode === "double") {
-						jumpCount += 1;
-					}
-				}
-				if (locomotion.jumpRequestBool && jumpVelocity > 0 && jumpHoldTimeSeconds > 0) {
-					jumpVelocity += jumpHoldBoostSpeed * delta;
-					jumpHoldTimeSeconds = Math.max(0, jumpHoldTimeSeconds - delta);
-				}
-				if (!locomotion.jumpRequestBool) {
-					jumpHoldTimeSeconds = 0;
-				}
-				jumpPressedBool = locomotion.jumpRequestBool;
-				if (!menuOpenBool && locomotion.airBoostActiveBool && !groundedBool && locomotion.rightControllerBoostDir) {
-					horizontalVelocityX += locomotion.rightControllerBoostDir.x * airBoostSpeed * delta;
-					horizontalVelocityZ += locomotion.rightControllerBoostDir.z * airBoostSpeed * delta;
-					jumpVelocity += locomotion.rightControllerBoostDir.y * airBoostSpeed * delta;
-				}
-				const horizontalSpeed = Math.sqrt(horizontalVelocityX * horizontalVelocityX + horizontalVelocityZ * horizontalVelocityZ);
-				const drag = groundedBool ? groundMomentumDrag : airMomentumDrag;
-				const dragFactor = Math.max(0, 1 - drag * delta);
-				if (horizontalSpeed > 0.0001) {
-					const resolvedMomentum = resolveHorizontalMovement(
-						trackingOrigin.x,
-						trackingOrigin.y,
-						trackingOrigin.z,
-						trackingOrigin.x + horizontalVelocityX * delta,
-						trackingOrigin.z + horizontalVelocityZ * delta,
-						playerHeight
-					);
-					trackingOrigin.x = resolvedMomentum.x;
-					trackingOrigin.y = resolvedMomentum.y > trackingOrigin.y ? Math.min(resolvedMomentum.y, trackingOrigin.y + climbSpeed * delta) : resolvedMomentum.y;
-					trackingOrigin.z = resolvedMomentum.z;
-					horizontalVelocityX *= dragFactor;
-					horizontalVelocityZ *= dragFactor;
-				} else {
-					horizontalVelocityX = 0;
-					horizontalVelocityZ = 0;
-				}
-				const supportHeight = getFloorHeightAtPosition(trackingOrigin.x, trackingOrigin.z, getMaxClimbSurfaceY(Math.max(trackingOrigin.y, trackingOrigin.y + jumpVelocity * delta)));
-				const floorSupportBool = supportHeight > -Infinity;
-				if (jumpVelocity !== 0 || trackingOrigin.y > supportHeight || !floorSupportBool) {
-					const previousY = trackingOrigin.y;
-					jumpVelocity += jumpGravity * delta;
-					trackingOrigin.y += jumpVelocity * delta;
-					const resolvedVertical = resolveVerticalMovement(previousY, trackingOrigin.y, trackingOrigin.x, trackingOrigin.z, playerHeight);
-					trackingOrigin.y = resolvedVertical.y;
-					if (resolvedVertical.hitCeilingBool && jumpVelocity > 0) {
-						jumpVelocity = 0;
-						jumpHoldTimeSeconds = 0;
-					}
-					if (trackingOrigin.y <= fallResetY) {
-						resetPlayerPose();
-						return;
-					}
-					if (resolvedVertical.groundedBool) {
-						jumpVelocity = 0;
-						jumpHoldTimeSeconds = 0;
-						horizontalVelocityX *= Math.max(0, 1 - groundMomentumDrag * delta);
-						horizontalVelocityZ *= Math.max(0, 1 - groundMomentumDrag * delta);
-						jumpCount = 0;
-					}
-					updateReferenceSpace();
-				} else if (horizontalSpeed > 0.0001 || eyeHeightState.heightChangedBool || eyeHeightState.offsetChangedBool || eyeHeightState.baseHeightChangedBool) {
+				const locomotionStep = locomotionController.applyXrLocomotion(xrMovementState, {
+					delta: delta,
+					viewerTransform: viewerTransform,
+					turnAnchorPosition: basePose ? viewerTransform.position : null,
+					locomotion: locomotion,
+					jumpMode: jumpMode,
+					menuOpenBool: menuOpenBool
+				});
+				if (locomotionStep.referenceSpaceUpdateNeededBool) {
 					updateReferenceSpace();
 				}
 			};
 
-			const drawCenteredFittedText = function(text, centerX, topY, maxWidth, fontSize, minFontSize, color, weight) {
-				let currentFontSize = fontSize;
-				while (currentFontSize > minFontSize) {
-					menuCtx.font = (weight || "") + " " + currentFontSize + "px Arial";
-					if (menuCtx.measureText(text).width <= maxWidth) {
-						break;
-					}
-					currentFontSize -= 2;
-				}
-				menuCtx.fillStyle = color;
-				menuCtx.fillText(text, centerX, topY);
+			const getMenuRenderState = function() {
+				return {
+					sceneTimeSeconds: sceneTimeSeconds,
+					audioMetrics: getAudioMetrics(),
+					jumpMode: jumpMode,
+					hoveredJumpMode: hoveredJumpMode,
+					hoveredShaderModeAction: hoveredShaderModeAction,
+					hoveredLightPresetAction: hoveredLightPresetAction,
+					hoveredPresetAction: hoveredPresetAction,
+					floorAlpha: floorAlpha,
+					eyeDistanceMeters: eyeDistanceMeters,
+					floorAlphaHoverBool: floorAlphaHoverBool,
+					eyeDistanceHoverBool: eyeDistanceHoverBool,
+					floorAlphaSliderActiveBool: !!activeFloorAlphaSliderHand,
+					eyeDistanceSliderActiveBool: !!activeSliderHand,
+					shaderModeNames: visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"],
+					currentShaderModeIndex: visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0,
+					lightPresetNames: sceneLighting ? sceneLighting.getPresetNames() : ["Aurora Drift"],
+					currentLightPresetIndex: sceneLighting ? sceneLighting.getCurrentPresetIndex() : 0,
+					currentLightPresetDescription: sceneLighting ? sceneLighting.getCurrentPresetDescription() : "Slow colorful overhead drift",
+					presetNames: visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"],
+					currentPresetIndex: visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0,
+					eyeDistanceMin: eyeDistanceMin,
+					eyeDistanceMax: eyeDistanceMax,
+					eyeDistanceSliderU: eyeDistanceToSliderU(eyeDistanceMeters),
+					floorAlphaSliderU: floorAlphaToSliderU(floorAlpha)
+				};
 			};
 
 			const renderMenuCanvasTexture = function() {
-				const reactiveColors = getAudioReactiveFloorColors();
-				const audioMetrics = visualizerRenderer && visualizerRenderer.getAudioMetrics ? visualizerRenderer.getAudioMetrics() : {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
-				const accentRgb = hslToRgb((sceneTimeSeconds * 0.03 + 0.04) % 1, 0.85, 0.62);
-				const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
-				const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
-				const layout = getMenuLayoutMetrics();
-				syncMenuCanvasSize(layout);
-				const audioBarItems = [
-					{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
-					{label: "Peak", value: clampNumber(audioMetrics.peak || 0, 0, 1)},
-					{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
-					{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
-					{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)}
-				];
-				const headerGradient = menuCtx.createLinearGradient(0, 0, menuCanvas.width, menuCanvas.height);
-				headerGradient.addColorStop(0, "#04111f");
-				headerGradient.addColorStop(0.55, "#071d33");
-				headerGradient.addColorStop(1, "#160c2f");
-				menuCtx.fillStyle = headerGradient;
-				menuCtx.fillRect(0, 0, menuCanvas.width, menuCanvas.height);
-				menuCtx.fillStyle = "rgba(255,255,255,0.025)";
-				for (let i = 0; i < 24; i += 1) {
-					menuCtx.fillRect((i * 73 + sceneTimeSeconds * 28) % (menuCanvas.width + 40) - 40, 0, 18, menuCanvas.height);
-				}
-				menuCtx.fillStyle = accentSoft;
-				menuCtx.beginPath();
-				menuCtx.arc(menuCanvas.width * 0.18, menuCanvas.height * 0.14, 160, 0, Math.PI * 2);
-				menuCtx.fill();
-				menuCtx.beginPath();
-				menuCtx.arc(menuCanvas.width * 0.84, menuCanvas.height * 0.24, 210, 0, Math.PI * 2);
-				menuCtx.fill();
-				menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(14, 14, menuCanvas.width - 28, menuCanvas.height - 28);
-				menuCtx.strokeStyle = accentColor;
-				menuCtx.lineWidth = 4;
-				menuCtx.strokeRect(24, 24, menuCanvas.width - 48, menuCanvas.height - 48);
-				menuCtx.textAlign = "left";
-				menuCtx.textBaseline = "top";
-				menuCtx.fillStyle = "#f8fbff";
-				menuCtx.font = "bold 46px Arial";
-				menuCtx.fillText("VR Control Deck", layout.contentLeft, 34);
-				menuCtx.fillStyle = accentSoft;
-				menuCtx.fillRect(layout.contentLeft, layout.audioPanelTop, layout.contentWidth, layout.audioPanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.audioPanelTop, layout.contentWidth, layout.audioPanelHeight);
-				const audioBarStartX = layout.contentLeft + 150;
-				const audioBarWidth = layout.contentWidth - 230;
-				for (let i = 0; i < audioBarItems.length; i += 1) {
-					const item = audioBarItems[i];
-					const rowY = layout.audioBarTop + i * layout.audioBarSpacing;
-					menuCtx.textAlign = "left";
-					menuCtx.fillStyle = "#ffffff";
-					menuCtx.font = "bold 15px Arial";
-					menuCtx.fillText(item.label, layout.contentLeft + 18, rowY);
-					menuCtx.fillStyle = "rgba(255,255,255,0.14)";
-					menuCtx.fillRect(audioBarStartX, rowY + 2, audioBarWidth, 7);
-					menuCtx.fillStyle = accentColor;
-					menuCtx.fillRect(audioBarStartX, rowY + 2, audioBarWidth * item.value, 7);
-					menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
-					menuCtx.lineWidth = 1;
-					menuCtx.strokeRect(audioBarStartX, rowY + 2, audioBarWidth, 7);
-					menuCtx.textAlign = "right";
-					menuCtx.fillStyle = accentColor;
-					menuCtx.fillText(Math.round(item.value * 100) + "%", layout.contentRight - 16, rowY);
-				}
-				menuCtx.textAlign = "left";
-				menuCtx.fillStyle = "rgba(6,14,24,0.78)";
-				menuCtx.fillRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
-				menuCtx.textAlign = "center";
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 34px Arial";
-				menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, layout.jumpPanelTitleY);
-				const buttonTop = layout.jumpButtonTop;
-				const buttonHeight = layout.jumpButtonHeight;
-				const doubleButtonX = menuCanvas.width * jumpModeDoubleMinU;
-				const doubleButtonWidth = menuCanvas.width * (jumpModeDoubleMaxU - jumpModeDoubleMinU);
-				const multiButtonX = menuCanvas.width * jumpModeMultiMinU;
-				const multiButtonWidth = menuCanvas.width * (jumpModeMultiMaxU - jumpModeMultiMinU);
-				menuCtx.fillStyle = jumpMode === "double" ? accentSoft : hoveredJumpMode === "double" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(doubleButtonX, buttonTop, doubleButtonWidth, buttonHeight);
-				menuCtx.fillStyle = jumpMode === "multi" ? accentSoft : hoveredJumpMode === "multi" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
-				menuCtx.strokeRect(multiButtonX, buttonTop, multiButtonWidth, buttonHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 16);
-				menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, buttonTop + 16);
-				menuCtx.fillStyle = "rgba(255,255,255,0.7)";
-				menuCtx.font = "20px Arial";
-				menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, buttonTop + 48);
-				menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, buttonTop + 48);
-				menuCtx.textAlign = "left";
-				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Ground Opacity", layout.contentLeft + 28, layout.groundTitleY);
-				menuCtx.textAlign = "right";
-				menuCtx.fillStyle = accentColor;
-				menuCtx.fillText(Math.round(floorAlpha * 100) + "%", layout.contentRight - 28, layout.groundTitleY);
-				menuCtx.textAlign = "left";
-				const floorTrackStartX = layout.trackStartX;
-				const floorTrackEndX = layout.trackEndX;
-				const floorTrackY = layout.floorTrackY;
-				const floorKnobX = menuCanvas.width * floorAlphaToSliderU(floorAlpha);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
-				menuCtx.lineWidth = 18;
-				menuCtx.beginPath();
-				menuCtx.moveTo(floorTrackStartX, floorTrackY);
-				menuCtx.lineTo(floorTrackEndX, floorTrackY);
-				menuCtx.stroke();
-				const floorGradient = menuCtx.createLinearGradient(floorTrackStartX, floorTrackY, floorTrackEndX, floorTrackY);
-				for (let i = 0; i <= 6; i += 1) {
-					const stopColor = hslToRgb(i / 6, 0.88, 0.6);
-					floorGradient.addColorStop(i / 6, "rgb(" + Math.round(stopColor[0] * 255) + "," + Math.round(stopColor[1] * 255) + "," + Math.round(stopColor[2] * 255) + ")");
-				}
-				menuCtx.strokeStyle = floorGradient;
-				menuCtx.lineWidth = 10;
-				menuCtx.beginPath();
-				menuCtx.moveTo(floorTrackStartX, floorTrackY);
-				menuCtx.lineTo(floorTrackEndX, floorTrackY);
-				menuCtx.stroke();
-				menuCtx.fillStyle = floorAlphaHoverBool || activeFloorAlphaSliderHand ? accentColor : "#ffffff";
-				menuCtx.beginPath();
-				menuCtx.arc(floorKnobX, floorTrackY, 22, 0, Math.PI * 2);
-				menuCtx.fill();
-				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "18px Arial";
-				menuCtx.textAlign = "left";
-				menuCtx.fillText("Invisible", floorTrackStartX, floorTrackY + 26);
-				menuCtx.textAlign = "right";
-				menuCtx.fillText("Solid", floorTrackEndX, floorTrackY + 26);
-				menuCtx.textAlign = "left";
-				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText("Eye Distance", layout.contentLeft + 28, layout.eyeTitleY);
-				menuCtx.textAlign = "right";
-				menuCtx.fillStyle = accentColor;
-				menuCtx.fillText(Math.round(eyeDistanceMeters * 1000) + " mm", layout.contentRight - 28, layout.eyeTitleY);
-				menuCtx.textAlign = "left";
-				const trackStartX = layout.trackStartX;
-				const trackEndX = layout.trackEndX;
-				const trackY = layout.eyeTrackY;
-				const knobX = menuCanvas.width * eyeDistanceToSliderU(eyeDistanceMeters);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
-				menuCtx.lineWidth = 18;
-				menuCtx.beginPath();
-				menuCtx.moveTo(trackStartX, trackY);
-				menuCtx.lineTo(trackEndX, trackY);
-				menuCtx.stroke();
-				menuCtx.strokeStyle = accentColor;
-				menuCtx.lineWidth = 10;
-				menuCtx.beginPath();
-				menuCtx.moveTo(trackStartX, trackY);
-				menuCtx.lineTo(trackEndX, trackY);
-				menuCtx.stroke();
-				menuCtx.fillStyle = eyeDistanceHoverBool || activeSliderHand ? accentColor : "#ffffff";
-				menuCtx.beginPath();
-				menuCtx.arc(knobX, trackY, 22, 0, Math.PI * 2);
-				menuCtx.fill();
-				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "18px Arial";
-				menuCtx.textAlign = "left";
-				menuCtx.fillText(Math.round(eyeDistanceMin * 1000) + " mm", trackStartX, trackY + 26);
-				menuCtx.textAlign = "right";
-				menuCtx.fillText(Math.round(eyeDistanceMax * 1000) + " mm", trackEndX, trackY + 26);
-				menuCtx.textAlign = "center";
-				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, layout.modePanelTop, layout.contentWidth, layout.modePanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.modePanelTop, layout.contentWidth, layout.modePanelHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 28px Arial";
-				menuCtx.fillText("Visualizer Mode", menuCanvas.width * 0.5, layout.modeTitleY);
-				const shaderModeNames = visualizerRenderer && visualizerRenderer.getModeNames ? visualizerRenderer.getModeNames() : ["toroidal"];
-				const currentShaderModeIndex = visualizerRenderer && visualizerRenderer.getCurrentModeIndex ? visualizerRenderer.getCurrentModeIndex() : 0;
-				const shaderModeTop = layout.modeRowTop;
-				const shaderModeHeight = layout.modeRowHeight;
-				const shaderModeArrowButtonTop = layout.modeArrowButtonTop;
-				const shaderModeArrowButtonHeight = layout.modeArrowButtonHeight;
-				const prevX = layout.prevX;
-				const prevWidth = layout.prevWidth;
-				const nextX = layout.nextX;
-				const nextWidth = layout.nextWidth;
-				const centerX = layout.centerX;
-				menuCtx.fillStyle = hoveredShaderModeAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(prevX, shaderModeArrowButtonTop, prevWidth, shaderModeArrowButtonHeight);
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(prevX, shaderModeArrowButtonTop, prevWidth, shaderModeArrowButtonHeight);
-				menuCtx.fillStyle = hoveredShaderModeAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(nextX, shaderModeArrowButtonTop, nextWidth, shaderModeArrowButtonHeight);
-				menuCtx.strokeRect(nextX, shaderModeArrowButtonTop, nextWidth, shaderModeArrowButtonHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 44px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, shaderModeTop + 14);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, shaderModeTop + 14);
-				drawCenteredFittedText(shaderModeNames[currentShaderModeIndex] || "No mode", centerX, layout.modeValueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
-				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "18px Arial";
-				menuCtx.fillText((currentShaderModeIndex + 1) + " / " + shaderModeNames.length, centerX, layout.modeMetaY);
-				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, layout.lightPanelTop, layout.contentWidth, layout.lightPanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.lightPanelTop, layout.contentWidth, layout.lightPanelHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 28px Arial";
-				menuCtx.fillText("Light Preset", menuCanvas.width * 0.5, layout.lightTitleY);
-				const lightPresetNames = sceneLighting ? sceneLighting.getPresetNames() : ["Aurora Drift"];
-				const currentLightPresetIndex = sceneLighting ? sceneLighting.getCurrentPresetIndex() : 0;
-				const currentLightPresetDescription = sceneLighting ? sceneLighting.getCurrentPresetDescription() : "Slow colorful overhead drift";
-				const lightPresetTop = layout.lightRowTop;
-				const lightPresetArrowButtonTop = layout.lightArrowButtonTop;
-				const lightPresetArrowButtonHeight = layout.lightArrowButtonHeight;
-				menuCtx.fillStyle = hoveredLightPresetAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(prevX, lightPresetArrowButtonTop, prevWidth, lightPresetArrowButtonHeight);
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(prevX, lightPresetArrowButtonTop, prevWidth, lightPresetArrowButtonHeight);
-				menuCtx.fillStyle = hoveredLightPresetAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(nextX, lightPresetArrowButtonTop, nextWidth, lightPresetArrowButtonHeight);
-				menuCtx.strokeRect(nextX, lightPresetArrowButtonTop, nextWidth, lightPresetArrowButtonHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 44px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, lightPresetTop + 14);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, lightPresetTop + 14);
-				drawCenteredFittedText(lightPresetNames[currentLightPresetIndex] || "No preset", centerX, layout.lightValueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
-				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "18px Arial";
-				drawCenteredFittedText(currentLightPresetDescription, centerX, layout.lightMetaY, menuCanvas.width * 0.56, 18, 14, "rgba(255,255,255,0.65)");
-				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, layout.presetPanelTop, layout.contentWidth, layout.presetPanelHeight);
-				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, layout.presetPanelTop, layout.contentWidth, layout.presetPanelHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 28px Arial";
-				menuCtx.fillText("Butterchurn Preset", menuCanvas.width * 0.5, layout.presetTitleY);
-				const presetNames = visualizerRenderer ? visualizerRenderer.getPresetNames() : ["Preset 1"];
-				const currentPresetIndex = visualizerRenderer ? visualizerRenderer.getCurrentPresetIndex() : 0;
-				const presetTop = layout.presetRowTop;
-				const presetHeight = layout.presetRowHeight;
-				const presetArrowButtonTop = layout.presetArrowButtonTop;
-				const presetArrowButtonHeight = layout.presetArrowButtonHeight;
-				menuCtx.fillStyle = hoveredPresetAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(prevX, presetArrowButtonTop, prevWidth, presetArrowButtonHeight);
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(prevX, presetArrowButtonTop, prevWidth, presetArrowButtonHeight);
-				menuCtx.fillStyle = hoveredPresetAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(nextX, presetArrowButtonTop, nextWidth, presetArrowButtonHeight);
-				menuCtx.strokeRect(nextX, presetArrowButtonTop, nextWidth, presetArrowButtonHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 44px Arial";
-				menuCtx.fillText("<", prevX + prevWidth * 0.5, presetTop + 14);
-				menuCtx.fillText(">", nextX + nextWidth * 0.5, presetTop + 14);
-				drawCenteredFittedText(presetNames[currentPresetIndex] || "No preset", centerX, layout.presetValueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
-				menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-				menuCtx.font = "18px Arial";
-				menuCtx.fillText((currentPresetIndex + 1) + " / " + presetNames.length, centerX, layout.presetMetaY);
+				menuUi.render(getMenuRenderState());
 				gl.bindTexture(gl.TEXTURE_2D, menuTexture);
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 			};
@@ -2208,16 +1235,12 @@
 			};
 
 			const updateDesktopMenuPreview = function() {
-				if (!desktopPreviewMenuVisibleBool) {
-					desktopMenuPreviewCanvas.style.display = "none";
-					return;
-				}
 				applyDesktopMenuPointerState();
-				renderMenuCanvasTexture();
-				desktopMenuPreviewCanvas.style.display = "block";
-				desktopMenuPreviewCanvas.style.pointerEvents = desktopPointerLockedBool || xrSession ? "none" : "auto";
-				desktopMenuPreviewCtx.clearRect(0, 0, desktopMenuPreviewCanvas.width, desktopMenuPreviewCanvas.height);
-				desktopMenuPreviewCtx.drawImage(menuCanvas, 0, 0);
+				menuUi.updateDesktopPreview({
+					visible: desktopPreviewMenuVisibleBool,
+					interactiveBool: !desktopPointerLockedBool && !xrSession,
+					renderState: getMenuRenderState()
+				});
 			};
 
 			const drawControllerRays = function() {
@@ -2305,7 +1328,7 @@
 				const delta = previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTime - previewLastRenderTime));
 				previewLastRenderTime = previewTime;
 				sceneTimeSeconds = previewTime;
-				applyDesktopPreviewMovement(delta);
+				locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, jumpMode);
 				canvas.width = window.innerWidth * window.devicePixelRatio;
 				canvas.height = window.innerHeight * window.devicePixelRatio;
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -2345,8 +1368,8 @@
 				if (visualizerRenderer) {
 					visualizerRenderer.onSessionEnd();
 				}
-				horizontalVelocityX = 0;
-				horizontalVelocityZ = 0;
+				xrMovementState.horizontalVelocityX = 0;
+				xrMovementState.horizontalVelocityZ = 0;
 				window.requestAnimationFrame(renderPreview);
 			};
 
@@ -2389,48 +1412,43 @@
 
 			enterButton.addEventListener("click", function() {
 				if (navigator.xr && gl && !xrSession) {
-					activateVisualizerAudio();
+					audioController.activate();
 					startSession();
 				}
 			});
 
 			audioButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				requestDisplayAudio().catch(function(error) {
-					setStatus(error.message || "audio capture failed");
-				});
+				runAudioAction(function() {
+					return audioController.requestSharedAudio();
+				}, "audio capture failed");
 			});
 
 			youtubeAudioButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				requestYoutubePlaylistAudio().catch(function(error) {
-					setStatus(error.message || "youtube audio failed");
-				});
+				runAudioAction(function() {
+					return audioController.requestYoutubePlaylistAudio();
+				}, "youtube audio failed");
 			});
 
 			sunoLiveRadioButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				requestSunoLiveRadioAudio().catch(function(error) {
-					setStatus(error.message || "suno live radio audio failed");
-				});
+				runAudioAction(function() {
+					return audioController.requestSunoLiveRadioAudio();
+				}, "suno live radio audio failed");
 			});
 
 			microphoneButton.addEventListener("click", function() {
-				activateVisualizerAudio();
-				requestMicrophoneAudio().catch(function(error) {
-					setStatus(error.message || "microphone capture failed");
-				});
+				runAudioAction(function() {
+					return audioController.requestMicrophoneAudio();
+				}, "microphone capture failed");
 			});
 
 			debugAudioButton.addEventListener("click", function() {
-				startDebugAudio().catch(function(error) {
-					setStatus(error.message || "debug audio failed");
-				});
+				runAudioAction(function() {
+					return audioController.startDebugAudio();
+				}, "debug audio failed");
 			});
 
 			stopAudioButton.addEventListener("click", function() {
-				setActiveAudioStream(null, "");
-				audioLabel.textContent = "Audio: none";
+				audioController.stop();
 			});
 
 			exitButton.addEventListener("click", function() {
@@ -2441,36 +1459,36 @@
 
 			const setDesktopMovementKeyState = function(code, pressedBool) {
 				if (code === "KeyW") {
-					desktopMoveForwardBool = pressedBool;
+					desktopMovementState.moveForwardBool = pressedBool;
 					return true;
 				}
 				if (code === "KeyS") {
-					desktopMoveBackwardBool = pressedBool;
+					desktopMovementState.moveBackwardBool = pressedBool;
 					return true;
 				}
 				if (code === "KeyA") {
-					desktopMoveLeftBool = pressedBool;
+					desktopMovementState.moveLeftBool = pressedBool;
 					return true;
 				}
 				if (code === "KeyD") {
-					desktopMoveRightBool = pressedBool;
+					desktopMovementState.moveRightBool = pressedBool;
 					return true;
 				}
 				if (code === "Space") {
-					desktopJumpHeldBool = pressedBool;
+					desktopMovementState.jumpHeldBool = pressedBool;
 					return true;
 				}
 				return false;
 			};
 
 			const releaseDesktopMovementKeys = function() {
-				desktopMoveForwardBool = false;
-				desktopMoveBackwardBool = false;
-				desktopMoveLeftBool = false;
-				desktopMoveRightBool = false;
-				desktopSprintBool = false;
-				desktopCrouchBool = false;
-				desktopJumpHeldBool = false;
+				desktopMovementState.moveForwardBool = false;
+				desktopMovementState.moveBackwardBool = false;
+				desktopMovementState.moveLeftBool = false;
+				desktopMovementState.moveRightBool = false;
+				desktopMovementState.sprintBool = false;
+				desktopMovementState.crouchBool = false;
+				desktopMovementState.jumpHeldBool = false;
 			};
 
 			window.addEventListener("resize", function() {
@@ -2535,7 +1553,7 @@
 					cycleLightingPreset(hit.lightPresetAction === "prev" ? -1 : 1);
 				}
 				if (hit.presetAction) {
-					activateVisualizerAudio();
+					audioController.activate();
 					cyclePreset(hit.presetAction === "prev" ? -1 : 1);
 				}
 				if (hit.eyeDistanceSliderBool) {
@@ -2563,8 +1581,8 @@
 				if (desktopPointerLockedBool) {
 					clearDesktopMenuPointerState();
 				} else {
-					desktopSprintBool = false;
-					desktopCrouchBool = false;
+					desktopMovementState.sprintBool = false;
+					desktopMovementState.crouchBool = false;
 				}
 			});
 
@@ -2573,21 +1591,21 @@
 					return;
 				}
 				if (event.button === 0) {
-					desktopSprintBool = true;
+					desktopMovementState.sprintBool = true;
 					event.preventDefault();
 				}
 				if (event.button === 2) {
-					desktopCrouchBool = true;
+					desktopMovementState.crouchBool = true;
 					event.preventDefault();
 				}
 			}, true);
 
 			document.addEventListener("mouseup", function(event) {
 				if (event.button === 0) {
-					desktopSprintBool = false;
+					desktopMovementState.sprintBool = false;
 				}
 				if (event.button === 2) {
-					desktopCrouchBool = false;
+					desktopMovementState.crouchBool = false;
 				}
 				if (xrSession || !desktopPointerLockedBool) {
 					return;
@@ -2601,12 +1619,16 @@
 				if (!desktopPointerLockedBool || xrSession) {
 					return;
 				}
-				desktopLookYaw += event.movementX * desktopMouseSensitivity;
-				desktopLookPitch = clampNumber(desktopLookPitch - event.movementY * desktopMouseSensitivity, -1.35, 1.35);
+				desktopMovementState.lookYaw += event.movementX * desktopMouseSensitivity;
+				desktopMovementState.lookPitch = clampNumber(desktopMovementState.lookPitch - event.movementY * desktopMouseSensitivity, -1.35, 1.35);
 			});
 
-			document.addEventListener("pointerdown", activateVisualizerAudio, {passive: true});
-			document.addEventListener("keydown", activateVisualizerAudio);
+			document.addEventListener("pointerdown", function() {
+				audioController.activate();
+			}, {passive: true});
+			document.addEventListener("keydown", function() {
+				audioController.activate();
+			});
 			document.addEventListener("keydown", function(event) {
 				if (xrSession) {
 					return;
@@ -2653,7 +1675,7 @@
 				resetDesktopPreviewState();
 				if (window.createSceneLightingController) {
 					sceneLighting = window.createSceneLightingController();
-					sceneLighting.update(0, {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0});
+					sceneLighting.update(0, emptyAudioMetrics);
 				}
 				if (window.createGlbAssetManager) {
 					try {
@@ -2680,7 +1702,7 @@
 				if (window.createXrVisualizerManager) {
 					visualizerRenderer = window.createXrVisualizerManager();
 					visualizerRenderer.init({gl: gl});
-					visualizerRenderer.setAudioStream(activeAudioStream);
+					audioController.setVisualizerRenderer(visualizerRenderer);
 					updateVisualizerLabels();
 				}
 				if (!navigator.xr) {

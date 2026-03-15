@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Moved audio-source lifecycle logic into a dedicated `xr-audio-controller.js` module so capture setup, debug-audio activation, tab opening, stream cleanup, and audio UI state are no longer mixed into `index.html`.
+- Moved collision handling, floor detection, XR movement physics, eye-height adjustment, and desktop first-person locomotion into a dedicated `xr-locomotion.js` module so the movement baseline is easier to maintain and no longer relies on hidden shared globals.
+- Split the VR menu canvas rendering, layout math, mirrored desktop preview, and hit testing into a dedicated `xr-menu-ui.js` module so `index.html` stays smaller and focused on XR, movement, and scene orchestration.
+- Tightened the visualizer manager internals by replacing repeated mode-notification loops with a shared dispatcher and by copying render matrices with typed-array `.set(...)`.
+- Centralized shared color helpers such as `hslToRgb` and `hueToRgb` in `xr-visualizer-utils.js` so menu, scene-lighting, and main-scene code stop carrying duplicate implementations.
+- Centralized shared empty audio-metric defaults in `xr-visualizer-utils.js` so lighting, menu rendering, and visualizer management use the same fallback object.
 - Extended the shared Butterchurn audio analysis path with stereo-aware metrics including left/right energy, left/right bass, stereo balance, stereo width, mid level, and side level so world-space modes can react to channel structure instead of only mono loudness.
 - Improved mono-input handling in the shared stereo analysis path so single-channel sources such as the built-in debug synth stay centered instead of being misread as a hard-panned stereo signal.
 - Removed the current visible `stereoVolume` scene output so the mode is now an empty placeholder while the failed world-space interpretation is cleared out for a future redesign.

@@ -18,8 +18,8 @@
   - First establish stable XR foundations such as scene bootstrapping, locomotion, jumping, and render-loop stability.
   - Later phases can layer in audio analysis and spatial visualization, but should preserve the working movement baseline unless the user asks to replace it.
 - Implement **only what is explicitly requested**:
-  - Do not add “nice-to-have” features, abstractions, or refactors on your own.
-  - Do not invent mini-frameworks or complex architectures.
+  - Do not add “nice-to-have” features, abstractions, or refactors on your own, but ask proactively
+  - Do not invent mini-frameworks or complex architectures unless requested
 
 ## Coding Style & Naming Conventions
 - Plain ES5 with global scope; use lowerCamelCase for functions/variables and keep boolean flags suffixed (e.g., `threnodyLoadedBool`).
@@ -77,6 +77,7 @@ Use this as default when the user does not specify other styles:
 
 - Use `const` and `let`, never `var`.
 - **Indentation** must use **tabs**, not spaces.
+- Code must be commented adequately for maintainability, especially around module boundaries, shared state, non-obvious control flow, rendering paths, movement/physics, and any logic that would otherwise require reconstruction by reading line by line.
 - Add comments where they meaningfully improve orientation or readability.
 - **All comments must be in English and stay short but useful.**
 - Keep code concise and contained; avoid sprawl and unnecessary variables while staying efficient, maintainable, and well-structured.

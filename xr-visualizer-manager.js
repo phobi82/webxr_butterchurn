@@ -1,6 +1,7 @@
 (function() {
 	// Registers visualizer modes and feeds each mode the shared frame, pose, and Butterchurn source state.
 	const utils = window.xrVisualizerUtils;
+	const emptyAudioMetrics = utils.emptyAudioMetrics;
 	const registeredModeNames = [];
 	const registeredModeFactories = {};
 
@@ -77,6 +78,15 @@
 					}
 				}
 			},
+			notifyModes: function(methodName) {
+				const sourceState = this.getSourceState();
+				for (let i = 0; i < this.modeNames.length; i += 1) {
+					const mode = this.modes[this.modeNames[i]];
+					if (mode && mode[methodName]) {
+						mode[methodName](sourceState, this.frameState);
+					}
+				}
+			},
 			getActiveMode: function() {
 				return this.modes[this.modeNames[this.currentModeIndex]] || null;
 			},
@@ -93,10 +103,8 @@
 				}
 			},
 			setRenderMatrices: function(viewMatrix, projMatrix) {
-				for (let i = 0; i < 16; i += 1) {
-					this.frameState.viewMatrix[i] = viewMatrix[i];
-					this.frameState.projMatrix[i] = projMatrix[i];
-				}
+				this.frameState.viewMatrix.set(viewMatrix);
+				this.frameState.projMatrix.set(projMatrix);
 			},
 			setViewFromMatrix: function(viewMatrix, projectionMatrix) {
 				const forwardAngles = utils.extractForwardYawPitch(viewMatrix);
@@ -155,19 +163,11 @@
 			},
 			setAudioStream: function(stream) {
 				this.source.setAudioStream(stream);
-				this.forEachMode(function(mode) {
-					if (mode.onAudioChanged) {
-						mode.onAudioChanged(this.getSourceState(), this.frameState);
-					}
-				}.bind(this));
+				this.notifyModes("onAudioChanged");
 			},
 			startDebugAudio: function() {
 				return this.source.startDebugAudio().then(function() {
-					this.forEachMode(function(mode) {
-						if (mode.onAudioChanged) {
-							mode.onAudioChanged(this.getSourceState(), this.frameState);
-						}
-					}.bind(this));
+					this.notifyModes("onAudioChanged");
 				}.bind(this));
 			},
 			activateAudio: function() {
@@ -195,16 +195,12 @@
 				return this.source.getBeatPulse ? this.source.getBeatPulse() : 0;
 			},
 			getAudioMetrics: function() {
-				return this.source.getAudioMetrics ? this.source.getAudioMetrics() : {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
+				return this.source.getAudioMetrics ? this.source.getAudioMetrics() : emptyAudioMetrics;
 			},
 			selectPreset: function(index) {
 				return this.source.selectPreset(index, 1.2).then(function() {
 					this.source.lastCanvasRenderTimeSeconds = 0;
-					this.forEachMode(function(mode) {
-						if (mode.onPresetChanged) {
-							mode.onPresetChanged(this.getSourceState(), this.frameState);
-						}
-					}.bind(this));
+					this.notifyModes("onPresetChanged");
 				}.bind(this));
 			},
 			selectMode: function(index) {
@@ -216,19 +212,11 @@
 			},
 			onSessionStart: function() {
 				this.source.onSessionStart();
-				this.forEachMode(function(mode) {
-					if (mode.onSessionStart) {
-						mode.onSessionStart(this.getSourceState(), this.frameState);
-					}
-				}.bind(this));
+				this.notifyModes("onSessionStart");
 			},
 			onSessionEnd: function() {
 				this.source.onSessionEnd();
-				this.forEachMode(function(mode) {
-					if (mode.onSessionEnd) {
-						mode.onSessionEnd(this.getSourceState(), this.frameState);
-					}
-				}.bind(this));
+				this.notifyModes("onSessionEnd");
 			},
 			getShaderModeNames: function() {
 				return this.getModeNames();
