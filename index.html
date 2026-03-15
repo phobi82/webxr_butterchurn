@@ -17,12 +17,14 @@
 		<script src="xr-visualizer-mode-stereo-volume.js"></script>
 		<script src="glb-asset-manager.js"></script>
 		<script>
+			// Main app entry: owns XR session setup, desktop preview, world rendering, and UI wiring.
 			document.body.style.backgroundColor = "#000020";
 			document.body.style.color = "#ffff00";
 			document.body.style.margin = "0";
 			document.body.style.overflow = "hidden";
 			document.body.style.fontFamily = "Arial, sans-serif";
 
+			// Core gameplay, menu, and preview tuning live here so the baseline stays easy to audit.
 			const walkSpeed = 4;
 			const sprintMultiplier = 2;
 			const turnSpeed = 2;
@@ -99,6 +101,7 @@
 				{x: 8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.1, 0.95, 0.9, 0.48]}
 			];
 
+			// Mutable runtime state for XR, desktop controls, audio, scene resources, and menu interaction.
 			let gl = null;
 			let xrSession = null;
 			let baseRefSpace = null;
@@ -708,6 +711,7 @@
 				};
 			};
 
+			// Matrix, shader, and draw helpers stay local because index.html still owns the main world render loop.
 			const identityMatrix = function() {
 				return new Float32Array([
 					1, 0, 0, 0,
@@ -2641,6 +2645,7 @@
 				clearDesktopMenuPointerState();
 			});
 
+			// Startup wires the modules together, loads scene assets, and starts the desktop preview loop.
 			const init = async function() {
 				if (!initGl()) {
 					return;

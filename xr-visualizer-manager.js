@@ -1,4 +1,5 @@
 (function() {
+	// Registers visualizer modes and feeds each mode the shared frame, pose, and Butterchurn source state.
 	const utils = window.xrVisualizerUtils;
 	const registeredModeNames = [];
 	const registeredModeFactories = {};

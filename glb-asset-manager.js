@@ -1,4 +1,5 @@
 (function() {
+	// Loads simple GLB scene props and renders them with the shared scene-lighting pipeline.
 	window.createGlbAssetManager = function(deps) {
 		const gl = deps.gl;
 		const createProgram = deps.createProgram;

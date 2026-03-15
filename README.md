@@ -22,7 +22,7 @@ Current capabilities:
 - an in-headset menu for jump mode, ground opacity, eye distance, audio metrics, visualizer-mode switching, light-preset switching, and preset switching
 - Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 texture sampling in canvas-driven modes
 - a toroidal fullscreen visualizer pass driven by head orientation
-- a stereoscopic Butterchurn world mode that turns preset `shapes` and `waves` into simple 3D scene primitives
+- a layered Butterchurn world mode that turns preset structure into warped sky shells, luma-sliced feedback planes, embossed portal surfaces, hotspot shards, volumetric shape architecture, tube-like wave ribbons, halo gates, and motion-vector streaks
 - shared scene lighting with moving, audio-reactive, colorful top-light rigs that affect the floor, obstacle boxes, and GLB props
 - two lighting presets: `Aurora Drift` for slower overhead motion and `Disco Storm` for aggressive disco-style strobing
 - modular visualizer code split into shared Butterchurn source, render-phase-aware mode modules, and a mode manager
@@ -41,7 +41,7 @@ Current capabilities:
 - `xr-visualizer-manager.js`: mode registry, mode switching, and render-phase orchestration
 - `xr-visualizer-mode-fullscreen.js`: reusable fullscreen textured-mode helper for canvas-driven passes
 - `xr-visualizer-mode-toroidal.js`: toroidal pre-scene visualizer mode
-- `xr-visualizer-mode-stereo-volume.js`: stereoscopic world-space preset interpreter mode
+- `xr-visualizer-mode-stereo-volume.js`: layered world-space preset interpreter mode for textured shells, portals, and spatial geometry
 - `butterchurn.min.js`: bundled Butterchurn runtime
 - `butterchurnPresets.min.js`: bundled Butterchurn preset pack
 - `CHANGELOG.md`: notable user-facing changes
@@ -104,11 +104,12 @@ The start page can switch between these audio inputs:
 
 - Everything runs locally in the browser.
 - Current work prioritizes XR locomotion and render-loop stability before deeper audiovisual features.
-- `toroidal` still uses the shared Butterchurn canvas, while `stereoVolume` now advances from the same shared audio/preset state without depending on that canvas render path.
+- `toroidal` still uses the shared Butterchurn canvas as a fullscreen pass, while `stereoVolume` now rebuilds the same source as layered world-space shells, portal surfaces, and anchored preset geometry.
 - `Debug Audio` now only provides a synthetic source signal; beat, bass, transient, and peak values are derived through the same shared analysis path as real inputs.
+- Shared audio analysis now exposes stereo-aware metrics such as left/right level, stereo balance, and stereo width, while mono-style inputs are auto-centered so they do not collapse into a false hard-left spatial bias.
 - `Aurora Drift` keeps the world lighting in a slower colorful overhead sweep, while `Disco Storm` pushes faster moving beams and stronger strobes for a more aggressive disco look.
 - The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
-- The stereo mode is currently a first V2 step: it compiles preset `shapes` and `waves` into simple world-space geometry, while deeper Milkdrop/Butterchurn runtime interpretation can be layered into the same file later.
+- `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
 
 ## Development
