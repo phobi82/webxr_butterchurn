@@ -2,7 +2,8 @@
 	// Coordinates session lifecycle, frame loops, browser input, and feature modules as one runtime layer.
 	window.createXrAppRuntime = function(options) {
 		options = options || {};
-		const browser = options.browser || {};
+		const services = options.services || {};
+		const browser = services.browser || {};
 		const windowRef = browser.windowRef || window;
 		const documentRef = browser.documentRef || document;
 		const xrApi = browser.xrApi || options.xrApi || null;
@@ -13,11 +14,15 @@
 		const locomotionController = options.locomotionController;
 		const menuController = options.menuController;
 		const sceneRenderer = options.sceneRenderer;
-		const sharedResources = options.sharedResources || {};
-		const factories = options.factories || {};
-		const math = options.math || {};
-		const sceneMath = options.sceneMath || {};
-		const config = options.config || {};
+		const resources = services.resources || {};
+		const sceneResources = resources.scene || {};
+		const visualizerResources = resources.visualizer || {};
+		const inputConfig = services.input || {};
+		const math = services.math || {};
+		const sceneServices = services.scene || {};
+		const sceneLightingServices = sceneServices.lighting || {};
+		const glbAssetServices = sceneServices.glbAssets || {};
+		const visualizerServices = services.visualizer || {};
 		const xrMovementState = locomotionController.createXrState();
 		const desktopMovementState = locomotionController.createDesktopState();
 		const state = {
@@ -39,14 +44,14 @@
 		};
 
 		const getAudioMetrics = function() {
-			return sharedResources.visualizerRenderer && sharedResources.visualizerRenderer.getAudioMetrics ? sharedResources.visualizerRenderer.getAudioMetrics() : config.emptyAudioMetrics;
+			return visualizerResources.renderer && visualizerResources.renderer.getAudioMetrics ? visualizerResources.renderer.getAudioMetrics() : sceneServices.emptyAudioMetrics;
 		};
 
 		const updateSceneLighting = function(timeSeconds) {
-			if (!sharedResources.sceneLighting) {
+			if (!sceneResources.lightingController) {
 				return;
 			}
-			sharedResources.sceneLighting.update(timeSeconds, getAudioMetrics());
+			sceneResources.lightingController.update(timeSeconds, getAudioMetrics());
 		};
 
 		const lerpNumber = function(startValue, endValue, mixValue) {
@@ -86,45 +91,45 @@
 		};
 
 		const cyclePreset = function(direction) {
-			if (!sharedResources.visualizerRenderer) {
+			if (!visualizerResources.renderer) {
 				return;
 			}
-			const presetNames = sharedResources.visualizerRenderer.getPresetNames();
+			const presetNames = visualizerResources.renderer.getPresetNames();
 			const presetCount = presetNames.length;
 			if (!presetCount) {
 				return;
 			}
-			let nextPresetIndex = sharedResources.visualizerRenderer.getCurrentPresetIndex();
+			let nextPresetIndex = visualizerResources.renderer.getCurrentPresetIndex();
 			nextPresetIndex = (nextPresetIndex + direction + presetCount) % presetCount;
-			sharedResources.visualizerRenderer.selectPreset(nextPresetIndex);
+			visualizerResources.renderer.selectPreset(nextPresetIndex);
 		};
 
 		const cycleShaderMode = function(direction) {
-			if (!sharedResources.visualizerRenderer || !sharedResources.visualizerRenderer.getModeNames || !sharedResources.visualizerRenderer.selectMode) {
+			if (!visualizerResources.renderer || !visualizerResources.renderer.getModeNames || !visualizerResources.renderer.selectMode) {
 				return;
 			}
-			const shaderModeNames = sharedResources.visualizerRenderer.getModeNames();
+			const shaderModeNames = visualizerResources.renderer.getModeNames();
 			const shaderModeCount = shaderModeNames.length;
 			if (!shaderModeCount) {
 				return;
 			}
-			let nextShaderModeIndex = sharedResources.visualizerRenderer.getCurrentModeIndex();
+			let nextShaderModeIndex = visualizerResources.renderer.getCurrentModeIndex();
 			nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
-			sharedResources.visualizerRenderer.selectMode(nextShaderModeIndex);
+			visualizerResources.renderer.selectMode(nextShaderModeIndex);
 		};
 
 		const cycleLightingPreset = function(direction) {
-			if (!sharedResources.sceneLighting) {
+			if (!sceneResources.lightingController) {
 				return;
 			}
-			const lightPresetNames = sharedResources.sceneLighting.getPresetNames();
+			const lightPresetNames = sceneResources.lightingController.getPresetNames();
 			const lightPresetCount = lightPresetNames.length;
 			if (!lightPresetCount) {
 				return;
 			}
-			let nextLightPresetIndex = sharedResources.sceneLighting.getCurrentPresetIndex();
+			let nextLightPresetIndex = sceneResources.lightingController.getCurrentPresetIndex();
 			nextLightPresetIndex = (nextLightPresetIndex + direction + lightPresetCount) % lightPresetCount;
-			sharedResources.sceneLighting.selectPreset(nextLightPresetIndex);
+			sceneResources.lightingController.selectPreset(nextLightPresetIndex);
 		};
 
 		const xrMenuActionCallbacks = {
@@ -177,14 +182,14 @@
 				}
 				if (source.handedness === "left") {
 					const moveAxes = pickAxes(gamepad, false);
-					locomotion.moveX = Math.abs(moveAxes.x) > config.stickDeadzone ? moveAxes.x : 0;
-					locomotion.moveY = Math.abs(moveAxes.y) > config.stickDeadzone ? moveAxes.y : 0;
+					locomotion.moveX = Math.abs(moveAxes.x) > inputConfig.stickDeadzone ? moveAxes.x : 0;
+					locomotion.moveY = Math.abs(moveAxes.y) > inputConfig.stickDeadzone ? moveAxes.y : 0;
 					locomotion.sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
 				}
 				if (source.handedness === "right") {
 					const turnAxes = pickAxes(gamepad, true);
-					locomotion.turnX = Math.abs(turnAxes.x) > config.stickDeadzone ? turnAxes.x : 0;
-					locomotion.stanceInputY = Math.abs(turnAxes.y) > config.stanceStickDeadzone && Math.abs(turnAxes.y) > Math.abs(turnAxes.x) + config.stanceVerticalDominanceMargin ? -turnAxes.y : 0;
+					locomotion.turnX = Math.abs(turnAxes.x) > inputConfig.stickDeadzone ? turnAxes.x : 0;
+					locomotion.stanceInputY = Math.abs(turnAxes.y) > inputConfig.stanceStickDeadzone && Math.abs(turnAxes.y) > Math.abs(turnAxes.x) + inputConfig.stanceVerticalDominanceMargin ? -turnAxes.y : 0;
 					locomotion.jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
 					locomotion.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
 					const targetRayPose = state.xrRefSpace ? frame.getPose(source.targetRaySpace, state.xrRefSpace) : null;
@@ -230,13 +235,13 @@
 			return {
 				sceneTimeSeconds: state.sceneTimeSeconds,
 				audioMetrics: getAudioMetrics(),
-				shaderModeNames: sharedResources.visualizerRenderer && sharedResources.visualizerRenderer.getModeNames ? sharedResources.visualizerRenderer.getModeNames() : ["toroidal"],
-				currentShaderModeIndex: sharedResources.visualizerRenderer && sharedResources.visualizerRenderer.getCurrentModeIndex ? sharedResources.visualizerRenderer.getCurrentModeIndex() : 0,
-				lightPresetNames: sharedResources.sceneLighting ? sharedResources.sceneLighting.getPresetNames() : ["Aurora Drift"],
-				currentLightPresetIndex: sharedResources.sceneLighting ? sharedResources.sceneLighting.getCurrentPresetIndex() : 0,
-				currentLightPresetDescription: sharedResources.sceneLighting ? sharedResources.sceneLighting.getCurrentPresetDescription() : "Slow colorful overhead drift",
-				presetNames: sharedResources.visualizerRenderer ? sharedResources.visualizerRenderer.getPresetNames() : ["Preset 1"],
-				currentPresetIndex: sharedResources.visualizerRenderer ? sharedResources.visualizerRenderer.getCurrentPresetIndex() : 0
+				shaderModeNames: visualizerResources.renderer && visualizerResources.renderer.getModeNames ? visualizerResources.renderer.getModeNames() : ["toroidal"],
+				currentShaderModeIndex: visualizerResources.renderer && visualizerResources.renderer.getCurrentModeIndex ? visualizerResources.renderer.getCurrentModeIndex() : 0,
+				lightPresetNames: sceneResources.lightingController ? sceneResources.lightingController.getPresetNames() : ["Aurora Drift"],
+				currentLightPresetIndex: sceneResources.lightingController ? sceneResources.lightingController.getCurrentPresetIndex() : 0,
+				currentLightPresetDescription: sceneResources.lightingController ? sceneResources.lightingController.getCurrentPresetDescription() : "Slow colorful overhead drift",
+				presetNames: visualizerResources.renderer ? visualizerResources.renderer.getPresetNames() : ["Preset 1"],
+				currentPresetIndex: visualizerResources.renderer ? visualizerResources.renderer.getCurrentPresetIndex() : 0
 			};
 		};
 
@@ -261,21 +266,21 @@
 			applyLocomotion(delta, pose, frame);
 			const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 			updateMenuInput(frame, renderPose);
-			if (sharedResources.visualizerRenderer) {
+			if (visualizerResources.renderer) {
 				if (renderPose.transform && renderPose.views.length) {
-					sharedResources.visualizerRenderer.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
-					sharedResources.visualizerRenderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
+					visualizerResources.renderer.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
+					visualizerResources.renderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 				}
-				sharedResources.visualizerRenderer.update(time * 0.001);
+				visualizerResources.renderer.update(time * 0.001);
 			}
 			updateSceneLighting(time * 0.001);
 			sceneRenderer.renderXrViews({
 				baseLayer: state.xrSession.renderState.baseLayer,
 				pose: renderPose,
 				eyeDistanceMeters: menuController.getState().eyeDistanceMeters,
-				visualizerRenderer: sharedResources.visualizerRenderer,
-				glbAssetManager: sharedResources.glbAssetManager,
-				sceneLighting: sharedResources.sceneLighting,
+				visualizerRenderer: visualizerResources.renderer,
+				glbAssetManager: sceneResources.assetManager,
+				sceneLighting: sceneResources.lightingController,
 				menuController: menuController,
 				menuContentState: getMenuContentState(),
 				getReactiveFloorColors: getAudioReactiveFloorColors
@@ -295,9 +300,9 @@
 			sceneRenderer.renderPreviewFrame({
 				previewTimeSeconds: previewTimeSeconds,
 				desktopMovementState: desktopMovementState,
-				visualizerRenderer: sharedResources.visualizerRenderer,
-				glbAssetManager: sharedResources.glbAssetManager,
-				sceneLighting: sharedResources.sceneLighting,
+				visualizerRenderer: visualizerResources.renderer,
+				glbAssetManager: sceneResources.assetManager,
+				sceneLighting: sceneResources.lightingController,
 				menuController: menuController,
 				menuContentState: getMenuContentState(),
 				getReactiveFloorColors: getAudioReactiveFloorColors
@@ -322,8 +327,8 @@
 				enterEnabledBool: !!xrApi,
 				exitEnabledBool: false
 			});
-			if (sharedResources.visualizerRenderer) {
-				sharedResources.visualizerRenderer.onSessionEnd();
+			if (visualizerResources.renderer) {
+				visualizerResources.renderer.onSessionEnd();
 			}
 			xrMovementState.horizontalVelocityX = 0;
 			xrMovementState.horizontalVelocityZ = 0;
@@ -356,7 +361,7 @@
 				});
 				state.baseRefSpace = await state.xrSession.requestReferenceSpace("local-floor");
 				locomotionController.resetXrState(xrMovementState);
-				menuController.resetSessionInputState();
+				menuController.resetSessionState();
 				updateReferenceSpace();
 				shell.setXrState({
 					statusText: "session running",
@@ -364,8 +369,8 @@
 					exitEnabledBool: true
 				});
 				state.lastRenderTime = 0;
-				if (sharedResources.visualizerRenderer) {
-					sharedResources.visualizerRenderer.onSessionStart();
+				if (visualizerResources.renderer) {
+					visualizerResources.renderer.onSessionStart();
 				}
 				state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 			} catch (error) {
@@ -523,8 +528,8 @@
 				if (!state.desktopPointerLockedBool || state.xrSession) {
 					return;
 				}
-				desktopMovementState.lookYaw += event.movementX * config.desktopMouseSensitivity;
-				desktopMovementState.lookPitch = math.clampNumber(desktopMovementState.lookPitch - event.movementY * config.desktopMouseSensitivity, -1.35, 1.35);
+				desktopMovementState.lookYaw += event.movementX * inputConfig.desktopMouseSensitivity;
+				desktopMovementState.lookPitch = math.clampNumber(desktopMovementState.lookPitch - event.movementY * inputConfig.desktopMouseSensitivity, -1.35, 1.35);
 			});
 
 			documentRef.addEventListener("pointerdown", function() {
@@ -538,7 +543,7 @@
 					return;
 				}
 				if (event.code === "KeyM" && !event.repeat) {
-					menuController.setDesktopPreviewVisibleBool(!menuController.isDesktopPreviewVisible());
+					menuController.setDesktopPreviewVisibleBool(!menuController.getState().desktopPreviewVisibleBool);
 					event.preventDefault();
 					return;
 				}
@@ -571,36 +576,36 @@
 					return;
 				}
 				locomotionController.resetDesktopState(desktopMovementState);
-				if (factories.createSceneLightingController) {
-					sharedResources.sceneLighting = factories.createSceneLightingController();
-					sharedResources.sceneLighting.update(0, config.emptyAudioMetrics);
+				if (sceneLightingServices.createController) {
+					sceneResources.lightingController = sceneLightingServices.createController();
+					sceneResources.lightingController.update(0, sceneServices.emptyAudioMetrics);
 				}
-				if (factories.createGlbAssetManager) {
+				if (glbAssetServices.createManager) {
 					try {
-						sharedResources.glbAssetManager = factories.createGlbAssetManager({
+						sceneResources.assetManager = glbAssetServices.createManager({
 							gl: state.gl,
 							createProgram: sceneRenderer.createProgram,
 							getLightingState: function() {
-								return sharedResources.sceneLighting ? sharedResources.sceneLighting.getState() : null;
+								return sceneResources.lightingController ? sceneResources.lightingController.getState() : null;
 							},
-							getSceneLightingUniformLocations: sceneMath.getSceneLightingUniformLocations,
-							applySceneLightingUniforms: sceneMath.applySceneLightingUniforms,
-							maxSceneLights: config.maxSceneLights,
-							identityMatrix: sceneMath.identityMatrix,
-							multiplyMatrices: sceneMath.multiplyMatrices,
-							translateRotateYScale: sceneMath.translateRotateYScale,
+							getSceneLightingUniformLocations: sceneLightingServices.getUniformLocations,
+							applySceneLightingUniforms: sceneLightingServices.applyUniforms,
+							maxSceneLights: sceneServices.maxSceneLights,
+							identityMatrix: glbAssetServices.identityMatrix,
+							multiplyMatrices: glbAssetServices.multiplyMatrices,
+							translateRotateYScale: glbAssetServices.translateRotateYScale,
 							setStatus: shell.setStatus
 						});
-						sharedResources.glbAssetManager.init();
-						await sharedResources.glbAssetManager.loadAssets(config.sceneGlbAssets);
+						sceneResources.assetManager.init();
+						await sceneResources.assetManager.loadAssets(sceneServices.sceneGlbAssets);
 					} catch (error) {
 						shell.setStatus(error.message || "glb init failed");
 					}
 				}
-				if (factories.createXrVisualizerManager) {
-					sharedResources.visualizerRenderer = factories.createXrVisualizerManager();
-					sharedResources.visualizerRenderer.init({gl: state.gl});
-					audioController.setVisualizerRenderer(sharedResources.visualizerRenderer);
+				if (visualizerServices.createManager) {
+					visualizerResources.renderer = visualizerServices.createManager();
+					visualizerResources.renderer.init({gl: state.gl});
+					audioController.setVisualizerRenderer(visualizerResources.renderer);
 				}
 				if (!xrApi) {
 					shell.setXrState({

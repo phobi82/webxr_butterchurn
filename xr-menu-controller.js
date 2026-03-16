@@ -186,8 +186,6 @@
 		};
 
 		return {
-			menuCanvas: menuCanvas,
-			previewCanvas: previewCanvas,
 			getState: getStateSnapshot,
 			getControllerRays: function() {
 				return controllerRays;
@@ -352,10 +350,8 @@
 				}
 				previewCanvas.style.display = "block";
 			},
-			isDesktopPreviewVisible: function() {
-				return state.desktopPreviewVisibleBool;
-			},
-			resetSessionInputState: function() {
+			// Clears XR-session interaction state without resetting user menu choices.
+			resetSessionState: function() {
 				state.menuTogglePressedBool = false;
 				triggerPressedByHand.clear();
 			},

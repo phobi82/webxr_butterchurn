@@ -120,11 +120,15 @@
 				stanceVerticalDominanceMargin: 0.12
 			};
 
-			// Shared resources keep cross-module links explicit without spreading runtime globals.
-			const sharedResources = {
-				glbAssetManager: null,
-				sceneLighting: null,
-				visualizerRenderer: null
+			// Runtime-owned instances stay grouped by domain so cross-module links stay explicit.
+			const runtimeResources = {
+				scene: {
+					assetManager: null,
+					lightingController: null
+				},
+				visualizer: {
+					renderer: null
+				}
 			};
 			const appShell = window.createXrAppShell({
 				title: shellConfig.title,
@@ -196,7 +200,7 @@
 				desktopStartPitch: locomotionConfig.desktopStartPitch,
 				levelBoxes: sceneConfig.levelBoxes,
 				getGlbCollisionBoxes: function() {
-					return sharedResources.glbAssetManager && sharedResources.glbAssetManager.getCollisionBoxes ? sharedResources.glbAssetManager.getCollisionBoxes() : [];
+					return runtimeResources.scene.assetManager && runtimeResources.scene.assetManager.getCollisionBoxes ? runtimeResources.scene.assetManager.getCollisionBoxes() : [];
 				}
 			});
 			const menuController = window.createXrMenuController({
@@ -236,31 +240,8 @@
 				getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
 				applySceneLightingUniforms: window.applySceneLightingUniforms
 			});
-			const appRuntime = window.createXrAppRuntime({
-				shell: appShell,
-				audioController: audioController,
-				locomotionController: locomotionController,
-				menuController: menuController,
-				sceneRenderer: sceneRenderer,
-				sharedResources: sharedResources,
-				factories: {
-					createSceneLightingController: window.createSceneLightingController,
-					createGlbAssetManager: window.createGlbAssetManager,
-					createXrVisualizerManager: window.createXrVisualizerManager
-				},
-				math: {
-					clampNumber: clampNumber,
-					hslToRgb: hslToRgb,
-					rotateXZ: rotateXZ,
-					extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion
-				},
-				sceneMath: {
-					identityMatrix: identityMatrix,
-					multiplyMatrices: multiplyMatrices,
-					translateRotateYScale: translateRotateYScale,
-					getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
-					applySceneLightingUniforms: window.applySceneLightingUniforms
-				},
+			const runtimeServices = {
+				resources: runtimeResources,
 				browser: {
 					windowRef: window,
 					documentRef: document,
@@ -268,15 +249,46 @@
 					xrWebGLLayer: window.XRWebGLLayer || null,
 					xrRigidTransform: window.XRRigidTransform || null
 				},
-				config: {
+				input: {
 					desktopMouseSensitivity: runtimeConfig.desktopMouseSensitivity,
 					stickDeadzone: runtimeConfig.stickDeadzone,
 					stanceStickDeadzone: runtimeConfig.stanceStickDeadzone,
-					stanceVerticalDominanceMargin: runtimeConfig.stanceVerticalDominanceMargin,
+					stanceVerticalDominanceMargin: runtimeConfig.stanceVerticalDominanceMargin
+				},
+				math: {
+					clampNumber: clampNumber,
+					hslToRgb: hslToRgb,
+					rotateXZ: rotateXZ,
+					extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion
+				},
+				scene: {
 					maxSceneLights: sceneConfig.maxSceneLights,
 					sceneGlbAssets: sceneConfig.sceneGlbAssets,
-					emptyAudioMetrics: emptyAudioMetrics
+					emptyAudioMetrics: emptyAudioMetrics,
+					lighting: {
+						createController: window.createSceneLightingController,
+						getUniformLocations: window.getSceneLightingUniformLocations,
+						applyUniforms: window.applySceneLightingUniforms
+					},
+					glbAssets: {
+						createManager: window.createGlbAssetManager,
+						identityMatrix: identityMatrix,
+						multiplyMatrices: multiplyMatrices,
+						translateRotateYScale: translateRotateYScale
+					}
+				},
+				visualizer: {
+					createManager: window.createXrVisualizerManager
 				}
+			};
+
+			const appRuntime = window.createXrAppRuntime({
+				shell: appShell,
+				audioController: audioController,
+				locomotionController: locomotionController,
+				menuController: menuController,
+				sceneRenderer: sceneRenderer,
+				services: runtimeServices
 			});
 
 			appRuntime.init();

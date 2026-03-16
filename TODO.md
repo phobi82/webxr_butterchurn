@@ -64,21 +64,25 @@ Completed items stay checked. Open items remain unchecked until they are impleme
   - [ ] Review every custom module and document its effective public API.
   - [ ] Standardize lifecycle methods where useful.
     - [ ] Prefer consistent meanings for `init`, `reset`, `endSession`, and similar transitions.
+    - [x] Rename the menu-session reset hook to `resetSessionState()` so its lifecycle intent matches what it actually clears.
+    - [x] Hide the lighting preset index behind controller methods instead of exposing it as mutable public state.
     - [ ] Remove redundant public getters if a clearer shared state or config boundary exists.
   - [ ] Standardize state access patterns.
     - [x] Introduce a consolidated `getState()` path for menu runtime state and move runtime and renderer call sites away from multiple narrow menu getters.
     - [x] Route XR button-state changes through the shell API so runtime and entry wiring stop mutating XR control elements directly.
     - [x] Move desktop preview event registration into the menu controller so runtime no longer binds directly to preview-canvas internals.
+    - [x] Remove the last narrow desktop-preview visibility getter in favor of the existing menu `getState()` path.
+    - [x] Remove unused public alias methods and internal-only helper methods from the visualizer manager public surface.
     - [ ] Decide where `getState()` is better than multiple narrow getters.
     - [ ] Keep narrow getters only when they make call sites significantly clearer or reduce coupling.
 
 - [ ] Reduce remaining data clumps inside the runtime and module wiring.
-  - [ ] Review the `sharedResources` object in [`index.html`](./index.html) and [`xr-app-runtime.js`](./xr-app-runtime.js).
-    - [ ] Verify that each entry belongs there and is not a hidden global in disguise.
-    - [ ] Extract a clearer runtime resource shape if the current object becomes too broad.
+  - [ ] Review the mutable runtime resource object in [`index.html`](./index.html) and [`xr-app-runtime.js`](./xr-app-runtime.js).
+    - [x] Verify that each entry belongs there and is not a hidden global in disguise.
+    - [x] Extract a clearer runtime resource shape by grouping mutable runtime instances into `scene` and `visualizer` domains.
   - [ ] Review `sceneMath`, `math`, `factories`, and `config` passed into `createXrAppRuntime(...)`.
-    - [ ] Merge or rename groups where that would reduce cognitive overhead.
-    - [ ] Avoid turning config objects into generic dumping grounds.
+    - [x] Merge and rename the runtime wiring groups into domain-oriented `services` sections so the runtime no longer receives loose `factories`, `sceneMath`, `math`, and `config` bags.
+    - [x] Avoid turning config objects into generic dumping grounds by splitting runtime wiring into `browser`, `input`, `math`, `scene`, `visualizer`, and mutable `resources`.
 
 - [ ] Tighten the composition root in [`index.html`](./index.html) further without adding new modules.
   - [x] Check whether any remaining function in `index.html` is still runtime behavior instead of configuration.

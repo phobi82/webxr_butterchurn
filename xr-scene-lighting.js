@@ -171,10 +171,10 @@
 
 	window.createSceneLightingController = function() {
 		const state = createEmptyLightingState();
+		let currentPresetIndex = 0;
 		return {
-			currentPresetIndex: 0,
 			update: function(timeSeconds, audioMetrics) {
-				const preset = lightingPresetDefinitions[this.currentPresetIndex] || lightingPresetDefinitions[0];
+				const preset = lightingPresetDefinitions[currentPresetIndex] || lightingPresetDefinitions[0];
 				clearLightingState(state);
 				preset.buildState(state, timeSeconds || 0, audioMetrics || {});
 				state.name = preset.name;
@@ -192,19 +192,16 @@
 				return names;
 			},
 			getCurrentPresetIndex: function() {
-				return this.currentPresetIndex;
-			},
-			getCurrentPresetName: function() {
-				return lightingPresetDefinitions[this.currentPresetIndex] ? lightingPresetDefinitions[this.currentPresetIndex].name : "";
+				return currentPresetIndex;
 			},
 			getCurrentPresetDescription: function() {
-				return lightingPresetDefinitions[this.currentPresetIndex] ? lightingPresetDefinitions[this.currentPresetIndex].description : "";
+				return lightingPresetDefinitions[currentPresetIndex] ? lightingPresetDefinitions[currentPresetIndex].description : "";
 			},
 			selectPreset: function(index) {
 				if (!lightingPresetDefinitions.length) {
 					return Promise.resolve();
 				}
-				this.currentPresetIndex = (index + lightingPresetDefinitions.length) % lightingPresetDefinitions.length;
+				currentPresetIndex = (index + lightingPresetDefinitions.length) % lightingPresetDefinitions.length;
 				return Promise.resolve();
 			}
 		};
