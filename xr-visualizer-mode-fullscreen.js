@@ -48,13 +48,13 @@
 				this.source.ensureCanvasSize(width, height);
 				this.source.advanceFrame(timeSeconds);
 				if (this.lastPreparedTimeSeconds === timeSeconds && width === this.lastPreparedWidth && height === this.lastPreparedHeight) {
-					return this.source.getStateSnapshot();
+					return this.source.getState();
 				}
 				this.source.renderCanvas(timeSeconds);
 				this.lastPreparedTimeSeconds = timeSeconds;
 				this.lastPreparedWidth = width;
 				this.lastPreparedHeight = height;
-				return this.source.getStateSnapshot();
+				return this.source.getState();
 			},
 			drawPreScene: function(sourceState, frameState) {
 				const viewport = this.gl.getParameter(this.gl.VIEWPORT);

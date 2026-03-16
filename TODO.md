@@ -90,10 +90,10 @@ Completed items stay checked. Open items remain unchecked until they are impleme
   - [ ] Move any new runtime drift back into [`xr-app-runtime.js`](./xr-app-runtime.js) if it appears.
 
 - [ ] Clean up remaining odd constructions in [`xr-app-runtime.js`](./xr-app-runtime.js).
-  - [ ] Review repeated defensive patterns and inline fallbacks.
-  - [ ] Check whether callback objects can be simplified further without hiding behavior.
-  - [ ] Review event-handler closures for repeated logic that should be centralized.
-  - [ ] Remove any remaining one-off variables that only alias a value once without improving readability.
+  - [x] Review repeated defensive patterns and inline fallbacks.
+  - [x] Check whether callback objects can be simplified further without hiding behavior.
+  - [x] Review event-handler closures for repeated logic that should be centralized.
+  - [x] Remove any remaining one-off variables that only alias a value once without improving readability.
 
 - [ ] Review module reusability with the goal of making feature modules usable in other projects.
   - [ ] Check whether modules depend on browser globals more than necessary.
@@ -112,10 +112,10 @@ Completed items stay checked. Open items remain unchecked until they are impleme
   - [ ] Remove comments that only restate trivial code.
 
 - [ ] Do a final repo-wide smell pass after the API and state consolidation.
-  - [ ] Search again for mini-functions.
-  - [ ] Search again for unnecessary callback wrappers and return nesting.
-  - [ ] Search again for duplicate fallback logic.
-  - [ ] Search again for dead config fields or dead helper functions.
+  - [x] Search again for mini-functions.
+  - [x] Search again for unnecessary callback wrappers and return nesting.
+  - [x] Search again for duplicate fallback logic.
+  - [x] Search again for dead config fields or dead helper functions.
 
 - [ ] Keep documentation in sync with each remaining architectural step.
   - [ ] Update [`README.md`](./README.md) when a public-facing architectural boundary changes.

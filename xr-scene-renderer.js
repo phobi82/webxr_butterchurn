@@ -224,8 +224,8 @@
 		// The scene order stays centralized here so preview and XR use the same draw sequence.
 		const renderScene = function(args) {
 			const menuState = args.menuController.getState();
-			if (args.visualizerRenderer) {
-				args.visualizerRenderer.drawPreScene();
+			if (args.visualizerManager) {
+				args.visualizerManager.drawPreScene();
 			}
 			if (menuState.floorAlpha > 0.001) {
 				drawFloor(args.sceneLighting, args.getReactiveFloorColors());
@@ -233,8 +233,8 @@
 			if (args.glbAssetManager) {
 				args.glbAssetManager.draw(currentView, currentProj);
 			}
-			if (args.visualizerRenderer) {
-				args.visualizerRenderer.drawWorld();
+			if (args.visualizerManager) {
+				args.visualizerManager.drawWorld();
 			}
 			if (menuState.menuOpenBool) {
 				args.menuController.renderTexture(gl, menuTexture, args.menuContentState);
@@ -257,8 +257,8 @@
 					drawOverlayLine(ray.hitPoint, null, true, [0.2, 1, 0.2, 1]);
 				}
 			}
-			if (args.visualizerRenderer) {
-				args.visualizerRenderer.drawPostScene();
+			if (args.visualizerManager) {
+				args.visualizerManager.drawPostScene();
 			}
 		};
 
@@ -378,10 +378,10 @@
 					args.desktopMovementState.lookPitch
 				));
 				currentProj.set(perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
-				if (args.visualizerRenderer) {
-					args.visualizerRenderer.setRenderMatrices(currentView, currentProj);
-					args.visualizerRenderer.setViewFromMatrix(currentView, currentProj);
-					args.visualizerRenderer.update(args.previewTimeSeconds);
+				if (args.visualizerManager) {
+					args.visualizerManager.setRenderMatrices(currentView, currentProj);
+					args.visualizerManager.setViewFromMatrix(currentView, currentProj);
+					args.visualizerManager.update(args.previewTimeSeconds);
 				}
 				renderScene(args);
 			},
@@ -398,9 +398,9 @@
 					invertRigidViewMatrix(adjustedView, view.transform.matrix, eye.x, eye.y, eye.z);
 					currentView.set(adjustedView);
 					currentProj.set(view.projectionMatrix);
-					if (args.visualizerRenderer) {
-						args.visualizerRenderer.setRenderMatrices(currentView, currentProj);
-						args.visualizerRenderer.setEyeProjection(view.projectionMatrix);
+					if (args.visualizerManager) {
+						args.visualizerManager.setRenderMatrices(currentView, currentProj);
+						args.visualizerManager.setEyeProjection(view.projectionMatrix);
 					}
 					renderScene(args);
 				}

@@ -6,6 +6,8 @@
 
 	window.createXrMenuUi = function(options) {
 		options = options || {};
+		const emptyModeNames = ["No mode"];
+		const emptyPresetNames = ["No preset"];
 		const documentRef = options.documentRef || document;
 		const menuCanvas = documentRef.createElement("canvas");
 		menuCanvas.width = options.canvasWidth || 1280;
@@ -177,6 +179,10 @@
 			menuCtx.fillText(text, centerX, topY);
 		};
 
+		const getNonEmptyItems = function(items, fallbackItems) {
+			return items && items.length ? items : fallbackItems;
+		};
+
 		return {
 			menuCanvas: menuCanvas,
 			previewCanvas: previewCanvas,
@@ -234,11 +240,11 @@
 				renderState = renderState || {};
 				const layout = getLayoutMetrics();
 				const audioMetrics = renderState.audioMetrics || {};
-				const shaderModeNames = renderState.shaderModeNames && renderState.shaderModeNames.length ? renderState.shaderModeNames : ["No mode"];
+				const shaderModeNames = getNonEmptyItems(renderState.shaderModeNames, emptyModeNames);
 				const currentShaderModeIndex = clampNumber(renderState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
-				const lightPresetNames = renderState.lightPresetNames && renderState.lightPresetNames.length ? renderState.lightPresetNames : ["No preset"];
+				const lightPresetNames = getNonEmptyItems(renderState.lightPresetNames, emptyPresetNames);
 				const currentLightPresetIndex = clampNumber(renderState.currentLightPresetIndex || 0, 0, lightPresetNames.length - 1);
-				const presetNames = renderState.presetNames && renderState.presetNames.length ? renderState.presetNames : ["No preset"];
+				const presetNames = getNonEmptyItems(renderState.presetNames, emptyPresetNames);
 				const currentPresetIndex = clampNumber(renderState.currentPresetIndex || 0, 0, presetNames.length - 1);
 				const accentRgb = hslToRgb((renderState.sceneTimeSeconds || 0) * 0.03 + 0.04, 0.85, 0.62);
 				const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";

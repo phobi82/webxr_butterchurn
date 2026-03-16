@@ -177,7 +177,7 @@
 		};
 
 		const getSourceState = function() {
-			return manager.source.getStateSnapshot();
+			return manager.source.getState();
 		};
 
 		const notifyModes = function(methodName) {
@@ -205,7 +205,4 @@
 		return manager;
 	};
 
-	window.createXrBackgroundRenderer = function() {
-		return window.createXrVisualizerManager();
-	};
 })();

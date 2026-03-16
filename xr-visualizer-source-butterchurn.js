@@ -379,6 +379,7 @@
 					const combinedLevel = mainStats.combinedLevel;
 					const bassLevel = mainStats.bassLevel;
 					const spectralFluxLevel = mainStats.spectralFluxLevel;
+					// Fold broken one-sided tab capture back to mono so downstream metrics stay stable.
 					const monoFallbackBool = combinedLevel > 0.02 && (
 						leftStats.combinedLevel < combinedLevel * 0.12 && rightStats.combinedLevel > combinedLevel * 0.6 ||
 						rightStats.combinedLevel < combinedLevel * 0.12 && leftStats.combinedLevel > combinedLevel * 0.6
@@ -453,6 +454,7 @@
 					this.audioBeatBaseline += (bassLevel - this.audioBeatBaseline) * baselineBlend;
 					this.audioTransientBaseline += (transientInstant - this.audioTransientBaseline) * transientBaselineBlend;
 					this.beatCooldownSeconds = Math.max(0, this.beatCooldownSeconds - elapsedTimeSeconds);
+					// Beat pulses stay sparse so lighting and floor accents react to peaks instead of raw noise.
 					if (
 						this.beatCooldownSeconds <= 0 &&
 						bassRise > bassRiseThreshold &&
@@ -544,30 +546,11 @@
 				this.visualizer.render({elapsedTime: elapsedTimeSeconds});
 				this.canvasRenderVersion += 1;
 			},
-			getCurrentTextureSource: function() {
-				return this.canvas;
-			},
-			getCurrentPresetName: function() {
-				return this.presetNames[this.currentPresetIndex] || "";
-			},
-			getCurrentPresetObject: function() {
-				const presetName = this.getCurrentPresetName();
-				return presetName ? this.presetMap[presetName] || null : null;
-			},
 			getPresetNames: function() {
 				return this.presetNames.slice();
 			},
 			getCurrentPresetIndex: function() {
 				return this.currentPresetIndex;
-			},
-			getAudioLevel: function() {
-				return this.audioLevel;
-			},
-			getAudioPeak: function() {
-				return this.audioPeak;
-			},
-			getBeatPulse: function() {
-				return this.beatPulse;
 			},
 			getAudioMetrics: function() {
 				return {
@@ -586,10 +569,11 @@
 					stereoWidth: this.audioStereoWidth
 				};
 			},
-			getStateSnapshot: function() {
+			// Exposes the shared source snapshot consumed by the visualizer manager and fullscreen modes.
+			getState: function() {
+				const presetName = this.presetNames[this.currentPresetIndex] || "";
 				return {
-					presetName: this.getCurrentPresetName(),
-					presetObject: this.getCurrentPresetObject(),
+					presetName: presetName,
 					presetVersion: this.presetVersion,
 					audioVersion: this.audioVersion,
 					canvasRenderVersion: this.canvasRenderVersion,

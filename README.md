@@ -36,7 +36,7 @@ Current capabilities:
 - `xr-app-shell.js`: shared browser UI shell for the desktop control panel, status text, audio controls, and main canvas
 - `xr-app-runtime.js`: shared runtime layer for XR session lifecycle, desktop and XR frame loops, browser input wiring, and module orchestration
 - `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
-- `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, and UI state updates
+- `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, UI state updates, and visualizer-manager handoff
 - `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
 - `xr-menu-ui.js`: shared VR menu canvas renderer and mirrored desktop preview surface
 - `xr-menu-controller.js`: shared VR menu runtime state, XR ray handling, slider drag logic, and desktop menu interaction
@@ -125,6 +125,8 @@ The start page can switch between these audio inputs:
 - XR button-state updates now flow through the shell API, and desktop menu-preview event wiring now lives in `xr-menu-controller.js`, which reduces direct DOM coupling between the runtime layer and feature modules.
 - The scene-lighting and visualizer-manager modules now keep preset and mode internals private and expose only the smaller public API surface the runtime actually uses.
 - Runtime wiring now enters `xr-app-runtime.js` through a smaller `services` tree with explicit `browser`, `input`, `math`, `scene`, `visualizer`, and mutable `resources` sections, and those mutable runtime instances are now grouped into `scene` and `visualizer` domains instead of one flat bag.
+- The runtime and audio paths now refer to the shared visualizer runtime object consistently as a manager instead of mixing `renderer` and `manager`, which makes the render-pipeline renderer and the visualizer mode/state controller easier to tell apart.
+- Menu-content fallback defaults are now grouped in the runtime and menu UI instead of being repeated inline at each call site.
 - Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
 - `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
 - The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.

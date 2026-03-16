@@ -15,14 +15,23 @@
 		const menuController = options.menuController;
 		const sceneRenderer = options.sceneRenderer;
 		const resources = services.resources || {};
-		const sceneResources = resources.scene || {};
-		const visualizerResources = resources.visualizer || {};
+		resources.scene = resources.scene || {};
+		resources.visualizer = resources.visualizer || {};
+		const sceneResources = resources.scene;
+		const visualizerResources = resources.visualizer;
 		const inputConfig = services.input || {};
 		const math = services.math || {};
 		const sceneServices = services.scene || {};
 		const sceneLightingServices = sceneServices.lighting || {};
 		const glbAssetServices = sceneServices.glbAssets || {};
 		const visualizerServices = services.visualizer || {};
+		const fallbackShaderModeNames = ["toroidal"];
+		const fallbackLightPresetNames = ["Aurora Drift"];
+		const fallbackPresetNames = ["Preset 1"];
+		const fallbackLightPresetDescription = "Slow colorful overhead drift";
+		const emptyAudioMetrics = sceneServices.emptyAudioMetrics || {};
+		const sceneGlbAssets = sceneServices.sceneGlbAssets || [];
+		const maxSceneLights = sceneServices.maxSceneLights || 0;
 		const xrMovementState = locomotionController.createXrState();
 		const desktopMovementState = locomotionController.createDesktopState();
 		const state = {
@@ -43,15 +52,29 @@
 			});
 		};
 
+		const getMenuState = function() {
+			return menuController.getState();
+		};
+
+		const getLightingController = function() {
+			return sceneResources.lightingController || null;
+		};
+
+		const getVisualizerManager = function() {
+			return visualizerResources.manager || null;
+		};
+
 		const getAudioMetrics = function() {
-			return visualizerResources.renderer && visualizerResources.renderer.getAudioMetrics ? visualizerResources.renderer.getAudioMetrics() : sceneServices.emptyAudioMetrics;
+			const visualizerManager = getVisualizerManager();
+			return visualizerManager && visualizerManager.getAudioMetrics ? visualizerManager.getAudioMetrics() : emptyAudioMetrics;
 		};
 
 		const updateSceneLighting = function(timeSeconds) {
-			if (!sceneResources.lightingController) {
+			const lightingController = getLightingController();
+			if (!lightingController) {
 				return;
 			}
-			sceneResources.lightingController.update(timeSeconds, getAudioMetrics());
+			lightingController.update(timeSeconds, getAudioMetrics());
 		};
 
 		const lerpNumber = function(startValue, endValue, mixValue) {
@@ -60,7 +83,7 @@
 
 		const getAudioReactiveFloorColors = function() {
 			const audioMetrics = getAudioMetrics();
-			const menuState = menuController.getState();
+			const menuState = getMenuState();
 			const audioLevel = math.clampNumber(audioMetrics.level || 0, 0, 1);
 			const audioPeak = math.clampNumber(audioMetrics.peak || 0, 0, 1);
 			const beatPulse = math.clampNumber(audioMetrics.beatPulse || 0, 0, 1);
@@ -83,6 +106,7 @@
 			if (!state.baseRefSpace) {
 				return;
 			}
+			// XR origin offsets keep locomotion in app space while the headset still runs in local-floor space.
 			const offset = math.rotateXZ(-xrMovementState.origin.x, -xrMovementState.origin.z, -xrMovementState.heading);
 			state.xrRefSpace = state.baseRefSpace.getOffsetReferenceSpace(new xrRigidTransform(
 				{x: offset.x, y: -(xrMovementState.origin.y + xrMovementState.effectiveEyeHeightMeters - xrMovementState.currentBaseEyeHeightMeters), z: offset.z},
@@ -91,45 +115,48 @@
 		};
 
 		const cyclePreset = function(direction) {
-			if (!visualizerResources.renderer) {
+			const visualizerManager = getVisualizerManager();
+			if (!visualizerManager) {
 				return;
 			}
-			const presetNames = visualizerResources.renderer.getPresetNames();
+			const presetNames = visualizerManager.getPresetNames();
 			const presetCount = presetNames.length;
 			if (!presetCount) {
 				return;
 			}
-			let nextPresetIndex = visualizerResources.renderer.getCurrentPresetIndex();
+			let nextPresetIndex = visualizerManager.getCurrentPresetIndex();
 			nextPresetIndex = (nextPresetIndex + direction + presetCount) % presetCount;
-			visualizerResources.renderer.selectPreset(nextPresetIndex);
+			visualizerManager.selectPreset(nextPresetIndex);
 		};
 
 		const cycleShaderMode = function(direction) {
-			if (!visualizerResources.renderer || !visualizerResources.renderer.getModeNames || !visualizerResources.renderer.selectMode) {
+			const visualizerManager = getVisualizerManager();
+			if (!visualizerManager || !visualizerManager.getModeNames || !visualizerManager.selectMode) {
 				return;
 			}
-			const shaderModeNames = visualizerResources.renderer.getModeNames();
+			const shaderModeNames = visualizerManager.getModeNames();
 			const shaderModeCount = shaderModeNames.length;
 			if (!shaderModeCount) {
 				return;
 			}
-			let nextShaderModeIndex = visualizerResources.renderer.getCurrentModeIndex();
+			let nextShaderModeIndex = visualizerManager.getCurrentModeIndex();
 			nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
-			visualizerResources.renderer.selectMode(nextShaderModeIndex);
+			visualizerManager.selectMode(nextShaderModeIndex);
 		};
 
 		const cycleLightingPreset = function(direction) {
-			if (!sceneResources.lightingController) {
+			const lightingController = getLightingController();
+			if (!lightingController) {
 				return;
 			}
-			const lightPresetNames = sceneResources.lightingController.getPresetNames();
+			const lightPresetNames = lightingController.getPresetNames();
 			const lightPresetCount = lightPresetNames.length;
 			if (!lightPresetCount) {
 				return;
 			}
-			let nextLightPresetIndex = sceneResources.lightingController.getCurrentPresetIndex();
+			let nextLightPresetIndex = lightingController.getCurrentPresetIndex();
 			nextLightPresetIndex = (nextLightPresetIndex + direction + lightPresetCount) % lightPresetCount;
-			sceneResources.lightingController.selectPreset(nextLightPresetIndex);
+			lightingController.selectPreset(nextLightPresetIndex);
 		};
 
 		const xrMenuActionCallbacks = {
@@ -137,13 +164,14 @@
 			onLightPresetAction: cycleLightingPreset,
 			onPresetAction: cyclePreset
 		};
+		const cyclePresetFromDesktop = function(direction) {
+			audioController.activate();
+			cyclePreset(direction);
+		};
 		const desktopMenuActionCallbacks = {
 			onShaderModeAction: cycleShaderMode,
 			onLightPresetAction: cycleLightingPreset,
-			onPresetAction: function(direction) {
-				audioController.activate();
-				cyclePreset(direction);
-			}
+			onPresetAction: cyclePresetFromDesktop
 		};
 
 		const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -217,7 +245,7 @@
 			}
 			const basePose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : null;
 			const viewerTransform = basePose ? basePose.transform : pose.transform;
-			const menuState = menuController.getState();
+			const menuState = getMenuState();
 			const locomotionStep = locomotionController.applyXrLocomotion(xrMovementState, {
 				delta: delta,
 				viewerTransform: viewerTransform,
@@ -232,26 +260,41 @@
 		};
 
 		const getMenuContentState = function() {
+			const visualizerManager = getVisualizerManager();
+			const lightingController = getLightingController();
 			return {
 				sceneTimeSeconds: state.sceneTimeSeconds,
 				audioMetrics: getAudioMetrics(),
-				shaderModeNames: visualizerResources.renderer && visualizerResources.renderer.getModeNames ? visualizerResources.renderer.getModeNames() : ["toroidal"],
-				currentShaderModeIndex: visualizerResources.renderer && visualizerResources.renderer.getCurrentModeIndex ? visualizerResources.renderer.getCurrentModeIndex() : 0,
-				lightPresetNames: sceneResources.lightingController ? sceneResources.lightingController.getPresetNames() : ["Aurora Drift"],
-				currentLightPresetIndex: sceneResources.lightingController ? sceneResources.lightingController.getCurrentPresetIndex() : 0,
-				currentLightPresetDescription: sceneResources.lightingController ? sceneResources.lightingController.getCurrentPresetDescription() : "Slow colorful overhead drift",
-				presetNames: visualizerResources.renderer ? visualizerResources.renderer.getPresetNames() : ["Preset 1"],
-				currentPresetIndex: visualizerResources.renderer ? visualizerResources.renderer.getCurrentPresetIndex() : 0
+				shaderModeNames: visualizerManager && visualizerManager.getModeNames ? visualizerManager.getModeNames() : fallbackShaderModeNames,
+				currentShaderModeIndex: visualizerManager && visualizerManager.getCurrentModeIndex ? visualizerManager.getCurrentModeIndex() : 0,
+				lightPresetNames: lightingController ? lightingController.getPresetNames() : fallbackLightPresetNames,
+				currentLightPresetIndex: lightingController ? lightingController.getCurrentPresetIndex() : 0,
+				currentLightPresetDescription: lightingController ? lightingController.getCurrentPresetDescription() : fallbackLightPresetDescription,
+				presetNames: visualizerManager ? visualizerManager.getPresetNames() : fallbackPresetNames,
+				currentPresetIndex: visualizerManager ? visualizerManager.getCurrentPresetIndex() : 0
 			};
 		};
 
-		const updateDesktopMenuPreview = function() {
-			menuController.updateDesktopPreview({
+		const getDesktopMenuInteractionState = function() {
+			return {
 				xrSessionActiveBool: !!state.xrSession,
-				pointerLockedBool: state.desktopPointerLockedBool,
-				interactiveBool: !state.desktopPointerLockedBool && !state.xrSession,
+				pointerLockedBool: state.desktopPointerLockedBool
+			};
+		};
+
+		const updateDesktopMenuPreview = function(xrSessionActiveOverrideBool) {
+			const interactionState = getDesktopMenuInteractionState();
+			const xrSessionActiveBool = xrSessionActiveOverrideBool == null ? interactionState.xrSessionActiveBool : xrSessionActiveOverrideBool;
+			menuController.updateDesktopPreview({
+				xrSessionActiveBool: xrSessionActiveBool,
+				pointerLockedBool: interactionState.pointerLockedBool,
+				interactiveBool: !interactionState.pointerLockedBool && !xrSessionActiveBool,
 				renderState: getMenuContentState()
 			});
+		};
+
+		const isDesktopPointerLockInputActive = function() {
+			return state.desktopPointerLockedBool && !state.xrSession;
 		};
 
 		const renderXr = function(time, frame) {
@@ -266,21 +309,22 @@
 			applyLocomotion(delta, pose, frame);
 			const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 			updateMenuInput(frame, renderPose);
-			if (visualizerResources.renderer) {
+			const visualizerManager = getVisualizerManager();
+			if (visualizerManager) {
 				if (renderPose.transform && renderPose.views.length) {
-					visualizerResources.renderer.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
-					visualizerResources.renderer.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
+					visualizerManager.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
+					visualizerManager.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 				}
-				visualizerResources.renderer.update(time * 0.001);
+				visualizerManager.update(time * 0.001);
 			}
 			updateSceneLighting(time * 0.001);
 			sceneRenderer.renderXrViews({
 				baseLayer: state.xrSession.renderState.baseLayer,
 				pose: renderPose,
-				eyeDistanceMeters: menuController.getState().eyeDistanceMeters,
-				visualizerRenderer: visualizerResources.renderer,
+				eyeDistanceMeters: getMenuState().eyeDistanceMeters,
+				visualizerManager: visualizerManager,
 				glbAssetManager: sceneResources.assetManager,
-				sceneLighting: sceneResources.lightingController,
+				sceneLighting: getLightingController(),
 				menuController: menuController,
 				menuContentState: getMenuContentState(),
 				getReactiveFloorColors: getAudioReactiveFloorColors
@@ -295,14 +339,14 @@
 			const delta = state.previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTimeSeconds - state.previewLastRenderTime));
 			state.previewLastRenderTime = previewTimeSeconds;
 			state.sceneTimeSeconds = previewTimeSeconds;
-			locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getState().jumpMode);
+			locomotionController.applyDesktopPreviewMovement(desktopMovementState, delta, getMenuState().jumpMode);
 			updateSceneLighting(previewTimeSeconds);
 			sceneRenderer.renderPreviewFrame({
 				previewTimeSeconds: previewTimeSeconds,
 				desktopMovementState: desktopMovementState,
-				visualizerRenderer: visualizerResources.renderer,
+				visualizerManager: getVisualizerManager(),
 				glbAssetManager: sceneResources.assetManager,
-				sceneLighting: sceneResources.lightingController,
+				sceneLighting: getLightingController(),
 				menuController: menuController,
 				menuContentState: getMenuContentState(),
 				getReactiveFloorColors: getAudioReactiveFloorColors
@@ -327,8 +371,9 @@
 				enterEnabledBool: !!xrApi,
 				exitEnabledBool: false
 			});
-			if (visualizerResources.renderer) {
-				visualizerResources.renderer.onSessionEnd();
+			const visualizerManager = getVisualizerManager();
+			if (visualizerManager) {
+				visualizerManager.onSessionEnd();
 			}
 			xrMovementState.horizontalVelocityX = 0;
 			xrMovementState.horizontalVelocityZ = 0;
@@ -341,12 +386,7 @@
 				if (documentRef.pointerLockElement === shell.canvas && documentRef.exitPointerLock) {
 					documentRef.exitPointerLock();
 				}
-				menuController.updateDesktopPreview({
-					xrSessionActiveBool: true,
-					pointerLockedBool: state.desktopPointerLockedBool,
-					interactiveBool: false,
-					renderState: getMenuContentState()
-				});
+				updateDesktopMenuPreview(true);
 				state.xrSession = await xrApi.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
 				state.xrSession.addEventListener("end", endSession);
 				await state.gl.makeXRCompatible();
@@ -369,8 +409,9 @@
 					exitEnabledBool: true
 				});
 				state.lastRenderTime = 0;
-				if (visualizerResources.renderer) {
-					visualizerResources.renderer.onSessionStart();
+				const visualizerManager = getVisualizerManager();
+				if (visualizerManager) {
+					visualizerManager.onSessionStart();
 				}
 				state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 			} catch (error) {
@@ -418,15 +459,31 @@
 			desktopMovementState.jumpHeldBool = false;
 		};
 
+		const setDesktopPointerModifierState = function(event, pressedBool) {
+			if (!isDesktopPointerLockInputActive()) {
+				return false;
+			}
+			if (event.button === 0) {
+				desktopMovementState.sprintBool = pressedBool;
+			} else if (event.button === 2) {
+				desktopMovementState.crouchBool = pressedBool;
+			} else {
+				return false;
+			}
+			event.preventDefault();
+			return true;
+		};
+
+		const bindAsyncButton = function(button, action, fallbackMessage) {
+			button.addEventListener("click", function() {
+				runAudioAction(action(), fallbackMessage);
+			});
+		};
+
 		const registerEventHandlers = function() {
 			menuController.registerDesktopPreviewEvents({
 				callbacks: desktopMenuActionCallbacks,
-				getInteractionState: function() {
-					return {
-						xrSessionActiveBool: !!state.xrSession,
-						pointerLockedBool: state.desktopPointerLockedBool
-					};
-				}
+				getInteractionState: getDesktopMenuInteractionState
 			});
 
 			shell.enterButton.addEventListener("click", function() {
@@ -436,25 +493,11 @@
 				}
 			});
 
-			shell.audioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestSharedAudio(), "audio capture failed");
-			});
-
-			shell.youtubeAudioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestYoutubePlaylistAudio(), "youtube audio failed");
-			});
-
-			shell.sunoLiveRadioButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestSunoLiveRadioAudio(), "suno live radio audio failed");
-			});
-
-			shell.microphoneButton.addEventListener("click", function() {
-				runAudioAction(audioController.requestMicrophoneAudio(), "microphone capture failed");
-			});
-
-			shell.debugAudioButton.addEventListener("click", function() {
-				runAudioAction(audioController.startDebugAudio(), "debug audio failed");
-			});
+			bindAsyncButton(shell.audioButton, audioController.requestSharedAudio, "audio capture failed");
+			bindAsyncButton(shell.youtubeAudioButton, audioController.requestYoutubePlaylistAudio, "youtube audio failed");
+			bindAsyncButton(shell.sunoLiveRadioButton, audioController.requestSunoLiveRadioAudio, "suno live radio audio failed");
+			bindAsyncButton(shell.microphoneButton, audioController.requestMicrophoneAudio, "microphone capture failed");
+			bindAsyncButton(shell.debugAudioButton, audioController.startDebugAudio, "debug audio failed");
 
 			shell.stopAudioButton.addEventListener("click", function() {
 				audioController.stop();
@@ -496,36 +539,15 @@
 			});
 
 			documentRef.addEventListener("mousedown", function(event) {
-				if (state.xrSession || !state.desktopPointerLockedBool) {
-					return;
-				}
-				if (event.button === 0) {
-					desktopMovementState.sprintBool = true;
-					event.preventDefault();
-				}
-				if (event.button === 2) {
-					desktopMovementState.crouchBool = true;
-					event.preventDefault();
-				}
+				setDesktopPointerModifierState(event, true);
 			}, true);
 
 			documentRef.addEventListener("mouseup", function(event) {
-				if (event.button === 0) {
-					desktopMovementState.sprintBool = false;
-				}
-				if (event.button === 2) {
-					desktopMovementState.crouchBool = false;
-				}
-				if (state.xrSession || !state.desktopPointerLockedBool) {
-					return;
-				}
-				if (event.button === 0 || event.button === 2) {
-					event.preventDefault();
-				}
+				setDesktopPointerModifierState(event, false);
 			}, true);
 
 			documentRef.addEventListener("mousemove", function(event) {
-				if (!state.desktopPointerLockedBool || state.xrSession) {
+				if (!isDesktopPointerLockInputActive()) {
 					return;
 				}
 				desktopMovementState.lookYaw += event.movementX * inputConfig.desktopMouseSensitivity;
@@ -543,7 +565,7 @@
 					return;
 				}
 				if (event.code === "KeyM" && !event.repeat) {
-					menuController.setDesktopPreviewVisibleBool(!menuController.getState().desktopPreviewVisibleBool);
+					menuController.setDesktopPreviewVisibleBool(!getMenuState().desktopPreviewVisibleBool);
 					event.preventDefault();
 					return;
 				}
@@ -578,7 +600,7 @@
 				locomotionController.resetDesktopState(desktopMovementState);
 				if (sceneLightingServices.createController) {
 					sceneResources.lightingController = sceneLightingServices.createController();
-					sceneResources.lightingController.update(0, sceneServices.emptyAudioMetrics);
+					sceneResources.lightingController.update(0, emptyAudioMetrics);
 				}
 				if (glbAssetServices.createManager) {
 					try {
@@ -590,22 +612,22 @@
 							},
 							getSceneLightingUniformLocations: sceneLightingServices.getUniformLocations,
 							applySceneLightingUniforms: sceneLightingServices.applyUniforms,
-							maxSceneLights: sceneServices.maxSceneLights,
+							maxSceneLights: maxSceneLights,
 							identityMatrix: glbAssetServices.identityMatrix,
 							multiplyMatrices: glbAssetServices.multiplyMatrices,
 							translateRotateYScale: glbAssetServices.translateRotateYScale,
 							setStatus: shell.setStatus
 						});
 						sceneResources.assetManager.init();
-						await sceneResources.assetManager.loadAssets(sceneServices.sceneGlbAssets);
+						await sceneResources.assetManager.loadAssets(sceneGlbAssets);
 					} catch (error) {
 						shell.setStatus(error.message || "glb init failed");
 					}
 				}
 				if (visualizerServices.createManager) {
-					visualizerResources.renderer = visualizerServices.createManager();
-					visualizerResources.renderer.init({gl: state.gl});
-					audioController.setVisualizerRenderer(visualizerResources.renderer);
+					visualizerResources.manager = visualizerServices.createManager();
+					visualizerResources.manager.init({gl: state.gl});
+					audioController.setVisualizerManager(visualizerResources.manager);
 				}
 				if (!xrApi) {
 					shell.setXrState({

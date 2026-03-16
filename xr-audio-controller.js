@@ -1,9 +1,9 @@
 (function() {
-	// Owns audio source selection, stream cleanup, and renderer handoff.
+	// Owns audio source selection, stream cleanup, and visualizer-manager handoff.
 	window.createXrAudioController = function(options) {
 		options = options || {};
 		const controller = {
-			visualizerRenderer: null,
+			visualizerManager: null,
 			activeStream: null,
 			sourceKind: "none",
 			sourceName: "",
@@ -29,21 +29,17 @@
 			}
 		};
 
-		const getRenderer = function() {
-			return controller.visualizerRenderer;
-		};
-
-		// Replays the current controller state into a renderer after init or source changes.
+		// Replays the current controller state into the visualizer manager after init or source changes.
 		const applyRendererAudioState = function() {
-			const renderer = getRenderer();
-			if (!renderer) {
+			const visualizerManager = controller.visualizerManager;
+			if (!visualizerManager) {
 				return Promise.resolve();
 			}
-			if (controller.sourceKind === "debug" && renderer.startDebugAudio) {
-				return renderer.startDebugAudio();
+			if (controller.sourceKind === "debug" && visualizerManager.startDebugAudio) {
+				return visualizerManager.startDebugAudio();
 			}
-			if (renderer.setAudioStream) {
-				renderer.setAudioStream(controller.activeStream);
+			if (visualizerManager.setAudioStream) {
+				visualizerManager.setAudioStream(controller.activeStream);
 			}
 			return Promise.resolve();
 		};
@@ -91,19 +87,14 @@
 		};
 
 		const activateAudio = async function() {
-			const renderer = getRenderer();
-			if (!renderer || !renderer.activateAudio) {
+			const visualizerManager = controller.visualizerManager;
+			if (!visualizerManager || !visualizerManager.activateAudio) {
 				return;
 			}
 			try {
-				await renderer.activateAudio();
+				await visualizerManager.activateAudio();
 			} catch (error) {
 			}
-		};
-
-		const runActivated = async function(action) {
-			await activateAudio();
-			return action();
 		};
 
 		// Display capture is reused for generic sharing and tab-audio flows.
@@ -166,8 +157,8 @@
 		};
 
 		return {
-			setVisualizerRenderer: function(renderer) {
-				controller.visualizerRenderer = renderer || null;
+			setVisualizerManager: function(visualizerManager) {
+				controller.visualizerManager = visualizerManager || null;
 				return applyRendererAudioState();
 			},
 			activate: function() {
@@ -178,40 +169,39 @@
 				resetSourceState();
 				return applyRendererAudioState();
 			},
-			requestSharedAudio: function() {
-				return runActivated(requestDisplayAudio);
+			requestSharedAudio: async function() {
+				await activateAudio();
+				return requestDisplayAudio();
 			},
-			requestMicrophoneAudio: function() {
-				return runActivated(requestMicrophoneAudio);
+			requestMicrophoneAudio: async function() {
+				await activateAudio();
+				return requestMicrophoneAudio();
 			},
-			requestYoutubePlaylistAudio: function() {
-				return runActivated(async function() {
-					openSourceWindow("youtube", options.youtubePlaylistUrl, options.youtubeWindowName, "youtube tab blocked");
-					setStatus("select the YouTube tab and enable tab audio");
-					await requestDisplayAudio("YouTube playlist", {preferCurrentTab: false});
-					setStatus("youtube tab audio active");
-				});
+			requestYoutubePlaylistAudio: async function() {
+				await activateAudio();
+				openSourceWindow("youtube", options.youtubePlaylistUrl, options.youtubeWindowName, "youtube tab blocked");
+				setStatus("select the YouTube tab and enable tab audio");
+				await requestDisplayAudio("YouTube playlist", {preferCurrentTab: false});
+				setStatus("youtube tab audio active");
 			},
-			requestSunoLiveRadioAudio: function() {
-				return runActivated(async function() {
-					openSourceWindow("suno", options.sunoLiveRadioUrl, options.sunoWindowName, "suno live radio tab blocked");
-					setStatus("select the Suno Live Radio tab and enable tab audio");
-					await requestDisplayAudio("Suno Live Radio", {preferCurrentTab: false});
-					setStatus("suno live radio tab audio active");
-				});
+			requestSunoLiveRadioAudio: async function() {
+				await activateAudio();
+				openSourceWindow("suno", options.sunoLiveRadioUrl, options.sunoWindowName, "suno live radio tab blocked");
+				setStatus("select the Suno Live Radio tab and enable tab audio");
+				await requestDisplayAudio("Suno Live Radio", {preferCurrentTab: false});
+				setStatus("suno live radio tab audio active");
 			},
-			startDebugAudio: function() {
+			startDebugAudio: async function() {
 				clearActiveStream();
-				return runActivated(async function() {
-					const renderer = getRenderer();
-					if (!renderer || !renderer.startDebugAudio) {
-						return;
-					}
-					await renderer.startDebugAudio();
-					controller.sourceKind = "debug";
-					controller.sourceName = "debug signal";
-					updateUiState();
-				});
+				await activateAudio();
+				const visualizerManager = controller.visualizerManager;
+				if (!visualizerManager || !visualizerManager.startDebugAudio) {
+					return;
+				}
+				await visualizerManager.startDebugAudio();
+				controller.sourceKind = "debug";
+				controller.sourceName = "debug signal";
+				updateUiState();
 			}
 		};
 	};

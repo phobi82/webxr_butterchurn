@@ -173,20 +173,18 @@
 			}
 		};
 
-		const getStateSnapshot = function() {
-			return {
-				jumpMode: state.jumpMode,
-				menuOpenBool: state.menuOpenBool,
-				floorAlpha: state.floorAlpha,
-				eyeDistanceMeters: state.eyeDistanceMeters,
-				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
-				plane: menuPlane,
-				planeHeight: menuUi.getPlaneHeight(options.menuWidth)
-			};
-		};
-
 		return {
-			getState: getStateSnapshot,
+			getState: function() {
+				return {
+					jumpMode: state.jumpMode,
+					menuOpenBool: state.menuOpenBool,
+					floorAlpha: state.floorAlpha,
+					eyeDistanceMeters: state.eyeDistanceMeters,
+					desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
+					plane: menuPlane,
+					planeHeight: menuUi.getPlaneHeight(options.menuWidth)
+				};
+			},
 			getControllerRays: function() {
 				return controllerRays;
 			},
