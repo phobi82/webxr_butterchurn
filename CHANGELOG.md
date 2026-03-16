@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-03-16
+
 ### Changed
 - Moved audio-source lifecycle logic into a dedicated `xr-audio-controller.js` module so capture setup, debug-audio activation, tab opening, stream cleanup, and audio UI state are no longer mixed into `index.html`.
 - Moved collision handling, floor detection, XR movement physics, eye-height adjustment, and desktop first-person locomotion into a dedicated `xr-locomotion.js` module so the movement baseline is easier to maintain and no longer relies on hidden shared globals.
