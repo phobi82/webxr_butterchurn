@@ -3,14 +3,6 @@
 	const utils = window.xrVisualizerUtils;
 	const defaultPresetName = "martin - mucus cervix";
 
-	const createCanvas = function(width, height) {
-		const canvas = document.createElement("canvas");
-		canvas.width = width;
-		canvas.height = height;
-		canvas.style.display = "none";
-		return canvas;
-	};
-
 	const createAnalyser = function(audioContext) {
 		const analyser = audioContext.createAnalyser();
 		analyser.fftSize = 512;
@@ -52,9 +44,20 @@
 		};
 	};
 
-	window.createButterchurnVisualizerSource = function() {
-		const butterchurnApi = window.butterchurn && window.butterchurn.createVisualizer ? window.butterchurn : window.butterchurn && window.butterchurn.default && window.butterchurn.default.createVisualizer ? window.butterchurn.default : null;
-		const butterchurnPresetsApi = window.butterchurnPresets && window.butterchurnPresets.getPresets ? window.butterchurnPresets : window.butterchurnPresets && window.butterchurnPresets.default && window.butterchurnPresets.default.getPresets ? window.butterchurnPresets.default : null;
+	window.createButterchurnVisualizerSource = function(options) {
+		options = options || {};
+		const windowRef = options.windowRef || window;
+		const documentRef = options.documentRef || document;
+		const audioContextCtor = options.audioContextCtor || windowRef.AudioContext || windowRef.webkitAudioContext;
+		const butterchurnApi = options.butterchurnApi || (windowRef.butterchurn && windowRef.butterchurn.createVisualizer ? windowRef.butterchurn : windowRef.butterchurn && windowRef.butterchurn.default && windowRef.butterchurn.default.createVisualizer ? windowRef.butterchurn.default : null);
+		const butterchurnPresetsApi = options.butterchurnPresetsApi || (windowRef.butterchurnPresets && windowRef.butterchurnPresets.getPresets ? windowRef.butterchurnPresets : windowRef.butterchurnPresets && windowRef.butterchurnPresets.default && windowRef.butterchurnPresets.default.getPresets ? windowRef.butterchurnPresets.default : null);
+		const createCanvasElement = function(width, height) {
+			const canvas = documentRef.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			canvas.style.display = "none";
+			return canvas;
+		};
 		return {
 			canvas: null,
 			visualizer: null,
@@ -104,7 +107,7 @@
 			audioVersion: 0,
 			canvasRenderVersion: 0,
 			init: function(width, height) {
-				this.canvas = createCanvas(width, height);
+				this.canvas = createCanvasElement(width, height);
 				this.currentWidth = width;
 				this.currentHeight = height;
 				this.presetMap = butterchurnPresetsApi ? butterchurnPresetsApi.getPresets() : {};
@@ -120,7 +123,7 @@
 					}
 					return Promise.resolve();
 				}
-				this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+				this.audioContext = new audioContextCtor();
 				this.visualizer = butterchurnApi.createVisualizer(this.audioContext, this.canvas, {
 					width: this.currentWidth,
 					height: this.currentHeight,
@@ -583,10 +586,10 @@
 					timeSeconds: this.lastFrameTimeSeconds
 				};
 			},
-			onSessionStart: function() {
+			startSession: function() {
 				this.activate();
 			},
-			onSessionEnd: function() {
+			endSession: function() {
 			}
 		};
 	};

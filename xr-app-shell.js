@@ -3,19 +3,33 @@
 	window.createXrAppShell = function(options) {
 		options = options || {};
 		const documentRef = options.documentRef || document;
-		const body = documentRef.body;
+		const rootElement = options.rootElement || documentRef.body;
+		const panelParentElement = options.panelParentElement || rootElement;
+		const canvasParentElement = options.canvasParentElement || rootElement;
+		const applyStyles = function(element, styleMap) {
+			if (!styleMap) {
+				return;
+			}
+			const styleKeys = Object.keys(styleMap);
+			for (let i = 0; i < styleKeys.length; i += 1) {
+				element.style[styleKeys[i]] = styleMap[styleKeys[i]];
+			}
+		};
 		const panel = documentRef.createElement("div");
-		panel.style.position = "fixed";
-		panel.style.left = "12px";
-		panel.style.top = "12px";
-		panel.style.display = "flex";
-		panel.style.flexDirection = "column";
-		panel.style.gap = "8px";
-		panel.style.padding = "10px";
-		panel.style.backgroundColor = "rgba(0, 0, 32, 0.88)";
-		panel.style.border = "1px solid #ffff00";
-		panel.style.zIndex = "10";
-		body.appendChild(panel);
+		applyStyles(panel, {
+			position: "fixed",
+			left: "12px",
+			top: "12px",
+			display: "flex",
+			flexDirection: "column",
+			gap: "8px",
+			padding: "10px",
+			backgroundColor: "rgba(0, 0, 32, 0.88)",
+			border: "1px solid #ffff00",
+			zIndex: "10"
+		});
+		applyStyles(panel, options.panelStyle);
+		panelParentElement.appendChild(panel);
 
 		const title = documentRef.createElement("div");
 		title.textContent = options.title || "WebXR Visualizer Foundation";
@@ -134,10 +148,13 @@
 		audioSection.appendChild(audioHint);
 
 		const canvas = documentRef.createElement("canvas");
-		canvas.style.display = "block";
-		canvas.style.width = "100vw";
-		canvas.style.height = "100vh";
-		body.appendChild(canvas);
+		applyStyles(canvas, {
+			display: "block",
+			width: "100vw",
+			height: "100vh"
+		});
+		applyStyles(canvas, options.canvasStyle);
+		canvasParentElement.appendChild(canvas);
 
 		return {
 			panel: panel,
@@ -170,6 +187,23 @@
 				audioState = audioState || {};
 				audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
 				stopAudioButton.disabled = !audioState.stopEnabledBool;
+			},
+			syncCanvasToViewport: function(viewport) {
+				viewport = viewport || {};
+				const width = viewport.width == null ? 0 : viewport.width;
+				const height = viewport.height == null ? 0 : viewport.height;
+				const pixelRatio = viewport.pixelRatio == null ? 1 : viewport.pixelRatio;
+				canvas.width = width * pixelRatio;
+				canvas.height = height * pixelRatio;
+			},
+			requestCanvasPointerLock: function() {
+				if (canvas.requestPointerLock) {
+					canvas.requestPointerLock();
+				}
+			},
+			isCanvasPointerLocked: function(activeDocumentRef) {
+				const pointerDocumentRef = activeDocumentRef || documentRef;
+				return pointerDocumentRef.pointerLockElement === canvas;
 			}
 		};
 	};

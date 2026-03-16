@@ -9,6 +9,16 @@
 		const emptyModeNames = ["No mode"];
 		const emptyPresetNames = ["No preset"];
 		const documentRef = options.documentRef || document;
+		const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
+		const applyStyles = function(element, styleMap) {
+			if (!styleMap) {
+				return;
+			}
+			const styleKeys = Object.keys(styleMap);
+			for (let i = 0; i < styleKeys.length; i += 1) {
+				element.style[styleKeys[i]] = styleMap[styleKeys[i]];
+			}
+		};
 		const menuCanvas = documentRef.createElement("canvas");
 		menuCanvas.width = options.canvasWidth || 1280;
 		menuCanvas.height = options.canvasHeight || 960;
@@ -18,18 +28,21 @@
 		const previewWidthPixels = options.desktopMenuPreviewWidthPixels || 420;
 		previewCanvas.width = menuCanvas.width;
 		previewCanvas.height = menuCanvas.height;
-		previewCanvas.style.position = "fixed";
-		previewCanvas.style.right = "12px";
-		previewCanvas.style.top = "12px";
-		previewCanvas.style.width = previewWidthPixels + "px";
-		previewCanvas.style.height = Math.round(previewWidthPixels * menuCanvas.height / menuCanvas.width) + "px";
-		previewCanvas.style.border = "1px solid #ffff00";
-		previewCanvas.style.backgroundColor = "rgba(0, 0, 32, 0.92)";
-		previewCanvas.style.display = "block";
-		previewCanvas.style.pointerEvents = "auto";
-		previewCanvas.style.cursor = "pointer";
-		previewCanvas.style.zIndex = "20";
-		(options.parentElement || documentRef.body).appendChild(previewCanvas);
+		applyStyles(previewCanvas, {
+			position: "fixed",
+			right: "12px",
+			top: "12px",
+			width: previewWidthPixels + "px",
+			height: Math.round(previewWidthPixels * menuCanvas.height / menuCanvas.width) + "px",
+			border: "1px solid #ffff00",
+			backgroundColor: "rgba(0, 0, 32, 0.92)",
+			display: "block",
+			pointerEvents: "auto",
+			cursor: "pointer",
+			zIndex: "20"
+		});
+		applyStyles(previewCanvas, options.previewStyle);
+		previewParentElement.appendChild(previewCanvas);
 
 		// Layout metrics drive both drawing and interaction so the menu stays in sync.
 		const getLayoutMetrics = function() {
@@ -490,7 +503,7 @@
 			},
 			updateDesktopPreview: function(previewState) {
 				previewState = previewState || {};
-				if (!previewState.visible) {
+				if (!previewState.visibleBool) {
 					previewCanvas.style.display = "none";
 					return;
 				}

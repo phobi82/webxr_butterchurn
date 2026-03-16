@@ -2,7 +2,6 @@
 	// Owns WebGL setup and the shared scene draw pipeline for XR and desktop preview.
 	window.createXrSceneRenderer = function(options) {
 		const canvas = options.canvas;
-		const windowRef = options.windowRef || window;
 		let gl = null;
 		let colorProgram = null;
 		let litColorProgram = null;
@@ -364,8 +363,7 @@
 				return gl;
 			},
 			renderPreviewFrame: function(args) {
-				canvas.width = windowRef.innerWidth * windowRef.devicePixelRatio;
-				canvas.height = windowRef.innerHeight * windowRef.devicePixelRatio;
+				// The shell owns viewport pixel sizing so the renderer can stay focused on drawing only.
 				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 				gl.viewport(0, 0, canvas.width, canvas.height);
 				gl.clearColor(0.01, 0.01, 0.08, 1);
@@ -379,8 +377,7 @@
 				));
 				currentProj.set(perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
 				if (args.visualizerManager) {
-					args.visualizerManager.setRenderMatrices(currentView, currentProj);
-					args.visualizerManager.setViewFromMatrix(currentView, currentProj);
+					args.visualizerManager.setPreviewView(currentView, currentProj);
 					args.visualizerManager.update(args.previewTimeSeconds);
 				}
 				renderScene(args);
@@ -399,8 +396,7 @@
 					currentView.set(adjustedView);
 					currentProj.set(view.projectionMatrix);
 					if (args.visualizerManager) {
-						args.visualizerManager.setRenderMatrices(currentView, currentProj);
-						args.visualizerManager.setEyeProjection(view.projectionMatrix);
+						args.visualizerManager.setRenderView(currentView, currentProj);
 					}
 					renderScene(args);
 				}

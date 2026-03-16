@@ -16,7 +16,11 @@
 		return registeredModeNames.slice();
 	};
 
-	window.createXrVisualizerManager = function() {
+	window.createXrVisualizerManager = function(options) {
+		options = options || {};
+		const createVisualizerSource = options.createVisualizerSource || window.createButterchurnVisualizerSource;
+		const getModeNames = options.getModeNames || window.getRegisteredXrVisualizerModeNames;
+		const visualizerSourceOptions = options.visualizerSourceOptions || null;
 		const frameState = {
 			timeSeconds: 0,
 			headYaw: 0,
@@ -31,17 +35,30 @@
 			viewMatrix: new Float32Array(16),
 			projMatrix: new Float32Array(16)
 		};
+		const setHeadYaw = function(rawYaw) {
+			if (frameState.lastRawHeadYaw === undefined) {
+				frameState.headYaw = rawYaw;
+			} else {
+				frameState.headYaw = utils.unwrapAngle(rawYaw, frameState.lastRawHeadYaw) + (frameState.headYaw - frameState.lastRawHeadYaw);
+			}
+			frameState.lastRawHeadYaw = rawYaw;
+		};
+		const setProjectionState = function(projectionMatrix) {
+			frameState.projMatrix.set(projectionMatrix);
+			frameState.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
+			frameState.eyeCenterOffsetY = -(projectionMatrix[9] || 0) * 0.5;
+		};
 		const manager = {
 			gl: null,
-			source: null,
+			visualizerSource: null,
 			modeNames: [],
 			modes: {},
 			currentModeIndex: 0,
 			init: function(options) {
 				this.gl = options.gl;
-				this.source = window.createButterchurnVisualizerSource();
-				this.source.init(1, 1);
-				this.modeNames = window.getRegisteredXrVisualizerModeNames ? window.getRegisteredXrVisualizerModeNames() : [];
+				this.visualizerSource = createVisualizerSource(visualizerSourceOptions);
+				this.visualizerSource.init(1, 1);
+				this.modeNames = getModeNames ? getModeNames() : [];
 				this.modes = {};
 				for (let i = 0; i < this.modeNames.length; i += 1) {
 					const modeName = this.modeNames[i];
@@ -51,7 +68,7 @@
 					}
 					const mode = factory({
 						gl: this.gl,
-						source: this.source
+						visualizerSource: this.visualizerSource
 					});
 					if (!mode) {
 						continue;
@@ -59,7 +76,7 @@
 					if (mode.init) {
 						mode.init({
 							gl: this.gl,
-							source: this.source
+							visualizerSource: this.visualizerSource
 						});
 					}
 					this.modes[modeName] = mode;
@@ -70,49 +87,37 @@
 			},
 			update: function(timeSeconds) {
 				frameState.timeSeconds = timeSeconds;
-				this.source.advanceFrame(timeSeconds);
+				this.visualizerSource.advanceFrame(timeSeconds);
 				const mode = getActiveMode();
 				if (mode && mode.update) {
 					mode.update(getSourceState(), frameState);
 				}
 			},
-			setRenderMatrices: function(viewMatrix, projMatrix) {
+			setRenderView: function(viewMatrix, projectionMatrix) {
 				frameState.viewMatrix.set(viewMatrix);
-				frameState.projMatrix.set(projMatrix);
+				setProjectionState(projectionMatrix);
 			},
-			setViewFromMatrix: function(viewMatrix, projectionMatrix) {
+			setPreviewView: function(viewMatrix, projectionMatrix) {
 				const forwardAngles = utils.extractForwardYawPitch(viewMatrix);
 				const cameraPosition = utils.extractCameraPositionFromViewMatrix(viewMatrix);
 				const fov = utils.extractProjectionFov(projectionMatrix);
-				this.setHeadYaw(forwardAngles.yaw);
+				this.setRenderView(viewMatrix, projectionMatrix);
+				setHeadYaw(forwardAngles.yaw);
 				frameState.headPitch = forwardAngles.pitch;
 				frameState.headPositionX = cameraPosition.x;
 				frameState.headPositionY = cameraPosition.y;
 				frameState.headPositionZ = cameraPosition.z;
 				frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
 				frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
-				this.setEyeProjection(projectionMatrix);
 			},
 			setHeadPoseFromQuaternion: function(quaternion, projectionMatrix) {
 				const forwardAngles = utils.extractForwardYawPitchFromQuaternion(quaternion);
 				const fov = utils.extractProjectionFov(projectionMatrix);
-				this.setHeadYaw(forwardAngles.yaw);
+				setHeadYaw(forwardAngles.yaw);
 				frameState.headPitch = forwardAngles.pitch;
 				frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
 				frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
-				this.setEyeProjection(projectionMatrix);
-			},
-			setHeadYaw: function(rawYaw) {
-				if (frameState.lastRawHeadYaw === undefined) {
-					frameState.headYaw = rawYaw;
-				} else {
-					frameState.headYaw = utils.unwrapAngle(rawYaw, frameState.lastRawHeadYaw) + (frameState.headYaw - frameState.lastRawHeadYaw);
-				}
-				frameState.lastRawHeadYaw = rawYaw;
-			},
-			setEyeProjection: function(projectionMatrix) {
-				frameState.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
-				frameState.eyeCenterOffsetY = -(projectionMatrix[9] || 0) * 0.5;
+				setProjectionState(projectionMatrix);
 			},
 			setHeadPosition: function(x, y, z) {
 				frameState.headPositionX = x;
@@ -129,34 +134,30 @@
 				drawPhase("drawPostScene");
 			},
 			setAudioStream: function(stream) {
-				this.source.setAudioStream(stream);
+				this.visualizerSource.setAudioStream(stream);
 				notifyModes("onAudioChanged");
 			},
 			startDebugAudio: async function() {
-				await this.source.startDebugAudio();
+				await this.visualizerSource.startDebugAudio();
 				notifyModes("onAudioChanged");
 			},
 			activateAudio: function() {
-				return this.source.activate();
-			},
-			getPresetNames: function() {
-				return this.source.getPresetNames();
-			},
-			getCurrentPresetIndex: function() {
-				return this.source.getCurrentPresetIndex();
-			},
-			getModeNames: function() {
-				return this.modeNames.slice();
-			},
-			getCurrentModeIndex: function() {
-				return this.currentModeIndex;
+				return this.visualizerSource.activate();
 			},
 			getAudioMetrics: function() {
-				return this.source.getAudioMetrics ? this.source.getAudioMetrics() : emptyAudioMetrics;
+				return this.visualizerSource.getAudioMetrics ? this.visualizerSource.getAudioMetrics() : emptyAudioMetrics;
+			},
+			getSelectionState: function() {
+				return {
+					modeNames: this.modeNames.slice(),
+					currentModeIndex: this.currentModeIndex,
+					presetNames: this.visualizerSource.getPresetNames(),
+					currentPresetIndex: this.visualizerSource.getCurrentPresetIndex()
+				};
 			},
 			selectPreset: async function(index) {
-				await this.source.selectPreset(index, 1.2);
-				this.source.lastCanvasRenderTimeSeconds = 0;
+				await this.visualizerSource.selectPreset(index, 1.2);
+				this.visualizerSource.lastCanvasRenderTimeSeconds = 0;
 				notifyModes("onPresetChanged");
 			},
 			selectMode: function(index) {
@@ -166,18 +167,18 @@
 				this.currentModeIndex = (index + this.modeNames.length) % this.modeNames.length;
 				return Promise.resolve();
 			},
-			onSessionStart: function() {
-				this.source.onSessionStart();
+			startSession: function() {
+				this.visualizerSource.startSession();
 				notifyModes("onSessionStart");
 			},
-			onSessionEnd: function() {
-				this.source.onSessionEnd();
+			endSession: function() {
+				this.visualizerSource.endSession();
 				notifyModes("onSessionEnd");
 			}
 		};
 
 		const getSourceState = function() {
-			return manager.source.getState();
+			return manager.visualizerSource.getState();
 		};
 
 		const notifyModes = function(methodName) {

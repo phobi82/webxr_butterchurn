@@ -6,7 +6,7 @@
 		spec = spec || {};
 		return {
 			gl: null,
-			source: null,
+			visualizerSource: null,
 			programInfo: null,
 			positionBuffer: null,
 			sourceTexture: null,
@@ -18,7 +18,7 @@
 			lastPreparedHeight: 0,
 			init: function(options) {
 				this.gl = options.gl;
-				this.source = options.source;
+				this.visualizerSource = options.visualizerSource;
 				this.programInfo = glUtils.createFullscreenProgramInfo(this.gl, spec.fragmentSource, !!spec.includeAudioUniformsBool, spec.label || "Visualizer mode");
 				this.positionBuffer = glUtils.createFullscreenTriangleBuffer(this.gl);
 				this.sourceTexture = this.gl.createTexture();
@@ -45,16 +45,17 @@
 				this.lastPreparedTimeSeconds = -1;
 			},
 			prepareSourceFrame: function(width, height, timeSeconds) {
-				this.source.ensureCanvasSize(width, height);
-				this.source.advanceFrame(timeSeconds);
+				// Source rendering is cached per time/viewport so XR does not redraw the same Butterchurn frame for both eyes.
+				this.visualizerSource.ensureCanvasSize(width, height);
+				this.visualizerSource.advanceFrame(timeSeconds);
 				if (this.lastPreparedTimeSeconds === timeSeconds && width === this.lastPreparedWidth && height === this.lastPreparedHeight) {
-					return this.source.getState();
+					return this.visualizerSource.getState();
 				}
-				this.source.renderCanvas(timeSeconds);
+				this.visualizerSource.renderCanvas(timeSeconds);
 				this.lastPreparedTimeSeconds = timeSeconds;
 				this.lastPreparedWidth = width;
 				this.lastPreparedHeight = height;
-				return this.source.getState();
+				return this.visualizerSource.getState();
 			},
 			drawPreScene: function(sourceState, frameState) {
 				const viewport = this.gl.getParameter(this.gl.VIEWPORT);
@@ -65,6 +66,7 @@
 				if (!sourceCanvas) {
 					return;
 				}
+				// Texture uploads are versioned separately from source preparation so static frames do not churn GPU uploads.
 				if (sourceState.canvasRenderVersion !== this.lastUploadedCanvasVersion || width !== this.lastUploadedWidth || height !== this.lastUploadedHeight) {
 					this.uploadSourceTexture(sourceCanvas);
 					this.lastUploadedCanvasVersion = sourceState.canvasRenderVersion;

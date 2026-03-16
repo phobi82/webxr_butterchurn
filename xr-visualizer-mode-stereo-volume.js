@@ -3,7 +3,7 @@
 	window.registerXrVisualizerMode("stereoVolume", function() {
 		return {
 			gl: null,
-			source: null,
+			visualizerSource: null,
 			skyVertexCount: 0,
 			portalVertexCount: 0,
 			triangleVertexCount: 0,
@@ -11,7 +11,7 @@
 			texturedDraws: [],
 			init: function(options) {
 				this.gl = options.gl;
-				this.source = options.source;
+				this.visualizerSource = options.visualizerSource;
 			},
 			resetGeometry: function() {
 				// Keep the mode alive, but explicitly remove all render output.

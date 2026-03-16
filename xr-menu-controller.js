@@ -245,7 +245,7 @@
 				args = args || {};
 				applyDesktopHoverState(args.pointerLockedBool, args.xrSessionActiveBool);
 				options.menuUi.updateDesktopPreview({
-					visible: state.desktopPreviewVisibleBool,
+					visibleBool: state.desktopPreviewVisibleBool,
 					interactiveBool: !!args.interactiveBool,
 					renderState: this.getRenderState(args.renderState)
 				});

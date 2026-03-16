@@ -2,6 +2,12 @@
 	// Loads simple GLB scene props and renders them with the shared scene-lighting pipeline.
 	window.createGlbAssetManager = function(deps) {
 		const gl = deps.gl;
+		const fetchFn = deps.fetchFn || fetch;
+		const createImageBitmapFn = deps.createImageBitmapFn || null;
+		const imageCtor = deps.imageCtor || Image;
+		const blobCtor = deps.blobCtor || Blob;
+		const textDecoderCtor = deps.textDecoderCtor || TextDecoder;
+		const urlApi = deps.urlApi || URL;
 		const createProgram = deps.createProgram;
 		const identityMatrix = deps.identityMatrix;
 		const multiplyMatrices = deps.multiplyMatrices;
@@ -23,18 +29,18 @@
 		const assets = [];
 
 		const loadImageBitmapFromBlob = function(blob) {
-			if (window.createImageBitmap) {
-				return window.createImageBitmap(blob);
+			if (createImageBitmapFn) {
+				return createImageBitmapFn(blob);
 			}
 			return new Promise(function(resolve, reject) {
-				const image = new Image();
-				const imageUrl = URL.createObjectURL(blob);
+				const image = new imageCtor();
+				const imageUrl = urlApi.createObjectURL(blob);
 				image.onload = function() {
-					URL.revokeObjectURL(imageUrl);
+					urlApi.revokeObjectURL(imageUrl);
 					resolve(image);
 				};
 				image.onerror = function() {
-					URL.revokeObjectURL(imageUrl);
+					urlApi.revokeObjectURL(imageUrl);
 					reject(new Error("glb texture load failed"));
 				};
 				image.src = imageUrl;
@@ -135,7 +141,7 @@
 				}
 			},
 			loadAsset: async function(config) {
-				const response = await fetch(config.url, {mode: "cors"});
+				const response = await fetchFn(config.url, {mode: "cors"});
 				if (!response.ok) {
 					throw new Error("glb request failed: " + config.url);
 				}
@@ -145,8 +151,9 @@
 				if (headerView.getUint32(0, true) !== 0x46546c67) {
 					throw new Error("invalid glb header");
 				}
+				// This path only supports the simple single-mesh assets used by the scene props today.
 				const jsonChunkLength = headerView.getUint32(12, true);
-				const jsonText = new TextDecoder("utf-8").decode(new Uint8Array(arrayBuffer, 20, jsonChunkLength));
+				const jsonText = new textDecoderCtor("utf-8").decode(new Uint8Array(arrayBuffer, 20, jsonChunkLength));
 				const json = JSON.parse(jsonText);
 				const binaryChunkOffset = 20 + jsonChunkLength + 8;
 				const binaryChunkBytes = new Uint8Array(arrayBuffer, binaryChunkOffset);
@@ -159,7 +166,7 @@
 				const imageView = json.bufferViews[imageDef.bufferView];
 				const imageStart = binaryChunkOffset + (imageView.byteOffset || 0);
 				const imageEnd = imageStart + imageView.byteLength;
-				const imageBlob = new Blob([bytes.slice(imageStart, imageEnd)], {type: imageDef.mimeType || "image/png"});
+				const imageBlob = new blobCtor([bytes.slice(imageStart, imageEnd)], {type: imageDef.mimeType || "image/png"});
 				const imageBitmap = await loadImageBitmapFromBlob(imageBlob);
 				const positionBuffer = gl.createBuffer();
 				gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -184,6 +191,7 @@
 				gl.generateMipmap(gl.TEXTURE_2D);
 				const baseModelMatrix = json.nodes && json.nodes[0] && json.nodes[0].matrix ? new Float32Array(json.nodes[0].matrix) : identityMatrix();
 				const worldMatrix = createWorldMatrix(config, baseModelMatrix);
+				// Collision bounds are baked in world space so locomotion can query them like the fixed level boxes.
 				assets.push({
 					positionBuffer: positionBuffer,
 					normalBuffer: normalBuffer,

@@ -326,6 +326,7 @@
 				if (moveX !== 0 || moveY !== 0) {
 					const moveVector = normalize2d(moveX, moveY);
 					const movementSpeed = options.walkSpeed * (state.sprintBool ? options.sprintMultiplier : 1);
+					// Desktop yaw feeds the same collision resolver used by XR so floor and walls stay identical.
 					const moveStep = resolveHorizontalMovement(
 						state.origin.x,
 						state.origin.y,
@@ -372,6 +373,7 @@
 					const previousY = state.origin.y;
 					state.jumpVelocity += options.jumpGravity * delta;
 					state.origin.y += state.jumpVelocity * delta;
+					// Vertical resolution is separate so landings and ceiling hits clamp cleanly after horizontal stepping.
 					const resolvedVertical = resolveVerticalMovement(previousY, state.origin.y, state.origin.x, state.origin.z, playerHeight, state.eyeHeightMeters, state.jumpVelocity);
 					state.origin.y = resolvedVertical.y;
 					if (resolvedVertical.hitCeilingBool && state.jumpVelocity > 0) {
@@ -431,6 +433,7 @@
 				}
 				state.jumpPressedBool = args.locomotion.jumpRequestBool;
 				if (!args.menuOpenBool && args.locomotion.airBoostActiveBool && !groundedBool && args.locomotion.rightControllerBoostDir) {
+					// Air boosts modify stored momentum so they blend with the regular airborne drag path.
 					state.horizontalVelocityX += args.locomotion.rightControllerBoostDir.x * options.airBoostSpeed * args.delta;
 					state.horizontalVelocityZ += args.locomotion.rightControllerBoostDir.z * options.airBoostSpeed * args.delta;
 					state.jumpVelocity += args.locomotion.rightControllerBoostDir.y * options.airBoostSpeed * args.delta;
@@ -468,6 +471,7 @@
 					const previousY = state.origin.y;
 					state.jumpVelocity += options.jumpGravity * args.delta;
 					state.origin.y += state.jumpVelocity * args.delta;
+					// XR vertical motion resolves after walking and momentum so headset-space updates stay deterministic.
 					const resolvedVertical = resolveVerticalMovement(previousY, state.origin.y, state.origin.x, state.origin.z, playerHeight, state.effectiveEyeHeightMeters, state.jumpVelocity);
 					state.origin.y = resolvedVertical.y;
 					if (resolvedVertical.hitCeilingBool && state.jumpVelocity > 0) {

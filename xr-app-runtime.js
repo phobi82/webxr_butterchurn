@@ -68,6 +68,14 @@
 			const visualizerManager = getVisualizerManager();
 			return visualizerManager && visualizerManager.getAudioMetrics ? visualizerManager.getAudioMetrics() : emptyAudioMetrics;
 		};
+		const getVisualizerSelectionState = function() {
+			const visualizerManager = getVisualizerManager();
+			return visualizerManager && visualizerManager.getSelectionState ? visualizerManager.getSelectionState() : null;
+		};
+		const getLightingSelectionState = function() {
+			const lightingController = getLightingController();
+			return lightingController && lightingController.getSelectionState ? lightingController.getSelectionState() : null;
+		};
 
 		const updateSceneLighting = function(timeSeconds) {
 			const lightingController = getLightingController();
@@ -119,27 +127,27 @@
 			if (!visualizerManager) {
 				return;
 			}
-			const presetNames = visualizerManager.getPresetNames();
-			const presetCount = presetNames.length;
+			const visualizerSelectionState = getVisualizerSelectionState();
+			const presetCount = visualizerSelectionState ? visualizerSelectionState.presetNames.length : 0;
 			if (!presetCount) {
 				return;
 			}
-			let nextPresetIndex = visualizerManager.getCurrentPresetIndex();
+			let nextPresetIndex = visualizerSelectionState.currentPresetIndex;
 			nextPresetIndex = (nextPresetIndex + direction + presetCount) % presetCount;
 			visualizerManager.selectPreset(nextPresetIndex);
 		};
 
 		const cycleShaderMode = function(direction) {
 			const visualizerManager = getVisualizerManager();
-			if (!visualizerManager || !visualizerManager.getModeNames || !visualizerManager.selectMode) {
+			if (!visualizerManager || !visualizerManager.selectMode) {
 				return;
 			}
-			const shaderModeNames = visualizerManager.getModeNames();
-			const shaderModeCount = shaderModeNames.length;
+			const visualizerSelectionState = getVisualizerSelectionState();
+			const shaderModeCount = visualizerSelectionState ? visualizerSelectionState.modeNames.length : 0;
 			if (!shaderModeCount) {
 				return;
 			}
-			let nextShaderModeIndex = visualizerManager.getCurrentModeIndex();
+			let nextShaderModeIndex = visualizerSelectionState.currentModeIndex;
 			nextShaderModeIndex = (nextShaderModeIndex + direction + shaderModeCount) % shaderModeCount;
 			visualizerManager.selectMode(nextShaderModeIndex);
 		};
@@ -149,12 +157,12 @@
 			if (!lightingController) {
 				return;
 			}
-			const lightPresetNames = lightingController.getPresetNames();
-			const lightPresetCount = lightPresetNames.length;
+			const lightingSelectionState = getLightingSelectionState();
+			const lightPresetCount = lightingSelectionState ? lightingSelectionState.presetNames.length : 0;
 			if (!lightPresetCount) {
 				return;
 			}
-			let nextLightPresetIndex = lightingController.getCurrentPresetIndex();
+			let nextLightPresetIndex = lightingSelectionState.currentPresetIndex;
 			nextLightPresetIndex = (nextLightPresetIndex + direction + lightPresetCount) % lightPresetCount;
 			lightingController.selectPreset(nextLightPresetIndex);
 		};
@@ -260,18 +268,18 @@
 		};
 
 		const getMenuContentState = function() {
-			const visualizerManager = getVisualizerManager();
-			const lightingController = getLightingController();
+			const visualizerSelectionState = getVisualizerSelectionState();
+			const lightingSelectionState = getLightingSelectionState();
 			return {
 				sceneTimeSeconds: state.sceneTimeSeconds,
 				audioMetrics: getAudioMetrics(),
-				shaderModeNames: visualizerManager && visualizerManager.getModeNames ? visualizerManager.getModeNames() : fallbackShaderModeNames,
-				currentShaderModeIndex: visualizerManager && visualizerManager.getCurrentModeIndex ? visualizerManager.getCurrentModeIndex() : 0,
-				lightPresetNames: lightingController ? lightingController.getPresetNames() : fallbackLightPresetNames,
-				currentLightPresetIndex: lightingController ? lightingController.getCurrentPresetIndex() : 0,
-				currentLightPresetDescription: lightingController ? lightingController.getCurrentPresetDescription() : fallbackLightPresetDescription,
-				presetNames: visualizerManager ? visualizerManager.getPresetNames() : fallbackPresetNames,
-				currentPresetIndex: visualizerManager ? visualizerManager.getCurrentPresetIndex() : 0
+				shaderModeNames: visualizerSelectionState ? visualizerSelectionState.modeNames : fallbackShaderModeNames,
+				currentShaderModeIndex: visualizerSelectionState ? visualizerSelectionState.currentModeIndex : 0,
+				lightPresetNames: lightingSelectionState ? lightingSelectionState.presetNames : fallbackLightPresetNames,
+				currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
+				currentLightPresetDescription: lightingSelectionState ? lightingSelectionState.currentPresetDescription : fallbackLightPresetDescription,
+				presetNames: visualizerSelectionState ? visualizerSelectionState.presetNames : fallbackPresetNames,
+				currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0
 			};
 		};
 
@@ -373,7 +381,7 @@
 			});
 			const visualizerManager = getVisualizerManager();
 			if (visualizerManager) {
-				visualizerManager.onSessionEnd();
+				visualizerManager.endSession();
 			}
 			xrMovementState.horizontalVelocityX = 0;
 			xrMovementState.horizontalVelocityZ = 0;
@@ -383,7 +391,7 @@
 
 		const startSession = async function() {
 			try {
-				if (documentRef.pointerLockElement === shell.canvas && documentRef.exitPointerLock) {
+				if (shell.isCanvasPointerLocked(documentRef) && documentRef.exitPointerLock) {
 					documentRef.exitPointerLock();
 				}
 				updateDesktopMenuPreview(true);
@@ -411,7 +419,7 @@
 				state.lastRenderTime = 0;
 				const visualizerManager = getVisualizerManager();
 				if (visualizerManager) {
-					visualizerManager.onSessionStart();
+					visualizerManager.startSession();
 				}
 				state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 			} catch (error) {
@@ -511,14 +519,17 @@
 
 			windowRef.addEventListener("resize", function() {
 				if (!state.xrSession) {
-					shell.canvas.width = windowRef.innerWidth * windowRef.devicePixelRatio;
-					shell.canvas.height = windowRef.innerHeight * windowRef.devicePixelRatio;
+					shell.syncCanvasToViewport({
+						width: windowRef.innerWidth,
+						height: windowRef.innerHeight,
+						pixelRatio: windowRef.devicePixelRatio
+					});
 				}
 			});
 
 			shell.canvas.addEventListener("click", function() {
-				if (!state.xrSession && documentRef.pointerLockElement !== shell.canvas && shell.canvas.requestPointerLock) {
-					shell.canvas.requestPointerLock();
+				if (!state.xrSession && !shell.isCanvasPointerLocked(documentRef)) {
+					shell.requestCanvasPointerLock();
 				}
 			});
 
@@ -529,7 +540,7 @@
 			});
 
 			documentRef.addEventListener("pointerlockchange", function() {
-				state.desktopPointerLockedBool = documentRef.pointerLockElement === shell.canvas;
+				state.desktopPointerLockedBool = shell.isCanvasPointerLocked(documentRef);
 				if (state.desktopPointerLockedBool) {
 					menuController.clearDesktopPointerState();
 					return;
@@ -606,6 +617,12 @@
 					try {
 						sceneResources.assetManager = glbAssetServices.createManager({
 							gl: state.gl,
+							fetchFn: glbAssetServices.fetchFn,
+							createImageBitmapFn: glbAssetServices.createImageBitmapFn,
+							imageCtor: glbAssetServices.imageCtor,
+							blobCtor: glbAssetServices.blobCtor,
+							textDecoderCtor: glbAssetServices.textDecoderCtor,
+							urlApi: glbAssetServices.urlApi,
 							createProgram: sceneRenderer.createProgram,
 							getLightingState: function() {
 								return sceneResources.lightingController ? sceneResources.lightingController.getState() : null;
@@ -625,7 +642,11 @@
 					}
 				}
 				if (visualizerServices.createManager) {
-					visualizerResources.manager = visualizerServices.createManager();
+					visualizerResources.manager = visualizerServices.createManager({
+						createVisualizerSource: visualizerServices.createVisualizerSource,
+						getModeNames: visualizerServices.getModeNames,
+						visualizerSourceOptions: visualizerServices.visualizerSourceOptions
+					});
 					visualizerResources.manager.init({gl: state.gl});
 					audioController.setVisualizerManager(visualizerResources.manager);
 				}
@@ -636,13 +657,18 @@
 						exitEnabledBool: false
 					});
 				} else {
-					const supported = await xrApi.isSessionSupported("immersive-vr");
+					const supportedBool = await xrApi.isSessionSupported("immersive-vr");
 					shell.setXrState({
-						statusText: supported ? "ready" : "headset not detected.",
-						enterEnabledBool: supported,
+						statusText: supportedBool ? "ready" : "headset not detected.",
+						enterEnabledBool: supportedBool,
 						exitEnabledBool: false
 					});
 				}
+				shell.syncCanvasToViewport({
+					width: windowRef.innerWidth,
+					height: windowRef.innerHeight,
+					pixelRatio: windowRef.devicePixelRatio
+				});
 				windowRef.requestAnimationFrame(renderPreview);
 			}
 		};

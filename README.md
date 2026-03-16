@@ -2,56 +2,25 @@
 
 Local WebXR prototype built in plain HTML and vanilla JavaScript. The current goal is a stable movement and interaction baseline for an XR audiovisualizer: reliable locomotion, jumping, in-headset menu control, and Butterchurn-driven visuals that can respond to live audio.
 
-## Overview
+## What It Does
 
-This repository is the foundation phase of a browser-based WebXR audiovisualizer. It deliberately stays small: one HTML entry point, local browser execution, and no framework or build tooling.
+- immersive VR startup with `local-floor`
+- desktop preview when no XR session is active
+- XR and desktop locomotion with jumping, sprinting, crouching, tiptoe height control, and airborne boost
+- collidable level geometry plus a GLB scene prop
+- in-headset menu for jump mode, floor opacity, eye distance, visualizer mode, light preset, and Butterchurn preset
+- Butterchurn-driven visuals with a fullscreen toroidal mode and a placeholder `stereoVolume` world mode
+- audio input from shared display/tab audio, YouTube playlist, Suno Live Radio, microphone, or synthetic `Debug Audio`
+- shared audio-reactive scene lighting with `Aurora Drift` and `Disco Storm`
 
-Current capabilities:
+## Project Structure
 
-- immersive VR startup with `local-floor` reference space
-- desktop preview rendering when no XR session is active
-- first-person desktop preview controls with `WASD`, left mouse sprint, right mouse crouch, `Space`, mouse-look, and `M` for the mirrored VR menu
-- left-stick locomotion with head-relative movement
-- right-stick smooth turning plus crouch and tiptoe height control
-- sprint on the left trigger
-- jump, hold-to-jump-higher variable jump physics, double-jump, and multi-jump modes
-- in-air directional boost on the right trigger
-- simple collidable level geometry with platforms, walls, landing surfaces, ceiling checks, and smooth climbable obstacles
-- a textured goat model placed on the ground as a scene prop
-- automatic pose reset after falling out of bounds
-- an in-headset menu for jump mode, ground opacity, eye distance, audio metrics, visualizer-mode switching, light-preset switching, and preset switching
-- Butterchurn preset rendering on an offscreen canvas sized to the active display viewport for 1:1 texture sampling in canvas-driven modes
-- a toroidal fullscreen visualizer pass driven by head orientation
-- a layered Butterchurn world mode that turns preset structure into warped sky shells, luma-sliced feedback planes, embossed portal surfaces, hotspot shards, volumetric shape architecture, tube-like wave ribbons, halo gates, and motion-vector streaks
-- shared scene lighting with moving, audio-reactive, colorful top-light rigs that affect the floor, obstacle boxes, and GLB props
-- two lighting presets: `Aurora Drift` for slower overhead motion and `Disco Storm` for aggressive disco-style strobing
-- modular visualizer code split into shared Butterchurn source, render-phase-aware mode modules, and a mode manager
-- modular scene-lighting code split into a dedicated controller that feeds shared lighting uniforms to the world render paths
-- audio input from shared screen or tab audio, a dedicated YouTube playlist tab, Suno Live Radio, or microphone capture with beat and peak analysis
-- a built-in `Debug Audio` synth path that generates a repeatable synthetic source without requiring screen-share permission
-
-## Project Files
-
-- `index.html`: single-page app entry point and main XR logic
-- `xr-app-shell.js`: shared browser UI shell for the desktop control panel, status text, audio controls, and main canvas
-- `xr-app-runtime.js`: shared runtime layer for XR session lifecycle, desktop and XR frame loops, browser input wiring, and module orchestration
-- `glb-asset-manager.js`: reusable GLB loading and rendering path for simple scene props configured from `index.html`
-- `xr-audio-controller.js`: shared audio-source controller for stream capture, debug audio, external source tabs, UI state updates, and visualizer-manager handoff
-- `xr-locomotion.js`: shared collision, floor resolution, jump physics, XR locomotion, and desktop first-person movement state
-- `xr-menu-ui.js`: shared VR menu canvas renderer and mirrored desktop preview surface
-- `xr-menu-controller.js`: shared VR menu runtime state, XR ray handling, slider drag logic, and desktop menu interaction
-- `xr-scene-renderer.js`: shared WebGL setup plus the common XR and desktop scene-render pipeline
-- `xr-visualizer-utils.js`: shared pose and math helpers for XR visualizer modes, locomotion, and menu interaction
-- `xr-scene-lighting.js`: shared moving light presets and lighting-uniform helpers for scene geometry
-- `xr-visualizer-gl-utils.js`: reusable WebGL helpers for shader and fullscreen-pass setup
-- `xr-visualizer-source-butterchurn.js`: Butterchurn preset source, shared audio/frame analysis, and optional canvas output for canvas-driven modes
-- `xr-visualizer-manager.js`: mode registry, mode switching, and render-phase orchestration
-- `xr-visualizer-mode-fullscreen.js`: reusable fullscreen textured-mode helper for canvas-driven passes
-- `xr-visualizer-mode-toroidal.js`: toroidal pre-scene visualizer mode
-- `xr-visualizer-mode-stereo-volume.js`: layered world-space preset interpreter mode for textured shells, portals, and spatial geometry
-- `butterchurn.min.js`: bundled Butterchurn runtime
-- `butterchurnPresets.min.js`: bundled Butterchurn preset pack
-- `CHANGELOG.md`: notable user-facing changes
+- `index.html`: composition root and grouped config
+- `xr-app-shell.js`: desktop UI shell and main canvas
+- `xr-app-runtime.js`: XR session lifecycle, loops, and input orchestration
+- `xr-audio-controller.js`, `xr-locomotion.js`, `xr-menu-ui.js`, `xr-menu-controller.js`: feature modules for audio, movement, and menu handling
+- `xr-scene-renderer.js`, `xr-scene-lighting.js`, `glb-asset-manager.js`: scene rendering, lighting, and prop loading
+- `xr-visualizer-*.js`: Butterchurn source, mode manager, shared helpers, and render modes
 
 ## Requirements
 
@@ -79,14 +48,6 @@ The start page can switch between these audio inputs:
 - `Debug Audio`: start a synthetic shared audio source for visualizer debugging without screen sharing
 - `Stop Audio`: disconnect the active audio source
 
-## Desktop Panel
-
-- `Enter VR`: start an immersive session
-- `Exit VR`: end the immersive session
-- audio buttons: select or stop the active audio source
-- mirrored menu overlay: visible on desktop by default for preset, mode, and movement-debug interaction outside XR
-- lighting presets: switch between calmer and more aggressive audio-reactive world-light rigs from the mirrored VR menu
-
 ## Desktop Preview Controls
 
 - click the main view: capture mouse look with pointer lock
@@ -107,35 +68,16 @@ The start page can switch between these audio inputs:
 - Y (left controller): open or close the in-headset menu
 - trigger on a menu control: activate buttons and drag sliders in the in-headset menu
 
-## Notes
+## Architecture Summary
 
-- Everything runs locally in the browser.
-- Current work prioritizes XR locomotion and render-loop stability before deeper audiovisual features.
-- `toroidal` still uses the shared Butterchurn canvas as a fullscreen pass
-- `Debug Audio` now only provides a synthetic source signal; beat, bass, transient, and peak values are derived through the same shared analysis path as real inputs.
-- Shared audio analysis now exposes stereo-aware metrics such as left/right level, stereo balance, and stereo width, while mono-style inputs are auto-centered so they do not collapse into a false hard-left spatial bias.
-- `Aurora Drift` keeps the world lighting in a slower colorful overhead sweep, while `Disco Storm` pushes faster moving beams and stronger strobes for a more aggressive disco look.
-- The desktop preview now uses a first-person camera instead of the old orbiting debug camera, and the headset menu overlay is shown by default on page load. `M` toggles that same menu canvas for desktop debugging.
-- Audio source switching, stream cleanup, external source-tab handling, and debug-audio activation now live in `xr-audio-controller.js` instead of the main page script.
-- XR collision, jump handling, eye-height adjustment, and desktop first-person movement now live in `xr-locomotion.js` instead of being spread across `index.html`.
-- The VR menu canvas drawing stays in `xr-menu-ui.js`, while menu state, controller rays, slider drag handling, and desktop overlay interaction now live in `xr-menu-controller.js`, keeping `index.html` focused on orchestration, movement, and scene rendering.
-- The shared WebGL setup, scene draw order, floor and menu rendering, and XR/desktop view rendering now live in `xr-scene-renderer.js`, so `index.html` no longer carries the whole render pipeline inline.
-- The browser-side shell for the control panel, status labels, audio buttons, and main canvas now lives in `xr-app-shell.js`, which is the first step toward a clearer top-level hierarchy of shell, runtime orchestration, and reusable feature modules.
-- XR session setup, desktop and XR render loops, browser input listeners, and feature-module coordination now live in `xr-app-runtime.js`, keeping `index.html` closer to a composition root instead of a mixed control-flow file.
-- XR button-state updates now flow through the shell API, and desktop menu-preview event wiring now lives in `xr-menu-controller.js`, which reduces direct DOM coupling between the runtime layer and feature modules.
-- The scene-lighting and visualizer-manager modules now keep preset and mode internals private and expose only the smaller public API surface the runtime actually uses.
-- Runtime wiring now enters `xr-app-runtime.js` through a smaller `services` tree with explicit `browser`, `input`, `math`, `scene`, `visualizer`, and mutable `resources` sections, and those mutable runtime instances are now grouped into `scene` and `visualizer` domains instead of one flat bag.
-- The runtime and audio paths now refer to the shared visualizer runtime object consistently as a manager instead of mixing `renderer` and `manager`, which makes the render-pipeline renderer and the visualizer mode/state controller easier to tell apart.
-- Menu-content fallback defaults are now grouped in the runtime and menu UI instead of being repeated inline at each call site.
-- Shared vector math such as `rotateXZ`, 3D normalization, dot products, and quaternion forward-direction extraction now live in `xr-visualizer-utils.js` so the menu and locomotion paths stop duplicating the same helpers.
-- `stereoVolume` is currently stripped back to an empty placeholder mode while the previous world-space interpretation is being removed and reconsidered from scratch.
-- The modular split keeps shared audio metrics and preset handling in one place so new visualizer modes can be developed in their own files without rewriting the Butterchurn bridge.
+- `index.html` is now a composition root with grouped config and module wiring.
+- Browser UI, runtime orchestration, audio, locomotion, menu, scene rendering, lighting, GLB loading, and visualizer logic are separated into coherent modules.
+- Shared math, color helpers, and empty audio-metric defaults are centralized in `xr-visualizer-utils.js`.
+- Browser-specific dependencies are passed explicitly where useful so modules are less tied to globals.
 
-## Development
+## Current Status
 
-- Open the page directly in a browser for verification.
-- Use browser devtools for logging and debugging.
-- Keep movement changes small and testable so locomotion regressions stay easy to spot.
+- `stereoVolume` is intentionally a placeholder while that world-space mode is reconsidered
 
 ## GitHub Pages
 

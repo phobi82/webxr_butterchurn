@@ -58,7 +58,15 @@
 				title: "WebXR Visualizer Foundation",
 				xrHintText: "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.",
 				desktopHintText: "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.",
-				audioHintText: "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio."
+				audioHintText: "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.",
+				panelStyle: {
+					left: "12px",
+					top: "12px"
+				},
+				canvasStyle: {
+					width: "100vw",
+					height: "100vh"
+				}
 			};
 			const audioConfig = {
 				youtubePlaylistUrl: "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1",
@@ -111,7 +119,11 @@
 				initialJumpMode: "double",
 				initialFloorAlpha: 0.72,
 				initialEyeDistanceMeters: 0.064,
-				initialDesktopPreviewVisibleBool: true
+				initialDesktopPreviewVisibleBool: true,
+				previewStyle: {
+					right: "12px",
+					top: "12px"
+				}
 			};
 			const runtimeConfig = {
 				desktopMouseSensitivity: 0.0024,
@@ -135,6 +147,8 @@
 				xrHintText: shellConfig.xrHintText,
 				desktopHintText: shellConfig.desktopHintText,
 				audioHintText: shellConfig.audioHintText,
+				panelStyle: shellConfig.panelStyle,
+				canvasStyle: shellConfig.canvasStyle,
 				documentRef: document
 			});
 			const canvas = appShell.canvas;
@@ -142,6 +156,7 @@
 			const menuUi = window.createXrMenuUi({
 				documentRef: document,
 				desktopMenuPreviewWidthPixels: menuConfig.desktopMenuPreviewWidthPixels,
+				previewStyle: menuConfig.previewStyle,
 				jumpModeDoubleMinU: menuConfig.jumpModeDoubleMinU,
 				jumpModeDoubleMaxU: menuConfig.jumpModeDoubleMaxU,
 				jumpModeMultiMinU: menuConfig.jumpModeMultiMinU,
@@ -168,6 +183,10 @@
 			const basisScale = utils.basisScale;
 			const audioController = window.createXrAudioController({
 				setStatus: setStatus,
+				mediaDevices: navigator.mediaDevices || null,
+				openWindow: function(url, windowName) {
+					return window.open(url, windowName);
+				},
 				youtubePlaylistUrl: audioConfig.youtubePlaylistUrl,
 				youtubeWindowName: audioConfig.youtubeWindowName,
 				sunoLiveRadioUrl: audioConfig.sunoLiveRadioUrl,
@@ -221,7 +240,6 @@
 
 			const sceneRenderer = window.createXrSceneRenderer({
 				canvas: canvas,
-				windowRef: window,
 				onInitFailure: function() {
 					appShell.setXrState({
 						statusText: "WebGL not available.",
@@ -272,13 +290,25 @@
 					},
 					glbAssets: {
 						createManager: window.createGlbAssetManager,
+						fetchFn: window.fetch ? window.fetch.bind(window) : null,
+						createImageBitmapFn: window.createImageBitmap ? window.createImageBitmap.bind(window) : null,
+						imageCtor: window.Image,
+						blobCtor: window.Blob,
+						textDecoderCtor: window.TextDecoder,
+						urlApi: window.URL,
 						identityMatrix: identityMatrix,
 						multiplyMatrices: multiplyMatrices,
 						translateRotateYScale: translateRotateYScale
 					}
 				},
 				visualizer: {
-					createManager: window.createXrVisualizerManager
+					createManager: window.createXrVisualizerManager,
+					createVisualizerSource: window.createButterchurnVisualizerSource,
+					getModeNames: window.getRegisteredXrVisualizerModeNames,
+					visualizerSourceOptions: {
+						windowRef: window,
+						documentRef: document
+					}
 				}
 			};
 

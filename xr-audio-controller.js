@@ -2,6 +2,10 @@
 	// Owns audio source selection, stream cleanup, and visualizer-manager handoff.
 	window.createXrAudioController = function(options) {
 		options = options || {};
+		const mediaDevices = options.mediaDevices || (navigator.mediaDevices ? navigator.mediaDevices : null);
+		const openWindow = options.openWindow || function(url, windowName) {
+			return window.open(url, windowName);
+		};
 		const controller = {
 			visualizerManager: null,
 			activeStream: null,
@@ -30,7 +34,7 @@
 		};
 
 		// Replays the current controller state into the visualizer manager after init or source changes.
-		const applyRendererAudioState = function() {
+		const syncVisualizerAudioState = function() {
 			const visualizerManager = controller.visualizerManager;
 			if (!visualizerManager) {
 				return Promise.resolve();
@@ -70,7 +74,7 @@
 			controller.sourceKind = stream ? "stream" : "none";
 			controller.sourceName = stream ? sourceName || "shared surface" : "";
 			updateUiState();
-			await applyRendererAudioState();
+			await syncVisualizerAudioState();
 			if (!stream) {
 				return;
 			}
@@ -80,7 +84,7 @@
 					if (controller.activeStream === stream) {
 						controller.activeStream = null;
 						resetSourceState();
-						applyRendererAudioState();
+						syncVisualizerAudioState();
 					}
 				});
 			}
@@ -99,6 +103,9 @@
 
 		// Display capture is reused for generic sharing and tab-audio flows.
 		const requestDisplayAudio = async function(sourceName, optionOverrides) {
+			if (!mediaDevices || !mediaDevices.getDisplayMedia) {
+				throw new Error("display capture unavailable");
+			}
 			const optionsMap = {
 				video: true,
 				audio: {
@@ -117,7 +124,7 @@
 					optionsMap[overrideKeys[i]] = optionOverrides[overrideKeys[i]];
 				}
 			}
-			const stream = await navigator.mediaDevices.getDisplayMedia(optionsMap);
+			const stream = await mediaDevices.getDisplayMedia(optionsMap);
 			if (!stream.getAudioTracks().length) {
 				const tracks = stream.getTracks();
 				for (let i = 0; i < tracks.length; i += 1) {
@@ -129,7 +136,10 @@
 		};
 
 		const requestMicrophoneAudio = async function() {
-			const stream = await navigator.mediaDevices.getUserMedia({
+			if (!mediaDevices || !mediaDevices.getUserMedia) {
+				throw new Error("microphone capture unavailable");
+			}
+			const stream = await mediaDevices.getUserMedia({
 				audio: {
 					echoCancellation: false,
 					noiseSuppression: false,
@@ -143,7 +153,7 @@
 		// Reuse one window per external source so repeated clicks stay predictable.
 		const openSourceWindow = function(key, url, windowName, blockedMessage) {
 			if (!controller.windowHandles[key] || controller.windowHandles[key].closed) {
-				controller.windowHandles[key] = window.open(url, windowName);
+				controller.windowHandles[key] = openWindow(url, windowName);
 			} else {
 				controller.windowHandles[key].location.href = url;
 			}
@@ -159,7 +169,7 @@
 		return {
 			setVisualizerManager: function(visualizerManager) {
 				controller.visualizerManager = visualizerManager || null;
-				return applyRendererAudioState();
+				return syncVisualizerAudioState();
 			},
 			activate: function() {
 				return activateAudio();
@@ -167,7 +177,7 @@
 			stop: function() {
 				clearActiveStream();
 				resetSourceState();
-				return applyRendererAudioState();
+				return syncVisualizerAudioState();
 			},
 			requestSharedAudio: async function() {
 				await activateAudio();
