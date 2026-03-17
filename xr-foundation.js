@@ -1062,13 +1062,21 @@ const createXrSessionBridge = function(options) {
 			const baseRefSpace = await session.requestReferenceSpace("local-floor");
 			return {session: session, baseRefSpace: baseRefSpace};
 		},
-		createOffsetReferenceSpace: function(baseRefSpace, movementState) {
-			if (!baseRefSpace || !xrRigidTransform) {
+		createOffsetReferenceSpace: function(baseRefSpace, movementState, viewerTransform) {
+			if (!baseRefSpace || !xrRigidTransform || !viewerTransform || !viewerTransform.position) {
 				return baseRefSpace;
 			}
-			const offset = rotateXZ(-movementState.origin.x, -movementState.origin.z, -movementState.heading);
+			const desiredHeadOffset = rotateXZ(movementState.headPosition.x, movementState.headPosition.z, movementState.heading);
+			const desiredHeadX = movementState.playerPosition.x + desiredHeadOffset.x;
+			const desiredHeadY = movementState.playerPosition.y + movementState.headPosition.y;
+			const desiredHeadZ = movementState.playerPosition.z + desiredHeadOffset.z;
+			const offset = rotateXZ(-desiredHeadX, -desiredHeadZ, -movementState.heading);
 			return baseRefSpace.getOffsetReferenceSpace(new xrRigidTransform(
-				{x: offset.x, y: -(movementState.origin.y + movementState.effectiveEyeHeightMeters - movementState.currentBaseEyeHeightMeters), z: offset.z},
+				{
+					x: viewerTransform.position.x + offset.x,
+					y: viewerTransform.position.y - desiredHeadY,
+					z: viewerTransform.position.z + offset.z
+				},
 				{x: 0, y: Math.sin(-movementState.heading * 0.5), z: 0, w: Math.cos(-movementState.heading * 0.5)}
 			));
 		}

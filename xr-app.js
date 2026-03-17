@@ -548,8 +548,8 @@ const createRuntime = function(options) {
 			grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(menuState.floorAlpha * 0.72, menuState.floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
 		};
 	};
-	const updateReferenceSpace = function() {
-		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState);
+	const updateReferenceSpace = function(viewerTransform) {
+		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
 	};
 	const cycleSelection = function(controller, getSelectionState, namesKey, indexKey, selectFn, direction) {
 		if (!controller) {
@@ -652,11 +652,12 @@ const createRuntime = function(options) {
 			return;
 		}
 		const basePose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : null;
-		const viewerTransform = basePose ? basePose.transform : pose.transform;
+		const rawViewerTransform = basePose ? basePose.transform : pose.transform;
+		const renderSpaceInitializedBool = state.xrRefSpace !== state.baseRefSpace;
 		const menuState = menuController.getState();
-		const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {delta: delta, viewerTransform: viewerTransform, turnAnchorPosition: basePose ? viewerTransform.position : null, locomotion: readLocomotionInput(frame), jumpMode: menuState.jumpMode, menuOpenBool: menuState.menuOpenBool});
+		const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {delta: delta, renderedTransform: pose.transform, viewerTransform: rawViewerTransform, renderSpaceInitializedBool: renderSpaceInitializedBool, locomotion: readLocomotionInput(frame), jumpMode: menuState.jumpMode, menuOpenBool: menuState.menuOpenBool});
 		if (locomotionStep.referenceSpaceUpdateNeededBool) {
-			updateReferenceSpace();
+			updateReferenceSpace(rawViewerTransform);
 		}
 	};
 	const renderXr = function(time, frame) {
@@ -726,7 +727,7 @@ const createRuntime = function(options) {
 			state.baseRefSpace = xrState.baseRefSpace;
 			locomotion.resetXrState(xrMovementState);
 			menuController.resetSessionState();
-			updateReferenceSpace();
+			state.xrRefSpace = state.baseRefSpace;
 			shell.setXrState({statusText: "session running", enterEnabledBool: false, exitEnabledBool: true});
 			state.lastRenderTime = 0;
 			if (state.visualizerEngine) {
@@ -833,6 +834,7 @@ const createRuntime = function(options) {
 			state.visualizerEngine = createVisualizerEngine ? createVisualizerEngine(state.gl) : null;
 			if (state.visualizerEngine) {
 				audioController.setAudioBackend(state.visualizerEngine);
+				audioController.activate().catch(function() {});
 			}
 			if (!sessionBridge.isAvailable()) {
 				shell.setXrState({statusText: "WebXR not available.", enterEnabledBool: false, exitEnabledBool: false});
@@ -848,14 +850,6 @@ const createRuntime = function(options) {
 
 // app/config.js
 const appConfig = {
-	shell: {
-		title: "WebXR Visualizer Foundation",
-		xrHintText: "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.",
-		desktopHintText: "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.",
-		audioHintText: "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.",
-		panelStyle: {left: "12px", top: "12px"},
-		canvasStyle: {width: "100vw", height: "100vh"}
-	},
 	audio: {
 		youtubePlaylistUrl: "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1",
 		youtubeWindowName: "webxrYoutubePlaylist",
@@ -907,7 +901,7 @@ const appConfig = {
 		initialJumpMode: "double",
 		initialFloorAlpha: 0.72,
 		initialEyeDistanceMeters: 0.064,
-		initialDesktopPreviewVisibleBool: true,
+		initialDesktopPreviewVisibleBool: false,
 		previewStyle: {right: "12px", top: "12px"}
 	},
 	runtime: {
@@ -943,7 +937,6 @@ const appConfig = {
 const createApp = function(projectConfig) {
 	projectConfig = projectConfig || {};
 	const config = {
-		shell: Object.assign({}, appConfig.shell, projectConfig.shell || {}),
 		audio: Object.assign({}, appConfig.audio, projectConfig.audio || {}),
 		locomotion: Object.assign({}, appConfig.locomotion, projectConfig.locomotion || {}),
 		menu: Object.assign({}, appConfig.menu, projectConfig.menu || {}),
@@ -951,20 +944,10 @@ const createApp = function(projectConfig) {
 		scene: Object.assign({}, appConfig.scene, projectConfig.scene || {})
 	};
 	let assetStoreRef = null;
-	document.body.style.backgroundColor = "#000020";
-	document.body.style.color = "#ffff00";
-	document.body.style.margin = "0";
-	document.body.style.overflow = "hidden";
-	document.body.style.fontFamily = "Arial, sans-serif";
-	const shell = createShell({
-		title: config.shell.title,
-		xrHintText: config.shell.xrHintText,
-		desktopHintText: config.shell.desktopHintText,
-		audioHintText: config.shell.audioHintText,
-		panelStyle: config.shell.panelStyle,
-		canvasStyle: config.shell.canvasStyle,
-		documentRef: document
-	});
+	const shell = window.appShell;
+	if (!shell || !shell.canvas) {
+		throw new Error("appShell missing. Load the shell setup in index.html before xr-app.js.");
+	}
 	const menuView = createMenuView(Object.assign({documentRef: document}, config.menu));
 	const menuController = createMenuController(Object.assign({menuView: menuView, menuWidth: config.scene.menuWidth}, config.menu));
 	const audioController = createAudioSourceController({

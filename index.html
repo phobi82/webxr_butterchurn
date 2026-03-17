@@ -7,321 +7,203 @@
 	<body>
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
-		<script src="xr-app-shell.js"></script>
-		<script src="xr-app-runtime.js"></script>
-		<script src="xr-visualizer-utils.js"></script>
-		<script src="xr-audio-controller.js"></script>
-		<script src="xr-locomotion.js"></script>
-		<script src="xr-menu-ui.js"></script>
-		<script src="xr-menu-controller.js"></script>
-		<script src="xr-scene-renderer.js"></script>
-		<script src="xr-scene-lighting.js"></script>
-		<script src="xr-visualizer-gl-utils.js"></script>
-		<script src="xr-visualizer-source-butterchurn.js"></script>
-		<script src="xr-visualizer-manager.js"></script>
-		<script src="xr-visualizer-mode-fullscreen.js"></script>
-		<script src="xr-visualizer-mode-toroidal.js"></script>
-		<script src="xr-visualizer-mode-stereo-volume.js"></script>
-		<script src="glb-asset-manager.js"></script>
+		<script src="xr-foundation.js"></script>
+		<script src="xr-light-presets.js"></script>
+		<script src="xr-visualizer-modes.js"></script>
+		<script src="xr-world.js"></script>
+		<script src="xr-menu.js"></script>
 		<script>
-			// Main app entry: owns XR session setup, desktop preview, world rendering, and UI wiring.
 			document.body.style.backgroundColor = "#000020";
 			document.body.style.color = "#ffff00";
 			document.body.style.margin = "0";
 			document.body.style.overflow = "hidden";
 			document.body.style.fontFamily = "Arial, sans-serif";
 
-			// Group related tuning together so each module is wired with one coherent config object.
-			const sceneConfig = {
-				floorHalfSize: 40,
-				maxSceneLights: window.xrSceneLighting && window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS ? window.xrSceneLighting.MAX_DIRECTIONAL_LIGHTS : 4,
-				menuWidth: 0.74,
-				sceneGlbAssets: [
-				{
-					url: "https://phobi82.github.io/Phobis-Crystal-Lake/goat.glb",
-					position: {x: -1.4, y: 0.256, z: -2.6},
-					scale: 1,
-					rotationY: -0.55,
-					collisionBool: true
-				}
-				],
-				levelBoxes: [
-				{x: 0, y: 0.6, z: -6, width: 2.4, height: 1.2, depth: 2.4, color: [0.2, 0.72, 1, 0.72]},
-				{x: -3.6, y: 0.9, z: -10.5, width: 2.6, height: 1.8, depth: 2.6, color: [1, 0.55, 0.2, 0.72]},
-				{x: 4.2, y: 1.3, z: -13.5, width: 3, height: 2.6, depth: 3, color: [0.3, 1, 0.55, 0.72]},
-				{x: 0, y: 1.2, z: -18, width: 8, height: 2.4, depth: 1.3, color: [1, 0.28, 0.42, 0.68]},
-				{x: -8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.95, 0.2, 0.8, 0.48]},
-				{x: 8.5, y: 1.6, z: -8, width: 1.2, height: 3.2, depth: 10, color: [0.1, 0.95, 0.9, 0.48]}
-				]
-			};
-			const shellConfig = {
-				title: "WebXR Visualizer Foundation",
-				xrHintText: "VR: left stick move, right stick turn, A jump, Y menu, trigger menu select / slider drag.",
-				desktopHintText: "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.",
-				audioHintText: "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.",
-				panelStyle: {
-					left: "12px",
-					top: "12px"
-				},
-				canvasStyle: {
-					width: "100vw",
-					height: "100vh"
-				}
-			};
-			const audioConfig = {
-				youtubePlaylistUrl: "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1",
-				youtubeWindowName: "webxrYoutubePlaylist",
-				sunoLiveRadioUrl: "https://suno.com/labs/live-radio",
-				sunoWindowName: "webxrSunoLiveRadio"
-			};
-			const locomotionConfig = {
-				walkSpeed: 4,
-				sprintMultiplier: 2,
-				turnSpeed: 2,
-				jumpSpeed: 3.55,
-				jumpHoldBoostSpeed: 6.5,
-				jumpHoldMaxSeconds: 0.22,
-				airBoostSpeed: 14,
-				airMomentumDrag: 0.35,
-				groundMomentumDrag: 10,
-				doubleJumpMaxCount: 2,
-				jumpGravity: -8.6,
-				fallResetY: -25,
-				playerRadius: 0.32,
-				playerHeadClearance: 0.12,
-				defaultEyeHeight: 1.7, // Body height minus 10 cm.
-				tiptoeEyeHeightBoost: 0.3,
-				crouchMinEyeHeight: 0.5,
-				crouchSpeed: 1.8,
-				climbSpeed: 2.4,
-				stepHeight: 0.5,
-				desktopStartZ: 5.6,
-				desktopStartPitch: -0.16
-			};
-			const menuConfig = {
-				rayLength: 4,
-				eyeDistanceMin: 0.02,
-				eyeDistanceMax: 0.2,
-				floorAlphaMin: 0,
-				floorAlphaMax: 1,
-				desktopMenuPreviewWidthPixels: 420,
-				jumpModeDoubleMinU: 0.1,
-				jumpModeDoubleMaxU: 0.45,
-				jumpModeMultiMinU: 0.55,
-				jumpModeMultiMaxU: 0.9,
-				menuSliderMinU: 0.18,
-				menuSliderMaxU: 0.82,
-				menuSliderHalfHeight: 0.055,
-				presetPrevMinU: 0.08,
-				presetPrevMaxU: 0.22,
-				presetNextMinU: 0.78,
-				presetNextMaxU: 0.92,
-				initialJumpMode: "double",
-				initialFloorAlpha: 0.72,
-				initialEyeDistanceMeters: 0.064,
-				initialDesktopPreviewVisibleBool: true,
-				previewStyle: {
-					right: "12px",
-					top: "12px"
-				}
-			};
-			const runtimeConfig = {
-				desktopMouseSensitivity: 0.0024,
-				stickDeadzone: 0.08,
-				stanceStickDeadzone: 0.22,
-				stanceVerticalDominanceMargin: 0.12
-			};
+			const panel = document.createElement("div");
+			applyStyles(panel, {
+				position: "fixed",
+				left: "12px",
+				top: "12px",
+				display: "flex",
+				flexDirection: "column",
+				gap: "8px",
+				padding: "10px",
+				backgroundColor: "rgba(0, 0, 32, 0.88)",
+				border: "1px solid #ffff00",
+				zIndex: "10"
+			});
+			document.body.appendChild(panel);
 
-			// Runtime-owned instances stay grouped by domain so cross-module links stay explicit.
-			const runtimeResources = {
-				scene: {
-					assetManager: null,
-					lightingController: null
-				},
-				visualizer: {
-					manager: null
-				}
-			};
-			const appShell = window.createXrAppShell({
-				title: shellConfig.title,
-				xrHintText: shellConfig.xrHintText,
-				desktopHintText: shellConfig.desktopHintText,
-				audioHintText: shellConfig.audioHintText,
-				panelStyle: shellConfig.panelStyle,
-				canvasStyle: shellConfig.canvasStyle,
-				documentRef: document
-			});
-			const canvas = appShell.canvas;
-			const setStatus = appShell.setStatus;
-			const menuUi = window.createXrMenuUi({
-				documentRef: document,
-				desktopMenuPreviewWidthPixels: menuConfig.desktopMenuPreviewWidthPixels,
-				previewStyle: menuConfig.previewStyle,
-				jumpModeDoubleMinU: menuConfig.jumpModeDoubleMinU,
-				jumpModeDoubleMaxU: menuConfig.jumpModeDoubleMaxU,
-				jumpModeMultiMinU: menuConfig.jumpModeMultiMinU,
-				jumpModeMultiMaxU: menuConfig.jumpModeMultiMaxU,
-				menuSliderMinU: menuConfig.menuSliderMinU,
-				menuSliderMaxU: menuConfig.menuSliderMaxU,
-				menuSliderHalfHeight: menuConfig.menuSliderHalfHeight,
-				presetPrevMinU: menuConfig.presetPrevMinU,
-				presetPrevMaxU: menuConfig.presetPrevMaxU,
-				presetNextMinU: menuConfig.presetNextMinU,
-				presetNextMaxU: menuConfig.presetNextMaxU
-			});
+			const title = document.createElement("div");
+			title.textContent = "WebXR Visualizer Foundation";
+			title.style.fontWeight = "bold";
+			panel.appendChild(title);
 
-			const utils = window.xrVisualizerUtils;
-			const clampNumber = utils.clampNumber;
-			const hslToRgb = utils.hslToRgb;
-			const emptyAudioMetrics = utils.emptyAudioMetrics;
-			const rotateXZ = utils.rotateXZ;
-			const extractForwardDirectionFromQuaternion = utils.extractForwardDirectionFromQuaternion;
-			const identityMatrix = utils.identityMatrix;
-			const multiplyMatrices = utils.multiplyMatrices;
-			const translateScale = utils.translateScale;
-			const translateRotateYScale = utils.translateRotateYScale;
-			const basisScale = utils.basisScale;
-			const audioController = window.createXrAudioController({
-				setStatus: setStatus,
-				mediaDevices: navigator.mediaDevices || null,
-				openWindow: function(url, windowName) {
-					return window.open(url, windowName);
-				},
-				youtubePlaylistUrl: audioConfig.youtubePlaylistUrl,
-				youtubeWindowName: audioConfig.youtubeWindowName,
-				sunoLiveRadioUrl: audioConfig.sunoLiveRadioUrl,
-				sunoWindowName: audioConfig.sunoWindowName,
-				onStateChange: appShell.setAudioState
-			});
-			const locomotionController = window.createXrLocomotionController({
-				defaultEyeHeight: locomotionConfig.defaultEyeHeight,
-				playerHeadClearance: locomotionConfig.playerHeadClearance,
-				floorHalfSize: sceneConfig.floorHalfSize,
-				playerRadius: locomotionConfig.playerRadius,
-				stepHeight: locomotionConfig.stepHeight,
-				crouchMinEyeHeight: locomotionConfig.crouchMinEyeHeight,
-				tiptoeEyeHeightBoost: locomotionConfig.tiptoeEyeHeightBoost,
-				crouchSpeed: locomotionConfig.crouchSpeed,
-				walkSpeed: locomotionConfig.walkSpeed,
-				sprintMultiplier: locomotionConfig.sprintMultiplier,
-				climbSpeed: locomotionConfig.climbSpeed,
-				jumpGravity: locomotionConfig.jumpGravity,
-				jumpSpeed: locomotionConfig.jumpSpeed,
-				jumpHoldBoostSpeed: locomotionConfig.jumpHoldBoostSpeed,
-				jumpHoldMaxSeconds: locomotionConfig.jumpHoldMaxSeconds,
-				doubleJumpMaxCount: locomotionConfig.doubleJumpMaxCount,
-				airBoostSpeed: locomotionConfig.airBoostSpeed,
-				airMomentumDrag: locomotionConfig.airMomentumDrag,
-				groundMomentumDrag: locomotionConfig.groundMomentumDrag,
-				fallResetY: locomotionConfig.fallResetY,
-				turnSpeed: locomotionConfig.turnSpeed,
-				desktopStartZ: locomotionConfig.desktopStartZ,
-				desktopStartPitch: locomotionConfig.desktopStartPitch,
-				levelBoxes: sceneConfig.levelBoxes,
-				getGlbCollisionBoxes: function() {
-					return runtimeResources.scene.assetManager && runtimeResources.scene.assetManager.getCollisionBoxes ? runtimeResources.scene.assetManager.getCollisionBoxes() : [];
-				}
-			});
-			const menuController = window.createXrMenuController({
-				menuUi: menuUi,
-				menuWidth: sceneConfig.menuWidth,
-				rayLength: menuConfig.rayLength,
-				menuSliderMinU: menuConfig.menuSliderMinU,
-				menuSliderMaxU: menuConfig.menuSliderMaxU,
-				eyeDistanceMin: menuConfig.eyeDistanceMin,
-				eyeDistanceMax: menuConfig.eyeDistanceMax,
-				floorAlphaMin: menuConfig.floorAlphaMin,
-				floorAlphaMax: menuConfig.floorAlphaMax,
-				initialJumpMode: menuConfig.initialJumpMode,
-				initialFloorAlpha: menuConfig.initialFloorAlpha,
-				initialEyeDistanceMeters: menuConfig.initialEyeDistanceMeters,
-				initialDesktopPreviewVisibleBool: menuConfig.initialDesktopPreviewVisibleBool
-			});
+			const statusLabel = document.createElement("div");
+			statusLabel.textContent = "XR: checking support...";
+			statusLabel.style.fontSize = "14px";
+			panel.appendChild(statusLabel);
 
-			const sceneRenderer = window.createXrSceneRenderer({
+			const xrHint = document.createElement("div");
+			xrHint.textContent = "VR: left stick move, right stick turn plus crouch/tiptoe head height, A jump, Y menu, trigger menu select / slider drag.";
+			xrHint.style.fontSize = "13px";
+			xrHint.style.color = "#00ff00";
+			panel.appendChild(xrHint);
+
+			const desktopHint = document.createElement("div");
+			desktopHint.textContent = "Desktop: click view + mouse look, WASD move, left mouse sprint, right mouse crouch, Space jump, M menu.";
+			desktopHint.style.fontSize = "13px";
+			desktopHint.style.color = "#00ff00";
+			panel.appendChild(desktopHint);
+
+			const xrSection = document.createElement("div");
+			xrSection.style.display = "flex";
+			xrSection.style.flexDirection = "column";
+			xrSection.style.gap = "6px";
+			xrSection.style.padding = "8px";
+			xrSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
+			panel.appendChild(xrSection);
+
+			const xrSectionLabel = document.createElement("div");
+			xrSectionLabel.textContent = "XR";
+			xrSectionLabel.style.fontSize = "12px";
+			xrSectionLabel.style.fontWeight = "bold";
+			xrSectionLabel.style.color = "#00ff00";
+			xrSection.appendChild(xrSectionLabel);
+
+			const xrButtonRow = document.createElement("div");
+			xrButtonRow.style.display = "flex";
+			xrButtonRow.style.flexWrap = "wrap";
+			xrButtonRow.style.gap = "8px";
+			xrSection.appendChild(xrButtonRow);
+
+			const enterButton = document.createElement("button");
+			enterButton.textContent = "Enter VR";
+			xrButtonRow.appendChild(enterButton);
+
+			const exitButton = document.createElement("button");
+			exitButton.textContent = "Exit VR";
+			exitButton.disabled = true;
+			xrButtonRow.appendChild(exitButton);
+
+			const audioSection = document.createElement("div");
+			audioSection.style.display = "flex";
+			audioSection.style.flexDirection = "column";
+			audioSection.style.gap = "6px";
+			audioSection.style.padding = "8px";
+			audioSection.style.border = "1px solid rgba(255, 255, 0, 0.35)";
+			panel.appendChild(audioSection);
+
+			const audioSectionLabel = document.createElement("div");
+			audioSectionLabel.textContent = "Audio";
+			audioSectionLabel.style.fontSize = "12px";
+			audioSectionLabel.style.fontWeight = "bold";
+			audioSectionLabel.style.color = "#00ff00";
+			audioSection.appendChild(audioSectionLabel);
+
+			const audioSourceRow = document.createElement("div");
+			audioSourceRow.style.display = "flex";
+			audioSourceRow.style.flexWrap = "wrap";
+			audioSourceRow.style.gap = "8px";
+			audioSection.appendChild(audioSourceRow);
+
+			const audioButton = document.createElement("button");
+			audioButton.textContent = "Share Audio";
+			audioSourceRow.appendChild(audioButton);
+
+			const microphoneButton = document.createElement("button");
+			microphoneButton.textContent = "Use Microphone";
+			audioSourceRow.appendChild(microphoneButton);
+
+			const debugAudioButton = document.createElement("button");
+			debugAudioButton.textContent = "Debug Audio";
+			audioSourceRow.appendChild(debugAudioButton);
+
+			const stopAudioButton = document.createElement("button");
+			stopAudioButton.textContent = "Stop Audio";
+			stopAudioButton.disabled = true;
+			audioSourceRow.appendChild(stopAudioButton);
+
+			const audioPlaylistRow = document.createElement("div");
+			audioPlaylistRow.style.display = "flex";
+			audioPlaylistRow.style.flexWrap = "wrap";
+			audioPlaylistRow.style.gap = "8px";
+			audioSection.appendChild(audioPlaylistRow);
+
+			const youtubeAudioButton = document.createElement("button");
+			youtubeAudioButton.textContent = "YouTube Playlist";
+			audioPlaylistRow.appendChild(youtubeAudioButton);
+
+			const sunoLiveRadioButton = document.createElement("button");
+			sunoLiveRadioButton.textContent = "Suno Live Radio";
+			audioPlaylistRow.appendChild(sunoLiveRadioButton);
+
+			const audioLabel = document.createElement("div");
+			audioLabel.textContent = "Audio: none";
+			audioLabel.style.fontSize = "13px";
+			audioSection.appendChild(audioLabel);
+
+			const audioHint = document.createElement("div");
+			audioHint.textContent = "YouTube Playlist and Suno Live Radio open the tab automatically. In the share dialog, choose that tab and enable tab audio.";
+			audioHint.style.fontSize = "12px";
+			audioHint.style.maxWidth = "360px";
+			audioHint.style.color = "#00ff00";
+			audioSection.appendChild(audioHint);
+
+			const canvas = document.createElement("canvas");
+			applyStyles(canvas, {display: "block", width: "100vw", height: "100vh"});
+			document.body.appendChild(canvas);
+
+			window.appShell = {
+				panel: panel,
 				canvas: canvas,
-				onInitFailure: function() {
-					appShell.setXrState({
-						statusText: "WebGL not available.",
-						enterEnabledBool: false,
-						exitEnabledBool: false
-					});
+				enterButton: enterButton,
+				exitButton: exitButton,
+				audioButton: audioButton,
+				microphoneButton: microphoneButton,
+				debugAudioButton: debugAudioButton,
+				stopAudioButton: stopAudioButton,
+				youtubeAudioButton: youtubeAudioButton,
+				sunoLiveRadioButton: sunoLiveRadioButton,
+				setStatus: function(text) {
+					statusLabel.textContent = "XR: " + text;
 				},
-				clampNumber: clampNumber,
-				levelBoxes: sceneConfig.levelBoxes,
-				floorHalfSize: sceneConfig.floorHalfSize,
-				menuWidth: sceneConfig.menuWidth,
-				identityMatrix: identityMatrix,
-				translateScale: translateScale,
-				basisScale: basisScale,
-				maxSceneLights: sceneConfig.maxSceneLights,
-				getSceneLightingUniformLocations: window.getSceneLightingUniformLocations,
-				applySceneLightingUniforms: window.applySceneLightingUniforms
-			});
-			const runtimeServices = {
-				resources: runtimeResources,
-				browser: {
-					windowRef: window,
-					documentRef: document,
-					xrApi: navigator.xr || null,
-					xrWebGLLayer: window.XRWebGLLayer || null,
-					xrRigidTransform: window.XRRigidTransform || null
-				},
-				input: {
-					desktopMouseSensitivity: runtimeConfig.desktopMouseSensitivity,
-					stickDeadzone: runtimeConfig.stickDeadzone,
-					stanceStickDeadzone: runtimeConfig.stanceStickDeadzone,
-					stanceVerticalDominanceMargin: runtimeConfig.stanceVerticalDominanceMargin
-				},
-				math: {
-					clampNumber: clampNumber,
-					hslToRgb: hslToRgb,
-					rotateXZ: rotateXZ,
-					extractForwardDirectionFromQuaternion: extractForwardDirectionFromQuaternion
-				},
-				scene: {
-					maxSceneLights: sceneConfig.maxSceneLights,
-					sceneGlbAssets: sceneConfig.sceneGlbAssets,
-					emptyAudioMetrics: emptyAudioMetrics,
-					lighting: {
-						createController: window.createSceneLightingController,
-						getUniformLocations: window.getSceneLightingUniformLocations,
-						applyUniforms: window.applySceneLightingUniforms
-					},
-					glbAssets: {
-						createManager: window.createGlbAssetManager,
-						fetchFn: window.fetch ? window.fetch.bind(window) : null,
-						createImageBitmapFn: window.createImageBitmap ? window.createImageBitmap.bind(window) : null,
-						imageCtor: window.Image,
-						blobCtor: window.Blob,
-						textDecoderCtor: window.TextDecoder,
-						urlApi: window.URL,
-						identityMatrix: identityMatrix,
-						multiplyMatrices: multiplyMatrices,
-						translateRotateYScale: translateRotateYScale
+				setXrState: function(args) {
+					args = args || {};
+					if (args.statusText != null) {
+						statusLabel.textContent = "XR: " + args.statusText;
+					}
+					if (args.enterEnabledBool != null) {
+						enterButton.disabled = !args.enterEnabledBool;
+					}
+					if (args.exitEnabledBool != null) {
+						exitButton.disabled = !args.exitEnabledBool;
 					}
 				},
-				visualizer: {
-					createManager: window.createXrVisualizerManager,
-					createVisualizerSource: window.createButterchurnVisualizerSource,
-					getModeNames: window.getRegisteredXrVisualizerModeNames,
-					visualizerSourceOptions: {
-						windowRef: window,
-						documentRef: document
+				setAudioState: function(audioState) {
+					audioState = audioState || {};
+					audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
+					stopAudioButton.disabled = !audioState.stopEnabledBool;
+				},
+				syncCanvasToViewport: function(viewport) {
+					viewport = viewport || {};
+					const width = viewport.width == null ? 0 : viewport.width;
+					const height = viewport.height == null ? 0 : viewport.height;
+					const pixelRatio = viewport.pixelRatio == null ? 1 : viewport.pixelRatio;
+					canvas.width = width * pixelRatio;
+					canvas.height = height * pixelRatio;
+				},
+				requestCanvasPointerLock: function() {
+					if (canvas.requestPointerLock) {
+						canvas.requestPointerLock();
 					}
+				},
+				isCanvasPointerLocked: function(activeDocumentRef) {
+					const pointerDocumentRef = activeDocumentRef || document;
+					return pointerDocumentRef.pointerLockElement === canvas;
 				}
 			};
-
-			const appRuntime = window.createXrAppRuntime({
-				shell: appShell,
-				audioController: audioController,
-				locomotionController: locomotionController,
-				menuController: menuController,
-				sceneRenderer: sceneRenderer,
-				services: runtimeServices
-			});
-
-			appRuntime.init();
 		</script>
+		<script src="xr-app.js"></script>
 	</body>
 </html>

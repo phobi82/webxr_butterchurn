@@ -211,32 +211,33 @@ const applyJumpInput = function(options, state, jumpHeldBool, jumpMode, delta) {
 };
 
 const applyGravityAndVertical = function(options, world, state, delta, playerHeight, eyeHeight) {
+	const playerPosition = state.playerPosition || state.origin;
 	const supportHeight = world.getFloorHeightAtPosition(
-		state.origin.x,
-		state.origin.z,
-		world.getMaxClimbSurfaceY(Math.max(state.origin.y, state.origin.y + state.jumpVelocity * delta), eyeHeight)
+		playerPosition.x,
+		playerPosition.z,
+		world.getMaxClimbSurfaceY(Math.max(playerPosition.y, playerPosition.y + state.jumpVelocity * delta), eyeHeight)
 	);
-	if (state.jumpVelocity === 0 && state.origin.y <= supportHeight && supportHeight !== -Infinity) {
+	if (state.jumpVelocity === 0 && playerPosition.y <= supportHeight && supportHeight !== -Infinity) {
 		return {airborneBool: false, groundedBool: false, fallResetBool: false};
 	}
-	const previousY = state.origin.y;
+	const previousY = playerPosition.y;
 	state.jumpVelocity += options.jumpGravity * delta;
-	state.origin.y += state.jumpVelocity * delta;
+	playerPosition.y += state.jumpVelocity * delta;
 	const resolvedVertical = world.resolveVerticalMovement({
 		previousY: previousY,
-		nextY: state.origin.y,
-		x: state.origin.x,
-		z: state.origin.z,
+		nextY: playerPosition.y,
+		x: playerPosition.x,
+		z: playerPosition.z,
 		playerHeight: playerHeight,
 		eyeHeightMeters: eyeHeight,
 		verticalVelocity: state.jumpVelocity
 	});
-	state.origin.y = resolvedVertical.y;
+	playerPosition.y = resolvedVertical.y;
 	if (resolvedVertical.hitCeilingBool && state.jumpVelocity > 0) {
 		state.jumpVelocity = 0;
 		state.jumpHoldTimeSeconds = 0;
 	}
-	if (state.origin.y <= options.fallResetY) {
+	if (playerPosition.y <= options.fallResetY) {
 		return {airborneBool: true, groundedBool: false, fallResetBool: true};
 	}
 	if (resolvedVertical.groundedBool) {
@@ -251,72 +252,84 @@ const applyGravityAndVertical = function(options, world, state, delta, playerHei
 const createLocomotion = function(options) {
 	const world = options.world;
 
-	const updateEyeHeightFromInput = function(state, delta, viewerTransform, stanceInputY) {
-		const previousEffectiveEyeHeightMeters = state.effectiveEyeHeightMeters;
-		const previousStickEyeHeightOffsetMeters = state.stickEyeHeightOffsetMeters;
-		const previousBaseEyeHeightMeters = state.currentBaseEyeHeightMeters;
-		state.currentBaseEyeHeightMeters = viewerTransform.position && viewerTransform.position.y ? viewerTransform.position.y : options.defaultEyeHeight;
-		if (!state.standingEyeHeightCalibratedBool) {
-			state.calibratedStandingEyeHeightMeters = state.currentBaseEyeHeightMeters;
-			state.standingEyeHeightCalibratedBool = true;
+	const syncHeadPositionFromRenderPose = function(state, renderedTransform) {
+		if (!renderedTransform || !renderedTransform.position) {
+			return false;
 		}
-		const physicalEyeHeightMeters = options.defaultEyeHeight + (state.currentBaseEyeHeightMeters - state.calibratedStandingEyeHeightMeters);
-		const neutralEyeHeightMeters = Math.max(options.defaultEyeHeight, physicalEyeHeightMeters);
-		const maxEyeHeightMeters = options.defaultEyeHeight + options.tiptoeEyeHeightBoost;
-		let nextEyeHeightMeters = clampNumber(physicalEyeHeightMeters + state.stickEyeHeightOffsetMeters, options.crouchMinEyeHeight, maxEyeHeightMeters);
-		if (stanceInputY > 0) {
-			nextEyeHeightMeters = Math.min(maxEyeHeightMeters, nextEyeHeightMeters + stanceInputY * options.crouchSpeed * delta);
-		} else if (stanceInputY < 0) {
-			nextEyeHeightMeters = Math.max(options.crouchMinEyeHeight, nextEyeHeightMeters + stanceInputY * options.crouchSpeed * delta);
-		} else if (nextEyeHeightMeters > neutralEyeHeightMeters) {
-			nextEyeHeightMeters = Math.max(neutralEyeHeightMeters, nextEyeHeightMeters - options.crouchSpeed * delta);
-		}
-		state.effectiveEyeHeightMeters = nextEyeHeightMeters;
-		state.stickEyeHeightOffsetMeters = state.effectiveEyeHeightMeters - physicalEyeHeightMeters;
+		const previousHeadX = state.headPosition.x;
+		const previousHeadY = state.headPosition.y;
+		const previousHeadZ = state.headPosition.z;
+		const headWorldOffset = {
+			x: renderedTransform.position.x - state.playerPosition.x,
+			y: renderedTransform.position.y - state.playerPosition.y,
+			z: renderedTransform.position.z - state.playerPosition.z
+		};
+		const headLocalOffset = rotateXZ(headWorldOffset.x, headWorldOffset.z, -state.heading);
+		state.headPosition.x = headLocalOffset.x;
+		state.headPosition.y = headWorldOffset.y;
+		state.headPosition.z = headLocalOffset.z;
+		return (
+			Math.abs(state.headPosition.x - previousHeadX) > 0.0001 ||
+			Math.abs(state.headPosition.y - previousHeadY) > 0.0001 ||
+			Math.abs(state.headPosition.z - previousHeadZ) > 0.0001
+		);
+	};
+
+	const getHeadWorldOffset = function(state) {
+		const horizontalOffset = rotateXZ(state.headPosition.x, state.headPosition.z, state.heading);
 		return {
-			heightChangedBool: Math.abs(state.effectiveEyeHeightMeters - previousEffectiveEyeHeightMeters) > 0.0001,
-			offsetChangedBool: Math.abs(state.stickEyeHeightOffsetMeters - previousStickEyeHeightOffsetMeters) > 0.0001,
-			baseHeightChangedBool: Math.abs(state.currentBaseEyeHeightMeters - previousBaseEyeHeightMeters) > 0.0001
+			x: horizontalOffset.x,
+			y: state.headPosition.y,
+			z: horizontalOffset.z
 		};
 	};
 
-	const applyWalkingMovement = function(state, delta, moveX, moveY, worldYaw, playerHeight, sprintActiveBool) {
+	const updateHeadPositionFromInput = function(state, delta, stanceInputY) {
+		const previousHeadY = state.headPosition.y;
+		if (stanceInputY !== 0) {
+			state.headPosition.y += stanceInputY * options.crouchSpeed * delta;
+		} else if (state.headPosition.y > options.defaultEyeHeight) {
+			state.headPosition.y = Math.max(options.defaultEyeHeight, state.headPosition.y - options.crouchSpeed * delta);
+		}
+		// Clamp the combined head result directly because only player and head positions exist.
+		state.headPosition.y = clampNumber(state.headPosition.y, options.crouchMinEyeHeight, options.defaultEyeHeight + options.tiptoeEyeHeightBoost);
+		return Math.abs(state.headPosition.y - previousHeadY) > 0.0001;
+	};
+
+	const applyWalkingMovement = function(state, delta, moveX, moveY, worldYaw, playerHeight, headHeight, sprintActiveBool) {
 		if (moveX === 0 && moveY === 0) {
 			return false;
 		}
+		const playerPosition = state.playerPosition || state.origin;
 		const moveVector = normalize2d(moveX, moveY);
 		const cosYaw = Math.cos(worldYaw);
 		const sinYaw = Math.sin(worldYaw);
 		const movementSpeed = options.walkSpeed * (sprintActiveBool ? options.sprintMultiplier : 1);
 		const moveStep = world.resolveHorizontalMovement({
-			currentX: state.origin.x,
-			currentY: state.origin.y,
-			currentZ: state.origin.z,
-			nextX: state.origin.x + (moveVector.y * sinYaw + moveVector.x * cosYaw) * movementSpeed * delta,
-			nextZ: state.origin.z + (moveVector.y * cosYaw - moveVector.x * sinYaw) * movementSpeed * delta,
+			currentX: playerPosition.x,
+			currentY: playerPosition.y,
+			currentZ: playerPosition.z,
+			nextX: playerPosition.x + (moveVector.y * sinYaw + moveVector.x * cosYaw) * movementSpeed * delta,
+			nextZ: playerPosition.z + (moveVector.y * cosYaw - moveVector.x * sinYaw) * movementSpeed * delta,
 			playerHeight: playerHeight,
-			eyeHeightMeters: state.effectiveEyeHeightMeters,
+			eyeHeightMeters: headHeight,
 			momentumState: null
 		});
-		state.origin.x = moveStep.x;
-		state.origin.y = moveStep.y > state.origin.y ? Math.min(moveStep.y, state.origin.y + options.climbSpeed * delta) : moveStep.y;
-		state.origin.z = moveStep.z;
+		playerPosition.x = moveStep.x;
+		playerPosition.y = moveStep.y > playerPosition.y ? Math.min(moveStep.y, playerPosition.y + options.climbSpeed * delta) : moveStep.y;
+		playerPosition.z = moveStep.z;
 		return true;
 	};
 
 	return {
 		createXrState: function() {
 			return {
-				origin: {x: 0, y: 0, z: 0},
+				playerPosition: {x: 0, y: 0, z: 0},
+				headPosition: {x: 0, y: options.defaultEyeHeight, z: 0},
 				heading: 0,
 				jumpVelocity: 0,
 				horizontalVelocityX: 0,
 				horizontalVelocityZ: 0,
-				currentBaseEyeHeightMeters: options.defaultEyeHeight,
-				calibratedStandingEyeHeightMeters: options.defaultEyeHeight,
-				standingEyeHeightCalibratedBool: false,
-				stickEyeHeightOffsetMeters: 0,
-				effectiveEyeHeightMeters: options.defaultEyeHeight,
 				jumpCount: 0,
 				jumpPressedBool: false,
 				jumpHoldTimeSeconds: 0
@@ -342,18 +355,16 @@ const createLocomotion = function(options) {
 			};
 		},
 		resetXrState: function(state) {
-			state.origin.x = 0;
-			state.origin.y = 0;
-			state.origin.z = 0;
+			state.playerPosition.x = 0;
+			state.playerPosition.y = 0;
+			state.playerPosition.z = 0;
+			state.headPosition.x = 0;
+			state.headPosition.y = options.defaultEyeHeight;
+			state.headPosition.z = 0;
 			state.heading = 0;
 			state.jumpVelocity = 0;
 			state.horizontalVelocityX = 0;
 			state.horizontalVelocityZ = 0;
-			state.currentBaseEyeHeightMeters = options.defaultEyeHeight;
-			state.calibratedStandingEyeHeightMeters = options.defaultEyeHeight;
-			state.standingEyeHeightCalibratedBool = false;
-			state.stickEyeHeightOffsetMeters = 0;
-			state.effectiveEyeHeightMeters = options.defaultEyeHeight;
 			state.jumpCount = 0;
 			state.jumpPressedBool = false;
 			state.jumpHoldTimeSeconds = 0;
@@ -377,8 +388,16 @@ const createLocomotion = function(options) {
 			state.sprintBool = false;
 			state.crouchBool = false;
 		},
+		getHeadWorldPosition: function(state) {
+			const headWorldOffset = getHeadWorldOffset(state);
+			return {
+				x: state.playerPosition.x + headWorldOffset.x,
+				y: state.playerPosition.y + headWorldOffset.y,
+				z: state.playerPosition.z + headWorldOffset.z
+			};
+		},
 		getPlayerHeight: function(state) {
-			return state.effectiveEyeHeightMeters + options.playerHeadClearance;
+			return state.headPosition.y + options.playerHeadClearance;
 		},
 		applyDesktopPreviewMovement: function(state, delta, jumpMode) {
 			const playerHeight = state.eyeHeightMeters + options.playerHeadClearance;
@@ -426,27 +445,28 @@ const createLocomotion = function(options) {
 			return {resetBool: false};
 		},
 		applyXrLocomotion: function(state, args) {
-			let referenceSpaceUpdateNeededBool = false;
-			if (args.locomotion.turnX !== 0 && args.turnAnchorPosition) {
-				const offsetWorld = rotateXZ(args.turnAnchorPosition.x, args.turnAnchorPosition.z, state.heading);
-				const worldX = state.origin.x + offsetWorld.x;
-				const worldZ = state.origin.z + offsetWorld.z;
+			const playerPosition = state.playerPosition;
+			let referenceSpaceUpdateNeededBool = !args.renderSpaceInitializedBool;
+			const renderHeadMovedBool = args.renderSpaceInitializedBool ? syncHeadPositionFromRenderPose(state, args.renderedTransform) : false;
+			if (args.locomotion.turnX !== 0) {
+				const currentHeadWorldPosition = this.getHeadWorldPosition(state);
 				state.heading -= args.locomotion.turnX * options.turnSpeed * args.delta;
-				const offsetWorldNext = rotateXZ(args.turnAnchorPosition.x, args.turnAnchorPosition.z, state.heading);
-				state.origin.x = worldX - offsetWorldNext.x;
-				state.origin.z = worldZ - offsetWorldNext.z;
+				const nextHeadWorldOffset = getHeadWorldOffset(state);
+				playerPosition.x = currentHeadWorldPosition.x - nextHeadWorldOffset.x;
+				playerPosition.z = currentHeadWorldPosition.z - nextHeadWorldOffset.z;
 				referenceSpaceUpdateNeededBool = true;
 			}
-			const eyeHeightState = updateEyeHeightFromInput(state, args.delta, args.viewerTransform, args.locomotion.stanceInputY);
+			const headPositionChangedBool = updateHeadPositionFromInput(state, args.delta, args.locomotion.stanceInputY);
+			const headHeight = state.headPosition.y;
+			const playerHeight = headHeight + options.playerHeadClearance;
 			const worldYaw = getHeadYaw(args.viewerTransform.orientation) + state.heading;
-			const playerHeight = this.getPlayerHeight(state);
-			if (applyWalkingMovement(state, args.delta, args.locomotion.moveX, args.locomotion.moveY, worldYaw, playerHeight, args.locomotion.sprintActiveBool)) {
+			if (applyWalkingMovement(state, args.delta, args.locomotion.moveX, args.locomotion.moveY, worldYaw, playerHeight, headHeight, args.locomotion.sprintActiveBool)) {
 				referenceSpaceUpdateNeededBool = true;
 			}
-			const floorHeight = world.getFloorHeightAtPosition(state.origin.x, state.origin.z, world.getMaxClimbSurfaceY(state.origin.y, state.effectiveEyeHeightMeters));
-			const groundedBool = floorHeight > -Infinity && state.origin.y <= floorHeight + 0.001 && state.jumpVelocity <= 0;
+			const floorHeight = world.getFloorHeightAtPosition(playerPosition.x, playerPosition.z, world.getMaxClimbSurfaceY(playerPosition.y, headHeight));
+			const groundedBool = floorHeight > -Infinity && playerPosition.y <= floorHeight + 0.001 && state.jumpVelocity <= 0;
 			if (groundedBool) {
-				state.origin.y = floorHeight > state.origin.y ? Math.min(floorHeight, state.origin.y + options.climbSpeed * args.delta) : floorHeight;
+				playerPosition.y = floorHeight > playerPosition.y ? Math.min(floorHeight, playerPosition.y + options.climbSpeed * args.delta) : floorHeight;
 				state.jumpCount = 0;
 			}
 			applyJumpInput(options, state, args.locomotion.jumpRequestBool, args.jumpMode, args.delta);
@@ -461,25 +481,25 @@ const createLocomotion = function(options) {
 			if (horizontalSpeed > 0.0001) {
 				const momentumState = {x: state.horizontalVelocityX, z: state.horizontalVelocityZ};
 				const resolvedMomentum = world.resolveHorizontalMovement({
-					currentX: state.origin.x,
-					currentY: state.origin.y,
-					currentZ: state.origin.z,
-					nextX: state.origin.x + momentumState.x * args.delta,
-					nextZ: state.origin.z + momentumState.z * args.delta,
+					currentX: playerPosition.x,
+					currentY: playerPosition.y,
+					currentZ: playerPosition.z,
+					nextX: playerPosition.x + momentumState.x * args.delta,
+					nextZ: playerPosition.z + momentumState.z * args.delta,
 					playerHeight: playerHeight,
-					eyeHeightMeters: state.effectiveEyeHeightMeters,
+					eyeHeightMeters: headHeight,
 					momentumState: momentumState
 				});
-				state.origin.x = resolvedMomentum.x;
-				state.origin.y = resolvedMomentum.y > state.origin.y ? Math.min(resolvedMomentum.y, state.origin.y + options.climbSpeed * args.delta) : resolvedMomentum.y;
-				state.origin.z = resolvedMomentum.z;
+				playerPosition.x = resolvedMomentum.x;
+				playerPosition.y = resolvedMomentum.y > playerPosition.y ? Math.min(resolvedMomentum.y, playerPosition.y + options.climbSpeed * args.delta) : resolvedMomentum.y;
+				playerPosition.z = resolvedMomentum.z;
 				state.horizontalVelocityX = momentumState.x * dragFactor;
 				state.horizontalVelocityZ = momentumState.z * dragFactor;
 			} else {
 				state.horizontalVelocityX = 0;
 				state.horizontalVelocityZ = 0;
 			}
-			const verticalResult = applyGravityAndVertical(options, world, state, args.delta, playerHeight, state.effectiveEyeHeightMeters);
+			const verticalResult = applyGravityAndVertical(options, world, state, args.delta, playerHeight, headHeight);
 			if (verticalResult.fallResetBool) {
 				this.resetXrState(state);
 				return {referenceSpaceUpdateNeededBool: true, resetBool: true};
@@ -490,7 +510,7 @@ const createLocomotion = function(options) {
 			}
 			if (verticalResult.airborneBool || verticalResult.groundedBool) {
 				referenceSpaceUpdateNeededBool = true;
-			} else if (horizontalSpeed > 0.0001 || eyeHeightState.heightChangedBool || eyeHeightState.offsetChangedBool || eyeHeightState.baseHeightChangedBool) {
+			} else if (horizontalSpeed > 0.0001 || headPositionChangedBool || renderHeadMovedBool) {
 				referenceSpaceUpdateNeededBool = true;
 			}
 			return {
@@ -1106,4 +1126,3 @@ const createSceneRenderer = function(options) {
 		}
 	};
 };
-

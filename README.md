@@ -1,12 +1,13 @@
 # WebXR Visualizer Foundation
 
-Local WebXR prototype built in plain HTML and vanilla JavaScript. The current goal is a stable movement and interaction baseline for an XR audiovisualizer: reliable locomotion, jumping, in-headset menu control, and Butterchurn-driven visuals that can respond to live audio.
+Local WebXR prototype built in plain HTML and vanilla JavaScript. The current goal is a stable XR movement and interaction baseline for an audiovisualizer: reliable locomotion, in-headset menu control, Butterchurn-driven visuals, and a codebase that stays direct enough to edit without a toolchain.
 
 ## What It Does
 
 - immersive VR startup with `local-floor`
 - desktop preview when no XR session is active
-- XR and desktop locomotion with jumping, sprinting, crouching, tiptoe height control, and airborne boost
+- Butterchurn visualizer starts immediately on page load, even before an audio source is selected
+- XR and desktop locomotion with jumping, sprinting, airborne boost, and a right-stick XR head-height model that combines stick input with relative headset motion while ignoring absolute headset height
 - collidable level geometry plus a GLB scene prop
 - in-headset menu for jump mode, floor opacity, eye distance, visualizer mode, light preset, and Butterchurn preset
 - Butterchurn-driven visuals with a fullscreen toroidal mode and a placeholder `stereoVolume` world mode
@@ -15,18 +16,22 @@ Local WebXR prototype built in plain HTML and vanilla JavaScript. The current go
 
 ## Project Structure
 
-- `index.html`: composition root and grouped config
-- `xr-app-shell.js`: desktop UI shell and main canvas
-- `xr-app-runtime.js`: XR session lifecycle, loops, and input orchestration
-- `xr-audio-controller.js`, `xr-locomotion.js`, `xr-menu-ui.js`, `xr-menu-controller.js`: feature modules for audio, movement, and menu handling
-- `xr-scene-renderer.js`, `xr-scene-lighting.js`, `glb-asset-manager.js`: scene rendering, lighting, and prop loading
-- `xr-visualizer-*.js`: Butterchurn source, mode manager, shared helpers, and render modes
+- `index.html`: standalone browser entry for local `file://` use, and also builds the desktop shell directly
+- `xr-foundation.js`: shared helpers, audio analysis/control, lighting, XR-session bridge, desktop input
+- `xr-light-presets.js`: light preset functions plus the preset list consumed by scene lighting
+- `xr-world.js`: collision world, locomotion, GLB loading, geometry, scene rendering
+- `xr-menu.js`: menu canvas view and menu interaction controller
+- `xr-visualizer-modes.js`: visualizer mode functions plus the mode list consumed by the runtime
+- `xr-app.js`: visualizer runtime, app config, composition, and startup
 
 ## Requirements
 
 - a modern desktop browser with WebXR and WebGL support
 - a VR headset/runtime supported by that browser for immersive mode
 - permission to access microphone or shared tab/screen audio if audio-reactive presets should respond to live input
+
+## Website
+`https://phobi82.github.io/webxr_butterchurn/`
 
 ## Run Locally
 
@@ -38,8 +43,6 @@ There is no build step and no backend.
 4. Use the desktop panel to start VR or test audio, presets, and movement in preview mode.
 
 ## Audio Sources
-
-The start page can switch between these audio inputs:
 
 - `Share Audio`: capture audio from a shared display, window, or tab
 - `YouTube Playlist`: open the configured playlist tab, then capture that tab with tab audio enabled
@@ -62,7 +65,7 @@ The start page can switch between these audio inputs:
 
 - left stick: move
 - left trigger: sprint
-- right stick: turn, crouch, and tiptoe
+- right stick: turn plus persistent crouch / temporary tiptoe head-height control combined with relative headset motion
 - A (right controller): jump, hold briefly for extra height
 - right trigger while airborne: directional air boost
 - Y (left controller): open or close the in-headset menu
@@ -70,18 +73,20 @@ The start page can switch between these audio inputs:
 
 ## Architecture Summary
 
-- `index.html` is now a composition root with grouped config and module wiring.
-- Browser UI, runtime orchestration, audio, locomotion, menu, scene rendering, lighting, GLB loading, and visualizer logic are separated into coherent modules.
-- Shared math, color helpers, and empty audio-metric defaults are centralized in `xr-visualizer-utils.js`.
-- Browser-specific dependencies are passed explicitly where useful so modules are less tied to globals.
+- The app is now organized as a few normal browser scripts instead of a long chain of tiny runtime files or a module/build setup.
+- Shared helpers, world logic, menu logic, and app composition are grouped into a few direct files so navigation stays simple without collapsing everything back into one monolith.
+- The runtime no longer depends on scattered `window.*` globals per subsystem; related behavior is grouped together and loaded in a clear order from `index.html`.
+- The desktop shell now lives directly in `index.html`, while the in-headset and mirrored desktop menu stay isolated in `xr-menu.js`.
+- Visualizer modes and light presets each live in one dedicated catalog file, so extending them means adding a function and registering it once in that file.
+- The project still launches directly from `index.html` over `file://` with no build or local server requirement.
 
 ## Current Status
 
-- `stereoVolume` is intentionally a placeholder while that world-space mode is reconsidered
+- `stereoVolume` is intentionally a placeholder while that world-space mode is reconsidered.
 
 ## GitHub Pages
 
-- The repository now includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml` that deploys the site on every push to `main`.
+- The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml` that deploys the site on every push to `main`.
 - In the repository Pages settings, set `Build and deployment -> Source` to `GitHub Actions` so GitHub uses the workflow-based deploy path instead of branch auto-publishing.
 
 ## Acknowledgements
