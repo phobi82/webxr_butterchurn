@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-18
+
 ### Changed
+- Moved the shared visualizer engine, fullscreen visualizer helper, and Butterchurn source integration out of `xr-app.js` into `xr-visualizer.js`, so app runtime wiring and visualizer internals are split into separate files again.
 - Moved visualizer mode definitions into `xr-visualizer-modes.js`, with one function per mode and a single local catalog list that now drives the Visualizer Mode menu automatically.
 - Moved light preset definitions into `xr-light-presets.js`, with one function per preset and a single local catalog list that now drives the Light Preset menu automatically.
 - Moved the desktop shell back into `index.html` and grouped the menu view plus menu controller together in `xr-menu.js`.
+- Moved shared audio analysis together with the audio-source controller into `xr-audio-controller.js`, so `xr-foundation.js` no longer mixes audio capture/runtime code with the generic browser and XR helpers.
 - Start the visualizer immediately on page load and hide the mirrored desktop VR menu by default until it is toggled on.
 - Rebuilt XR head-height movement around separate player and head positions so the right stick now combines with relative headset motion, ignores absolute headset height, holds crouch levels after release, and auto-returns stick-driven tiptoe height back to standing.
+- Updated the README to match the current runtime structure, controls, menu options, and GitHub Pages website link.
 
 ## [0.2.1] - 2026-03-16
 

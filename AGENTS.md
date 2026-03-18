@@ -128,6 +128,14 @@ Recommended structure order:
 - When a checkpoint visibly matches the user's intent and the worktree is in a sensible state to snapshot, proactively suggest making a commit and include the corresponding Semantic Versioning bump recommendation if a version increment is warranted.
 - PRs should explain the change, list reproduction steps, and attach before/after screenshots for UI tweaks; link issues when applicable and call out gameplay balance impacts.
 
+## Recurring Error Prevention
+- If the same avoidable working mistake happens repeatedly, add a short prevention rule here.
+- Only add rules that are concrete and operational.
+
+### Patching discipline
+- For large file moves or refactors, never use one large `apply_patch` spanning multiple files.
+- Split the work into small patches with one clear purpose each.
+
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.
 - Keep assets checked in and referenced via relative paths to support offline hosting.
