@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-18
+
+### Added
+- Skysphere visualizer mode: 3D raycasting with spherical coordinate UV mapping, roll-stable but with pole convergence at the zenith/nadir.
+- Sky Toroid visualizer mode: view-space angular offsets with roll correction, combining Skysphere roll stability with Toroidal pole-free tiling.
+
+### Changed
+- Default visualizer mode is now Skysphere instead of Toroidal.
+
+### Removed
+- Stereo Volume placeholder mode replaced by the two new implemented modes.
+
 ## [0.3.0] - 2026-03-18
 
 ### Changed

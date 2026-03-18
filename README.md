@@ -12,7 +12,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - in-headset menu plus mirrored desktop preview for debugging the same menu
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`
-- visualizer modes: `Toroidal`, `Stereo Volume` placeholder
+- visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, YouTube playlist, Suno Live Radio, or synthetic `Debug Audio`
 
 ## Project Structure
@@ -93,10 +93,16 @@ The current menu exposes:
 - Butterchurn preset selector
 - live audio meters for `Level`, `Peak`, `Bass`, `Transient`, and `Beat`
 
+## Visualizer Modes
+
+| Mode | Mapping | Roll | Poles | Description |
+|---|---|---|---|---|
+| **Toroidal** | Screen-space UV + head yaw/pitch offset | Rotates with head roll | None | Flat fullscreen quad with toroidal texture wrapping driven by head orientation. Fastest and simplest mode. |
+| **Skysphere** | 3D raycasting via view matrix to spherical coordinates | Stable | Convergence at poles | Computes world-space view direction per pixel, converts to yaw/pitch, and tiles the texture. Background stays fixed in world space during roll. |
+| **Sky Toroid** | View-space angular offsets with roll correction + head yaw/pitch | Stable | None | Computes per-pixel angular offsets in view space, counter-rotates by the camera roll, then adds world-space head orientation. Combines the roll stability of Skysphere with the pole-free tiling of Toroidal. |
+
 ## Current Status
 
-- `Toroidal` is the only implemented visualizer output mode right now.
-- `Stereo Volume` is intentionally still a placeholder with no world-space scene output.
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
 - The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
 
