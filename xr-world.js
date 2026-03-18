@@ -321,6 +321,32 @@ const createLocomotion = function(options) {
 		return true;
 	};
 
+	const applyXrMoveInputVelocity = function(state, delta, moveX, moveY, worldYaw, sprintActiveBool, groundedBool) {
+		if (moveX === 0 && moveY === 0) {
+			return;
+		}
+		// XR movement steers the shared horizontal velocity instead of moving the player directly.
+		const moveStrength = Math.min(1, Math.sqrt(moveX * moveX + moveY * moveY));
+		const moveVector = normalize2d(moveX, moveY);
+		const cosYaw = Math.cos(worldYaw);
+		const sinYaw = Math.sin(worldYaw);
+		const movementSpeed = options.walkSpeed * (sprintActiveBool ? options.sprintMultiplier : 1) * moveStrength;
+		const targetVelocityX = (moveVector.y * sinYaw + moveVector.x * cosYaw) * movementSpeed;
+		const targetVelocityZ = (moveVector.y * cosYaw - moveVector.x * sinYaw) * movementSpeed;
+		const velocityDeltaX = targetVelocityX - state.horizontalVelocityX;
+		const velocityDeltaZ = targetVelocityZ - state.horizontalVelocityZ;
+		const velocityDeltaLength = Math.sqrt(velocityDeltaX * velocityDeltaX + velocityDeltaZ * velocityDeltaZ);
+		const maxVelocityChange = (groundedBool ? options.xrGroundAcceleration : options.xrAirAcceleration) * delta;
+		if (velocityDeltaLength <= maxVelocityChange || velocityDeltaLength === 0) {
+			state.horizontalVelocityX = targetVelocityX;
+			state.horizontalVelocityZ = targetVelocityZ;
+			return;
+		}
+		const velocityDeltaScale = maxVelocityChange / velocityDeltaLength;
+		state.horizontalVelocityX += velocityDeltaX * velocityDeltaScale;
+		state.horizontalVelocityZ += velocityDeltaZ * velocityDeltaScale;
+	};
+
 	return {
 		createXrState: function() {
 			return {
@@ -460,15 +486,24 @@ const createLocomotion = function(options) {
 			const headHeight = state.headPosition.y;
 			const playerHeight = headHeight + options.playerHeadClearance;
 			const worldYaw = getHeadYaw(args.viewerTransform.orientation) + state.heading;
-			if (applyWalkingMovement(state, args.delta, args.locomotion.moveX, args.locomotion.moveY, worldYaw, playerHeight, headHeight, args.locomotion.sprintActiveBool)) {
-				referenceSpaceUpdateNeededBool = true;
-			}
 			const floorHeight = world.getFloorHeightAtPosition(playerPosition.x, playerPosition.z, world.getMaxClimbSurfaceY(playerPosition.y, headHeight));
 			const groundedBool = floorHeight > -Infinity && playerPosition.y <= floorHeight + 0.001 && state.jumpVelocity <= 0;
 			if (groundedBool) {
 				playerPosition.y = floorHeight > playerPosition.y ? Math.min(floorHeight, playerPosition.y + options.climbSpeed * args.delta) : floorHeight;
 				state.jumpCount = 0;
 			}
+			// Dampen existing carry-over velocity before adding fresh stick steering for this frame.
+			const drag = groundedBool ? options.groundMomentumDrag : options.airMomentumDrag;
+			const dragFactor = Math.max(0, 1 - drag * args.delta);
+			state.horizontalVelocityX *= dragFactor;
+			state.horizontalVelocityZ *= dragFactor;
+			if (Math.abs(state.horizontalVelocityX) < 0.0001) {
+				state.horizontalVelocityX = 0;
+			}
+			if (Math.abs(state.horizontalVelocityZ) < 0.0001) {
+				state.horizontalVelocityZ = 0;
+			}
+			applyXrMoveInputVelocity(state, args.delta, args.locomotion.moveX, args.locomotion.moveY, worldYaw, args.locomotion.sprintActiveBool, groundedBool);
 			applyJumpInput(options, state, args.locomotion.jumpRequestBool, args.jumpMode, args.delta);
 			if (!args.menuOpenBool && args.locomotion.airBoostActiveBool && !groundedBool && args.locomotion.rightControllerBoostDir) {
 				state.horizontalVelocityX += args.locomotion.rightControllerBoostDir.x * options.airBoostSpeed * args.delta;
@@ -476,8 +511,6 @@ const createLocomotion = function(options) {
 				state.jumpVelocity += args.locomotion.rightControllerBoostDir.y * options.airBoostSpeed * args.delta;
 			}
 			const horizontalSpeed = Math.sqrt(state.horizontalVelocityX * state.horizontalVelocityX + state.horizontalVelocityZ * state.horizontalVelocityZ);
-			const drag = groundedBool ? options.groundMomentumDrag : options.airMomentumDrag;
-			const dragFactor = Math.max(0, 1 - drag * args.delta);
 			if (horizontalSpeed > 0.0001) {
 				const momentumState = {x: state.horizontalVelocityX, z: state.horizontalVelocityZ};
 				const resolvedMomentum = world.resolveHorizontalMovement({
@@ -493,8 +526,8 @@ const createLocomotion = function(options) {
 				playerPosition.x = resolvedMomentum.x;
 				playerPosition.y = resolvedMomentum.y > playerPosition.y ? Math.min(resolvedMomentum.y, playerPosition.y + options.climbSpeed * args.delta) : resolvedMomentum.y;
 				playerPosition.z = resolvedMomentum.z;
-				state.horizontalVelocityX = momentumState.x * dragFactor;
-				state.horizontalVelocityZ = momentumState.z * dragFactor;
+				state.horizontalVelocityX = momentumState.x;
+				state.horizontalVelocityZ = momentumState.z;
 			} else {
 				state.horizontalVelocityX = 0;
 				state.horizontalVelocityZ = 0;
@@ -503,10 +536,6 @@ const createLocomotion = function(options) {
 			if (verticalResult.fallResetBool) {
 				this.resetXrState(state);
 				return {referenceSpaceUpdateNeededBool: true, resetBool: true};
-			}
-			if (verticalResult.groundedBool) {
-				state.horizontalVelocityX *= Math.max(0, 1 - options.groundMomentumDrag * args.delta);
-				state.horizontalVelocityZ *= Math.max(0, 1 - options.groundMomentumDrag * args.delta);
 			}
 			if (verticalResult.airborneBool || verticalResult.groundedBool) {
 				referenceSpaceUpdateNeededBool = true;

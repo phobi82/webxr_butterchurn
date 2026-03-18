@@ -81,6 +81,8 @@ The mirrored desktop menu is hidden on startup and uses the same canvas/menu sys
 - `Y` on the left controller: open or close the in-headset menu
 - trigger on menu controls: press buttons and drag sliders
 
+XR stick movement and airborne boost now drive the same horizontal movement velocity, so steering in the air no longer stacks a separate direct stick translation on top of boost momentum, while partial stick tilt still scales movement speed analogically after the deadzone.
+
 ## In-Headset Menu
 
 The current menu exposes:

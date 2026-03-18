@@ -389,6 +389,8 @@ const appConfig = {
 		jumpHoldBoostSpeed: 6.5,
 		jumpHoldMaxSeconds: 0.22,
 		airBoostSpeed: 14,
+		xrGroundAcceleration: 96,
+		xrAirAcceleration: 10,
 		airMomentumDrag: 0.35,
 		groundMomentumDrag: 10,
 		doubleJumpMaxCount: 2,

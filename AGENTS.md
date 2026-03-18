@@ -18,7 +18,7 @@
   - First establish stable XR foundations such as scene bootstrapping, locomotion, jumping, and render-loop stability.
   - Later phases can layer in audio analysis and spatial visualization, but should preserve the working movement baseline unless the user asks to replace it.
 - Implement **only what is explicitly requested**:
-  - Do not add “nice-to-have” features, abstractions, or refactors on your own, but ask proactively
+  - Do not add "nice-to-have" features, abstractions, or refactors on your own, but ask proactively
   - Do not invent mini-frameworks or complex architectures unless requested
 
 ## Coding Style & Naming Conventions
@@ -56,8 +56,8 @@ Use this as default when the user does not specify other styles:
 
 - Create all UI elements with `document.createElement(...)`.
 - Configure them via properties and styles, for example:
-  - `element.textContent = "..."`;
-  - `element.value = "..."`;
+  - `element.textContent = "...";`
+  - `element.value = "...";`
   - `element.style.display = "flex";`
 - Append elements using `appendChild` or `append`.
 - Use `innerHTML` only for very small, controlled snippets (e.g. an icon span), not for whole layouts.
@@ -82,7 +82,7 @@ Use this as default when the user does not specify other styles:
 - **All comments must be in English and stay short but useful.**
 - Keep code concise and contained; avoid sprawl and unnecessary variables while staying efficient, maintainable, and well-structured.
 - Prefer **straight-line code** over unnecessary abstractions:
-  - Do **not** introduce tiny helper functions (“mini-functions”) that are only used once, if the inline code is clear and short.
+  - Do **not** introduce tiny helper functions ("mini-functions") that are only used once, if the inline code is clear and short.
   - Do **not** introduce single-use variables that only alias another expression once, unless they significantly reduce duplication, make a complex expression clearer, or noticeably keep the code shorter.
   - When in doubt, prefer fewer layers and fewer indirections, as long as readability is not harmed.
 - Keep logic localized and simple; avoid overengineering or premature generalization.
@@ -98,7 +98,7 @@ Recommended structure order:
 
 ## Behavior and Logic
 
-- Follow the user’s description **literally and precisely**.
+- Follow the user's description **literally and precisely**.
 - When working on WebXR movement, prefer small, testable iterations over large rewrites so walking/jumping behavior stays easy to verify against the current baseline.
 - If the user wants expressions evaluated (e.g. `setVolt(3+3)` or `setVolt((2+1)*8)`), implement this behavior:
   - Use the simplest robust approach that matches the request (for example, JavaScript expression evaluation when acceptable).
@@ -126,15 +126,19 @@ Recommended structure order:
 - Commits use short, imperative subjects (e.g., `Tighten auto-wire pacing`) with focused diffs; include a brief body when behavior shifts.
 - When the user wants to commit, explicitly suggest whether a `major`, `minor`, or `patch` version bump is appropriate under Semantic Versioning, based on how much the public behavior changed: breaking changes imply `major`, backward-compatible feature additions imply `minor`, and backward-compatible fixes or polish imply `patch`.
 - When a checkpoint visibly matches the user's intent and the worktree is in a sensible state to snapshot, proactively suggest making a commit and include the corresponding Semantic Versioning bump recommendation if a version increment is warranted.
+- When suggesting a commit, explicitly say whether the current state looks like a release candidate or only an intermediate checkpoint.
+- If the state looks like a release candidate and a concrete semantic version is already implied by the changelog or agreed with the user, explicitly suggest creating the matching Git tag as part of the release flow.
+- If the state is only an intermediate checkpoint, explicitly say that no release tag should be created yet.
 - PRs should explain the change, list reproduction steps, and attach before/after screenshots for UI tweaks; link issues when applicable and call out gameplay balance impacts.
 
 ## Recurring Error Prevention
 - If the same avoidable working mistake happens repeatedly, add a short prevention rule here.
 - Only add rules that are concrete and operational.
 
-### Patching discipline
+### Rules
 - For large file moves or refactors, never use one large `apply_patch` spanning multiple files.
 - Split the work into small patches with one clear purpose each.
+- In PowerShell `shell_command` calls, never use `&&`; run commands separately unless a PowerShell-safe separator is explicitly required.
 
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.
