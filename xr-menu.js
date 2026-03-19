@@ -331,7 +331,7 @@ const createMenuView = function(options) {
 			menuCtx.strokeRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
 			menuCtx.fillStyle = "#ffffff";
 			menuCtx.font = "bold 30px Arial";
-			menuCtx.fillText("Ground Opacity", layout.contentLeft + 28, layout.groundTitleY);
+			menuCtx.fillText("World Opacity", layout.contentLeft + 28, layout.groundTitleY);
 			menuCtx.textAlign = "right";
 			menuCtx.fillStyle = accentColor;
 			menuCtx.fillText(Math.round((renderState.floorAlpha || 0) * 100) + "%", layout.contentRight - 28, layout.groundTitleY);

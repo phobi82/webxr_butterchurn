@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unified XR left-stick movement and airborne right-trigger boost onto the same horizontal velocity path, so air steering no longer adds a second direct position shift on top of jump momentum.
 - Reworked XR horizontal damping to apply before stick steering instead of after movement resolution, keeping ground movement responsive while preserving airborne inertia.
 - Restored analog XR left-stick speed scaling on top of the retained deadzone, so partial stick tilt no longer jumps straight to full movement speed.
+- Expanded the former `Ground Opacity` control into `World Opacity`, so the slider now fades floor, grid, and level blocks together while GLB props keep their own opacity.
 
 ## [0.4.0] - 2026-03-18
 

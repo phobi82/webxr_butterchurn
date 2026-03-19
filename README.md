@@ -88,7 +88,7 @@ XR stick movement and airborne boost now drive the same horizontal movement velo
 The current menu exposes:
 
 - jump mode: `Double`, `Multi`
-- ground opacity slider
+- world opacity slider for floor, grid, and level blocks; GLB props stay opaque
 - eye distance slider
 - visualizer mode selector
 - light preset selector

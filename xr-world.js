@@ -1005,6 +1005,7 @@ const createSceneRenderer = function(options) {
 	};
 
 	const drawFloor = function(sceneLighting, reactiveColors) {
+		const worldAlpha = reactiveColors.floor[3];
 		gl.disable(gl.CULL_FACE);
 		drawLitColor(geometry.floorBuffer, geometry.floorNormalBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor, sceneLighting);
 		drawColor(geometry.gridBuffer, geometry.gridVertexCount, gl.LINES, identityMatrix(), reactiveColors.grid);
@@ -1021,7 +1022,7 @@ const createSceneRenderer = function(options) {
 					options.clampNumber(box.color[0] + pulse * 0.25, 0, 1),
 					options.clampNumber(box.color[1] + pulse * 0.25, 0, 1),
 					options.clampNumber(box.color[2] + pulse * 0.25, 0, 1),
-					options.clampNumber(box.color[3] + reactiveColors.beatPulse * 0.12, 0.2, 0.95)
+					options.clampNumber((box.color[3] + reactiveColors.beatPulse * 0.12) * worldAlpha, 0, 0.95)
 				],
 				sceneLighting
 			);
