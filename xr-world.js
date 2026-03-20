@@ -505,7 +505,7 @@ const createLocomotion = function(options) {
 			}
 			applyXrMoveInputVelocity(state, args.delta, args.locomotion.moveX, args.locomotion.moveY, worldYaw, args.locomotion.sprintActiveBool, groundedBool);
 			applyJumpInput(options, state, args.locomotion.jumpRequestBool, args.jumpMode, args.delta);
-			if (!args.menuOpenBool && args.locomotion.airBoostActiveBool && !groundedBool && args.locomotion.rightControllerBoostDir) {
+			if (!args.menuConsumesRightTriggerBool && args.locomotion.airBoostActiveBool && !groundedBool && args.locomotion.rightControllerBoostDir) {
 				state.horizontalVelocityX += args.locomotion.rightControllerBoostDir.x * options.airBoostSpeed * args.delta;
 				state.horizontalVelocityZ += args.locomotion.rightControllerBoostDir.z * options.airBoostSpeed * args.delta;
 				state.jumpVelocity += args.locomotion.rightControllerBoostDir.y * options.airBoostSpeed * args.delta;
@@ -870,6 +870,7 @@ const createSceneRenderer = function(options) {
 	let texProjLoc = null;
 	let texSamplerLoc = null;
 	let menuTexture = null;
+	let passthroughOverlayRenderer = null;
 	let geometry = null;
 	const currentView = new Float32Array(16);
 	const currentProj = new Float32Array(16);
@@ -1042,6 +1043,9 @@ const createSceneRenderer = function(options) {
 		if (args.visualizerEngine) {
 			args.visualizerEngine.drawPreScene();
 		}
+		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
+			passthroughOverlayRenderer.draw(args, menuState.passthroughMix || 0);
+		}
 		if (menuState.floorAlpha > 0.001) {
 			drawFloor(args.sceneLighting, args.getReactiveFloorColors());
 		}
@@ -1110,6 +1114,8 @@ const createSceneRenderer = function(options) {
 			texViewLoc = gl.getUniformLocation(texProgram, "view");
 			texProjLoc = gl.getUniformLocation(texProgram, "proj");
 			texSamplerLoc = gl.getUniformLocation(texProgram, "tex");
+			passthroughOverlayRenderer = createPassthroughOverlayRenderer({clampNumber: options.clampNumber});
+			passthroughOverlayRenderer.init(gl);
 			geometry = createSceneGeometry(gl);
 			menuTexture = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D, menuTexture);
@@ -1126,7 +1132,7 @@ const createSceneRenderer = function(options) {
 		renderPreviewFrame: function(args) {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 			gl.viewport(0, 0, canvas.width, canvas.height);
-			gl.clearColor(0.01, 0.01, 0.08, 1);
+			gl.clearColor(args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.08, 1);
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			currentView.set(createViewMatrixFromYawPitch(args.desktopMovementState.origin.x, args.desktopMovementState.origin.y + args.desktopMovementState.eyeHeightMeters, args.desktopMovementState.origin.z, args.desktopMovementState.lookYaw, args.desktopMovementState.lookPitch));
 			currentProj.set(perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
@@ -1141,7 +1147,7 @@ const createSceneRenderer = function(options) {
 			if (args.transparentBackgroundBool) {
 				gl.clearColor(0, 0, 0, 0);
 			} else {
-				gl.clearColor(0.01, 0.01, 0.08, 1);
+				gl.clearColor(args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.08, 1);
 			}
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			for (let i = 0; i < args.pose.views.length; i += 1) {

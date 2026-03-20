@@ -23,6 +23,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-light-presets.js`: lighting preset catalog and preset state builders
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
+- `xr-passthrought.js`: passthrough/background fallback module for UI state, visualizer blend syncing, and lighting-tinted overlay compositing
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
 - `xr-app.js`: app config, composition, startup, and runtime orchestration
@@ -123,8 +124,9 @@ The current menu exposes:
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
-- The passthrough mix slider is only active in XR sessions that actually expose non-opaque `immersive-ar` blending; in desktop preview and plain VR it stays visible but inactive.
+- The passthrough mix slider now always works: live AR sessions blend toward real headset passthrough, while desktop preview and opaque VR/AR sessions use a black fallback background instead.
 - `Passthrough Mix = 0` now keeps the XR background fully opaque, and semi-transparent world geometry composites against the configured Butterchurn/Passthrough background mix instead of exposing raw passthrough directly behind those surfaces.
+- The visible passthrough or black fallback portion is darkened by 50% and then tinted by the active lighting preset based on the current audio metrics, while `Passthrough Mix = 100%` no longer leaves Butterchurn visible behind the scene.
 - Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
 - The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
 

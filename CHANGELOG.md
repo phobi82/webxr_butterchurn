@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-20
+
 ### Added
 - Added a `Passthrough Mix` slider to the in-headset menu so supported `immersive-ar` sessions can fade the Butterchurn background toward live headset passthrough from `0%` to `100%`.
 - Added a local HTTPS Quest-testing launcher (`start-local-https-server.bat`) plus helper scripts in `local-dev-https/` so the project can be served over LAN with a self-signed certificate.
@@ -14,9 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - XR session startup now prefers `immersive-ar` when the browser and headset support it, and falls back to `immersive-vr` otherwise.
 - Switched the XR WebGL path to alpha-capable rendering so AR sessions can keep the Butterchurn background partially transparent while leaving menu, floor, lights, and world geometry intact.
-- Added clear menu feedback when passthrough is unavailable, so the new slider stays visible in desktop preview or plain VR sessions without pretending to have an effect.
+- Added clear menu feedback and a black fallback path when passthrough is unavailable, so the slider stays usable in desktop preview or plain VR/opaque AR sessions instead of becoming inert.
 - Make the Butterchurn fullscreen background write the configured XR background alpha directly, so `Passthrough Mix = 0` is fully opaque and semi-transparent world geometry now shows the intended Butterchurn/Passthrough mix behind it instead of exposing raw passthrough directly.
+- Darken the visible passthrough contribution by 50% and lift it with a music-reactive color tint from the active lighting preset, while keeping `Passthrough Mix = 0` opaque and `Passthrough Mix = 100%` free of residual Butterchurn.
+- Moved passthrough UI state, visualizer blend syncing, and the lighting-tinted fallback compositor into a dedicated `xr-passthrought.js` module so the visualizer stays independent of scene-lighting and session-specific passthrough policy.
 - Switch world, grid, controller-ray, and menu blending to `blendFuncSeparate(...)` so translucent draws preserve the correct XR framebuffer alpha instead of punching passthrough holes through an otherwise opaque Butterchurn background.
+- Keep held XR slider drags clamped to their end values even when the controller ray overshoots slightly past the visible menu edge, so fast movements still reach the full slider range.
+- Keep right-trigger air boost active while the menu is open unless the right controller is actually pointing at the menu or dragging a menu slider.
 
 ## [0.4.1] - 2026-03-19
 

@@ -88,10 +88,8 @@ const createRuntime = function(options) {
 			environmentBlendMode: state.xrEnvironmentBlendMode
 		});
 	};
-	const syncVisualizerBackgroundBlend = function(passthroughAvailableBool) {
-		if (state.visualizerEngine && state.visualizerEngine.setBackgroundBlend) {
-			state.visualizerEngine.setBackgroundBlend(menuController.getState().passthroughMix, passthroughAvailableBool);
-		}
+	const syncVisualizerBackgroundBlend = function() {
+		syncPassthroughBackgroundBlend(state.visualizerEngine, menuController.getState().passthroughMix);
 	};
 	const cycleSelection = function(controller, getSelectionState, namesKey, indexKey, selectFn, direction) {
 		if (!controller) {
@@ -197,7 +195,7 @@ const createRuntime = function(options) {
 		const rawViewerTransform = basePose ? basePose.transform : pose.transform;
 		const renderSpaceInitializedBool = state.xrRefSpace !== state.baseRefSpace;
 		const menuState = menuController.getState();
-		const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {delta: delta, renderedTransform: pose.transform, viewerTransform: rawViewerTransform, renderSpaceInitializedBool: renderSpaceInitializedBool, locomotion: readLocomotionInput(frame), jumpMode: menuState.jumpMode, menuOpenBool: menuState.menuOpenBool});
+		const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {delta: delta, renderedTransform: pose.transform, viewerTransform: rawViewerTransform, renderSpaceInitializedBool: renderSpaceInitializedBool, locomotion: readLocomotionInput(frame), jumpMode: menuState.jumpMode, menuConsumesRightTriggerBool: menuState.menuConsumesRightTriggerBool});
 		if (locomotionStep.referenceSpaceUpdateNeededBool) {
 			updateReferenceSpace(rawViewerTransform);
 		}
@@ -219,11 +217,11 @@ const createRuntime = function(options) {
 				state.visualizerEngine.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
 				state.visualizerEngine.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 			}
-			syncVisualizerBackgroundBlend(state.passthroughAvailableBool);
+			syncVisualizerBackgroundBlend();
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -235,8 +233,8 @@ const createRuntime = function(options) {
 		state.sceneTimeSeconds = previewTimeSeconds;
 		locomotion.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getState().jumpMode);
 		updateSceneLighting(previewTimeSeconds);
-		syncVisualizerBackgroundBlend(false);
-		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors});
+		syncVisualizerBackgroundBlend();
+		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, passthroughFallbackBool: true});
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};
@@ -257,7 +255,7 @@ const createRuntime = function(options) {
 		updatePassthroughUiState();
 		shell.setXrState({statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.", enterEnabledBool: !!state.xrSupportState.preferredSessionMode, exitEnabledBool: false});
 		if (state.visualizerEngine) {
-			syncVisualizerBackgroundBlend(false);
+			syncVisualizerBackgroundBlend();
 			state.visualizerEngine.endSession();
 		}
 		xrMovementState.horizontalVelocityX = 0;

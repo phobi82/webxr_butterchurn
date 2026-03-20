@@ -89,6 +89,7 @@ const createMenuView = function(options) {
 		const centerX = menuCanvas.width * 0.5;
 		const trackStartX = menuCanvas.width * options.menuSliderMinU;
 		const trackEndX = menuCanvas.width * options.menuSliderMaxU;
+		const sliderReachPadPx = 28;
 		const canvasHeight = Math.ceil(presetPanelTop + presetPanelHeight + 30 + sectionGap);
 		const contentInset = canvasHeight - innerFrameInset - (presetPanelTop + presetPanelHeight);
 		const contentLeft = innerFrameInset + contentInset;
@@ -154,6 +155,7 @@ const createMenuView = function(options) {
 			centerX: centerX,
 			trackStartX: trackStartX,
 			trackEndX: trackEndX,
+			sliderReachPadPx: sliderReachPadPx,
 			sliderHalfHeightPx: options.menuSliderHalfHeight * canvasHeight
 		};
 	};
@@ -194,9 +196,9 @@ const createMenuView = function(options) {
 			const layout = getLayoutMetrics();
 			const x = u * menuCanvas.width;
 			const y = v * layout.canvasHeight;
-			const floorAlphaSliderBool = Math.abs(y - layout.floorTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
-			const passthroughMixSliderBool = Math.abs(y - layout.passthroughTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
-			const eyeDistanceSliderBool = Math.abs(y - layout.eyeTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX && x <= layout.trackEndX;
+			const floorAlphaSliderBool = Math.abs(y - layout.floorTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
+			const passthroughMixSliderBool = Math.abs(y - layout.passthroughTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
+			const eyeDistanceSliderBool = Math.abs(y - layout.eyeTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
 			let jumpMode = "";
 			let shaderModeAction = "";
 			let lightPresetAction = "";
@@ -385,7 +387,7 @@ const createMenuView = function(options) {
 			menuCtx.font = "bold 30px Arial";
 			menuCtx.fillText("Passthrough Mix", layout.contentLeft + 28, layout.passthroughTitleY);
 			menuCtx.textAlign = "right";
-			menuCtx.fillStyle = renderState.passthroughAvailableBool ? accentColor : "rgba(255,255,255,0.5)";
+			menuCtx.fillStyle = accentColor;
 			menuCtx.fillText(Math.round((renderState.passthroughMix || 0) * 100) + "%", layout.contentRight - 28, layout.passthroughTitleY);
 			menuCtx.textAlign = "left";
 			const passthroughKnobX = menuCanvas.width * renderState.passthroughMixSliderU;
@@ -399,13 +401,13 @@ const createMenuView = function(options) {
 			passthroughGradient.addColorStop(0, "rgba(255,255,255,0.95)");
 			passthroughGradient.addColorStop(0.5, "rgba(130,210,255,0.9)");
 			passthroughGradient.addColorStop(1, "rgba(80,255,180,0.95)");
-			menuCtx.strokeStyle = renderState.passthroughAvailableBool ? passthroughGradient : "rgba(255,255,255,0.22)";
+			menuCtx.strokeStyle = passthroughGradient;
 			menuCtx.lineWidth = 10;
 			menuCtx.beginPath();
 			menuCtx.moveTo(layout.trackStartX, layout.passthroughTrackY);
 			menuCtx.lineTo(layout.trackEndX, layout.passthroughTrackY);
 			menuCtx.stroke();
-			menuCtx.fillStyle = renderState.passthroughAvailableBool ? (renderState.passthroughHoverBool || renderState.passthroughSliderActiveBool ? accentColor : "#ffffff") : "rgba(255,255,255,0.35)";
+			menuCtx.fillStyle = renderState.passthroughHoverBool || renderState.passthroughSliderActiveBool ? accentColor : "#ffffff";
 			menuCtx.beginPath();
 			menuCtx.arc(passthroughKnobX, layout.passthroughTrackY, 22, 0, Math.PI * 2);
 			menuCtx.fill();
@@ -527,8 +529,9 @@ const createMenuController = function(options) {
 		floorAlphaHoverBool: false,
 		passthroughHoverBool: false,
 		passthroughAvailableBool: false,
+		passthroughFallbackBool: true,
 		passthroughSupportedBool: false,
-		passthroughStatusText: "Passthrough available in AR mode",
+		passthroughStatusText: "No passthrough here, using black fallback",
 		hoveredJumpMode: "",
 		hoveredShaderModeAction: "",
 		hoveredLightPresetAction: "",
@@ -579,26 +582,11 @@ const createMenuController = function(options) {
 		}
 	};
 	const applyPassthroughState = function(args) {
-		args = args || {};
-		state.passthroughSupportedBool = !!args.supportedBool;
-		state.passthroughAvailableBool = !!args.availableBool;
-		if (state.passthroughAvailableBool) {
-			state.passthroughStatusText = "Live headset passthrough active";
-			return;
-		}
-		if (args.sessionMode === "immersive-vr") {
-			state.passthroughStatusText = "Current VR session has no passthrough";
-			return;
-		}
-		if (args.sessionMode === "immersive-ar") {
-			state.passthroughStatusText = args.environmentBlendMode === "opaque" ? "Current AR session is still opaque" : "Passthrough unavailable in this AR session";
-			return;
-		}
-		if (state.passthroughSupportedBool) {
-			state.passthroughStatusText = "Enter AR mode to blend passthrough";
-			return;
-		}
-		state.passthroughStatusText = "Passthrough not available on this setup";
+		const uiState = getPassthroughUiState(args);
+		state.passthroughSupportedBool = !!(args && args.supportedBool);
+		state.passthroughAvailableBool = uiState.availableBool;
+		state.passthroughFallbackBool = uiState.fallbackBool;
+		state.passthroughStatusText = uiState.statusText;
 	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
@@ -614,7 +602,7 @@ const createMenuController = function(options) {
 		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
 		state.eyeDistanceHoverBool = !!hit.eyeDistanceSliderBool || state.activeSliderHand === "desktop";
 		state.floorAlphaHoverBool = !!hit.floorAlphaSliderBool || state.activeFloorAlphaSliderHand === "desktop";
-		state.passthroughHoverBool = (!!hit.passthroughMixSliderBool && state.passthroughAvailableBool) || state.activePassthroughSliderHand === "desktop";
+		state.passthroughHoverBool = !!hit.passthroughMixSliderBool || state.activePassthroughSliderHand === "desktop";
 		state.hoveredJumpMode = hit.jumpMode || "";
 		state.hoveredShaderModeAction = hit.shaderModeAction || "";
 		state.hoveredLightPresetAction = hit.lightPresetAction || "";
@@ -625,7 +613,7 @@ const createMenuController = function(options) {
 		if (state.activeFloorAlphaSliderHand === "desktop") {
 			state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
 		}
-		if (state.activePassthroughSliderHand === "desktop" && state.passthroughAvailableBool) {
+		if (state.activePassthroughSliderHand === "desktop") {
 			state.passthroughMix = passthroughMixSlider.fromSliderU(state.desktopPointerU);
 		}
 	};
@@ -648,11 +636,26 @@ const createMenuController = function(options) {
 		const relZ = point.z - menuPlane.center.z;
 		const localX = dotVec3(relX, relY, relZ, menuPlane.right.x, menuPlane.right.y, menuPlane.right.z);
 		const localY = dotVec3(relX, relY, relZ, menuPlane.up.x, menuPlane.up.y, menuPlane.up.z);
-		if (Math.abs(localX) > options.menuWidth * 0.5 || Math.abs(localY) > menuPlaneHeight * 0.5) {
-			return null;
-		}
 		const u = 0.5 + localX / options.menuWidth;
 		const v = 0.5 - localY / menuPlaneHeight;
+		if (Math.abs(localX) > options.menuWidth * 0.5 || Math.abs(localY) > menuPlaneHeight * 0.5) {
+			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && state.activePassthroughSliderHand !== ray.hand) {
+				return null;
+			}
+			return {
+				distance: distance,
+				point: point,
+				u: clampNumber(u, 0, 1),
+				v: clampNumber(v, 0, 1),
+				eyeDistanceSliderBool: state.activeSliderHand === ray.hand,
+				floorAlphaSliderBool: state.activeFloorAlphaSliderHand === ray.hand,
+				passthroughMixSliderBool: state.activePassthroughSliderHand === ray.hand,
+				jumpMode: "",
+				shaderModeAction: "",
+				lightPresetAction: "",
+				presetAction: ""
+			};
+		}
 		return Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v));
 	};
 	const updateControllerRays = function(frame, xrSession, xrRefSpace) {
@@ -689,7 +692,7 @@ const createMenuController = function(options) {
 				ray.hit = hit;
 				state.eyeDistanceHoverBool = hit.eyeDistanceSliderBool || state.eyeDistanceHoverBool;
 				state.floorAlphaHoverBool = hit.floorAlphaSliderBool || state.floorAlphaHoverBool;
-				state.passthroughHoverBool = (hit.passthroughMixSliderBool && state.passthroughAvailableBool) || state.passthroughHoverBool;
+				state.passthroughHoverBool = hit.passthroughMixSliderBool || state.passthroughHoverBool;
 				state.hoveredJumpMode = hit.jumpMode || state.hoveredJumpMode;
 				state.hoveredShaderModeAction = hit.shaderModeAction || state.hoveredShaderModeAction;
 				state.hoveredLightPresetAction = hit.lightPresetAction || state.hoveredLightPresetAction;
@@ -700,7 +703,26 @@ const createMenuController = function(options) {
 	};
 	return {
 		getState: function() {
-			return {jumpMode: state.jumpMode, menuOpenBool: state.menuOpenBool, floorAlpha: state.floorAlpha, passthroughMix: state.passthroughMix, passthroughAvailableBool: state.passthroughAvailableBool, eyeDistanceMeters: state.eyeDistanceMeters, desktopPreviewVisibleBool: state.desktopPreviewVisibleBool, plane: menuPlane, planeHeight: menuView.getPlaneHeight(options.menuWidth)};
+			let rightRayHitsMenuBool = false;
+			for (let i = 0; i < controllerRays.length; i += 1) {
+				if (controllerRays[i].hand === "right" && controllerRays[i].hitBool) {
+					rightRayHitsMenuBool = true;
+					break;
+				}
+			}
+			return {
+				jumpMode: state.jumpMode,
+				menuOpenBool: state.menuOpenBool,
+				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || state.activePassthroughSliderHand === "right"),
+				floorAlpha: state.floorAlpha,
+				passthroughMix: state.passthroughMix,
+				passthroughAvailableBool: state.passthroughAvailableBool,
+				passthroughFallbackBool: state.passthroughFallbackBool,
+				eyeDistanceMeters: state.eyeDistanceMeters,
+				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
+				plane: menuPlane,
+				planeHeight: menuView.getPlaneHeight(options.menuWidth)
+			};
 		},
 		getControllerRays: function() {
 			return controllerRays;
@@ -725,6 +747,7 @@ const createMenuController = function(options) {
 				passthroughSliderActiveBool: !!state.activePassthroughSliderHand,
 				eyeDistanceSliderActiveBool: !!state.activeSliderHand,
 				passthroughAvailableBool: state.passthroughAvailableBool,
+				passthroughFallbackBool: state.passthroughFallbackBool,
 				passthroughStatusText: state.passthroughStatusText,
 				shaderModeNames: externalState.shaderModeNames,
 				currentShaderModeIndex: externalState.currentShaderModeIndex,
@@ -742,12 +765,6 @@ const createMenuController = function(options) {
 		},
 		setPassthroughState: function(args) {
 			applyPassthroughState(args);
-			if (!state.passthroughAvailableBool) {
-				state.passthroughHoverBool = false;
-				if (state.activePassthroughSliderHand) {
-					state.activePassthroughSliderHand = "";
-				}
-			}
 		},
 		updateMenuPose: function(pose) {
 			if (!pose) {
@@ -852,7 +869,7 @@ const createMenuController = function(options) {
 				state.activeFloorAlphaSliderHand = "desktop";
 				state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
 			}
-			if (hit.passthroughMixSliderBool && state.passthroughAvailableBool) {
+			if (hit.passthroughMixSliderBool) {
 				state.activePassthroughSliderHand = "desktop";
 				state.passthroughMix = passthroughMixSlider.fromSliderU(state.desktopPointerU);
 			}
@@ -913,8 +930,12 @@ const createMenuController = function(options) {
 				state.activeSliderHand = "";
 				state.activeFloorAlphaSliderHand = "";
 				state.activePassthroughSliderHand = "";
+				clearHoverState();
 				if (state.menuOpenBool) {
 					this.updateMenuPose(args.pose);
+				} else {
+					controllerRays.length = 0;
+					triggerPressedByHand.clear();
 				}
 			}
 			state.menuTogglePressedBool = togglePressedBool;
@@ -945,7 +966,7 @@ const createMenuController = function(options) {
 					state.activeFloorAlphaSliderHand = hand;
 					state.floorAlpha = floorAlphaSlider.fromSliderU(ray.hit.u);
 				}
-				if (triggerPressedBool && ray.hit && ray.hit.passthroughMixSliderBool && state.passthroughAvailableBool && (!wasTriggerPressedBool || state.activePassthroughSliderHand === hand)) {
+				if (triggerPressedBool && ray.hit && ray.hit.passthroughMixSliderBool && (!wasTriggerPressedBool || state.activePassthroughSliderHand === hand)) {
 					state.activePassthroughSliderHand = hand;
 					state.passthroughMix = passthroughMixSlider.fromSliderU(ray.hit.u);
 				}
