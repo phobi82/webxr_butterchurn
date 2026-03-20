@@ -7,6 +7,7 @@ const createRuntime = function(options) {
 	const audioController = options.audioController;
 	const locomotion = options.locomotion;
 	const menuController = options.menuController;
+	const passthroughController = options.passthroughController;
 	const sceneRenderer = options.sceneRenderer;
 	const sceneLighting = options.sceneLighting;
 	const createGlbAssetStore = options.createGlbAssetStore;
@@ -87,9 +88,6 @@ const createRuntime = function(options) {
 			sessionMode: state.xrSessionMode,
 			environmentBlendMode: state.xrEnvironmentBlendMode
 		});
-	};
-	const syncVisualizerBackgroundBlend = function() {
-		syncPassthroughBackgroundBlend(state.visualizerEngine, menuController.getState().passthroughMix);
 	};
 	const cycleSelection = function(controller, getSelectionState, namesKey, indexKey, selectFn, direction) {
 		if (!controller) {
@@ -212,16 +210,18 @@ const createRuntime = function(options) {
 		applyLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: renderPose, callbacks: xrMenuActionCallbacks});
+		if (passthroughController && passthroughController.updateFrame) {
+			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
+		}
 		if (state.visualizerEngine) {
 			if (renderPose.transform && renderPose.views.length) {
 				state.visualizerEngine.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
 				state.visualizerEngine.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 			}
-			syncVisualizerBackgroundBlend();
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -233,8 +233,10 @@ const createRuntime = function(options) {
 		state.sceneTimeSeconds = previewTimeSeconds;
 		locomotion.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getState().jumpMode);
 		updateSceneLighting(previewTimeSeconds);
-		syncVisualizerBackgroundBlend();
-		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, passthroughFallbackBool: true});
+		if (passthroughController && passthroughController.updateFrame) {
+			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
+		}
+		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, passthroughFallbackBool: true});
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};
@@ -255,7 +257,7 @@ const createRuntime = function(options) {
 		updatePassthroughUiState();
 		shell.setXrState({statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.", enterEnabledBool: !!state.xrSupportState.preferredSessionMode, exitEnabledBool: false});
 		if (state.visualizerEngine) {
-			syncVisualizerBackgroundBlend();
+			applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
 			state.visualizerEngine.endSession();
 		}
 		xrMovementState.horizontalVelocityX = 0;
@@ -390,7 +392,7 @@ const createRuntime = function(options) {
 			if (state.visualizerEngine) {
 				audioController.setAudioBackend(state.visualizerEngine);
 				audioController.activate().catch(function() {});
-				syncVisualizerBackgroundBlend(false);
+				applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
 			}
 			if (!sessionBridge.isAvailable()) {
 				updatePassthroughUiState();
@@ -446,8 +448,6 @@ const appConfig = {
 		eyeDistanceMax: 0.2,
 		floorAlphaMin: 0,
 		floorAlphaMax: 1,
-		passthroughMixMin: 0,
-		passthroughMixMax: 1,
 		desktopMenuPreviewWidthPixels: 420,
 		jumpModeDoubleMinU: 0.1,
 		jumpModeDoubleMaxU: 0.45,
@@ -462,10 +462,18 @@ const appConfig = {
 		presetNextMaxU: 0.92,
 		initialJumpMode: "double",
 		initialFloorAlpha: 0.72,
-		initialPassthroughMix: 0,
 		initialEyeDistanceMeters: 0.064,
 		initialDesktopPreviewVisibleBool: false,
 		previewStyle: {right: "12px", top: "12px"}
+	},
+	passthrough: {
+		initialBlendModeKey: "uniform",
+		initialUniformBlendModeKey: "manual",
+		initialLightingModeKey: "spots",
+		initialManualMix: 0,
+		initialAudioReactiveIntensity: 0.7,
+		initialFlashlightRadius: 0.18,
+		initialFlashlightSoftness: 0.1
 	},
 	runtime: {
 		desktopMouseSensitivity: 0.0024,
@@ -503,6 +511,7 @@ const createApp = function(projectConfig) {
 		audio: Object.assign({}, appConfig.audio, projectConfig.audio || {}),
 		locomotion: Object.assign({}, appConfig.locomotion, projectConfig.locomotion || {}),
 		menu: Object.assign({}, appConfig.menu, projectConfig.menu || {}),
+		passthrough: Object.assign({}, appConfig.passthrough, projectConfig.passthrough || {}),
 		runtime: Object.assign({}, appConfig.runtime, projectConfig.runtime || {}),
 		scene: Object.assign({}, appConfig.scene, projectConfig.scene || {})
 	};
@@ -511,8 +520,9 @@ const createApp = function(projectConfig) {
 	if (!shell || !shell.canvas) {
 		throw new Error("appShell missing. Load the shell setup in index.html before xr-app.js.");
 	}
-	const menuView = createMenuView(Object.assign({documentRef: document}, config.menu));
-	const menuController = createMenuController(Object.assign({menuView: menuView, menuWidth: config.scene.menuWidth}, config.menu));
+			const passthroughController = createPassthroughController(config.passthrough);
+	const menuView = createMenuView(Object.assign({documentRef: document, menuWorldWidth: config.scene.menuWidth}, config.menu));
+	const menuController = createMenuController(Object.assign({menuView: menuView, menuWidth: config.scene.menuWidth, passthroughController: passthroughController}, config.menu));
 	const audioController = createAudioSourceController({
 		setStatus: shell.setStatus,
 		mediaDevices: navigator.mediaDevices || null,
@@ -560,6 +570,7 @@ const createApp = function(projectConfig) {
 		audioController: audioController,
 		locomotion: locomotion,
 		menuController: menuController,
+		passthroughController: passthroughController,
 		sceneRenderer: sceneRenderer,
 		sceneLighting: sceneLighting,
 		createGlbAssetStore: function(gl) {

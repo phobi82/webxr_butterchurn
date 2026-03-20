@@ -12,6 +12,9 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - in-headset menu plus mirrored desktop preview for debugging the same menu
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`
+- passthrough blend modes: `Uniform`, `Flashlight`
+- uniform passthrough submodes: `Manual`, `Music`
+- passthrough lighting modes: `None`, `Uniform`, `Spots`
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, YouTube playlist, Suno Live Radio, or synthetic `Debug Audio`
 
@@ -23,7 +26,9 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-light-presets.js`: lighting preset catalog and preset state builders
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
-- `xr-passthrought.js`: passthrough/background fallback module for UI state, visualizer blend syncing, and lighting-tinted overlay compositing
+- `xr-passthrough-modes.js`: pure passthrough mode catalog and blend formulas
+- `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
+- `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
 - `xr-app.js`: app config, composition, startup, and runtime orchestration
@@ -33,7 +38,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - a modern desktop browser with WebGL support
 - a browser/runtime combination with WebXR support for immersive mode
 - a VR headset supported by that browser for actual headset sessions
-- a passthrough-capable headset/browser combination if the new passthrough background mix should take effect
+- a passthrough-capable headset/browser combination if the AR passthrough blend modes should reveal the real environment instead of the black fallback
 - microphone or screen/tab-capture permission if live audio input should drive the scene
 - popup permission if `YouTube Playlist` or `Suno Live Radio` should open their source tabs automatically
 
@@ -106,10 +111,17 @@ The current menu exposes:
 
 - jump mode: `Double`, `Multi`
 - world opacity slider for floor, grid, and level blocks; GLB props stay opaque
-- passthrough mix slider: `0%` keeps full Butterchurn, `100%` maximizes passthrough replacement when the current XR session exposes passthrough
+- passthrough group:
+  - blend mode cycler: `Uniform`, `Flashlight`
+  - `Uniform Blend`: `Manual`, `Music`
+  - `Uniform` + `Manual`: `Mix`
+  - `Uniform` + `Music`: bipolar `Intensity` with end labels `Vis -> Passthrough` and `Passthrough -> Vis`
+  - `Flashlight`: `Radius` and `Softness`
+- scene lighting group:
+  - `Lighting Mode` cycler: `None`, `Uniform`, `Spots` with `Spots` as the default
+  - `Light Preset` cycler
 - eye distance slider
 - visualizer mode selector
-- light preset selector
 - Butterchurn preset selector
 - live audio meters for `Level`, `Peak`, `Bass`, `Transient`, and `Beat`
 
@@ -124,10 +136,16 @@ The current menu exposes:
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
-- The passthrough mix slider now always works: live AR sessions blend toward real headset passthrough, while desktop preview and opaque VR/AR sessions use a black fallback background instead.
-- `Passthrough Mix = 0` now keeps the XR background fully opaque, and semi-transparent world geometry composites against the configured Butterchurn/Passthrough background mix instead of exposing raw passthrough directly behind those surfaces.
-- The visible passthrough or black fallback portion is darkened by 50% and then tinted by the active lighting preset based on the current audio metrics, while `Passthrough Mix = 100%` no longer leaves Butterchurn visible behind the scene.
+- Passthrough now runs through a dedicated controller/orchestrator plus a separate pure mode-definition module instead of mixing mode logic into the visualizer or menu.
+- `Uniform` keeps one shared full-screen blend path, while `Flashlight` reveals passthrough through two soft hand-controlled masks.
+- `Uniform` splits into `Manual` and `Music`; the bipolar `Intensity` slider now spans a stronger full-range audio blend, clearly separates positive from negative direction, and labels the two directions as `Vis -> Passthrough` and `Passthrough -> Vis`.
+- The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
+- The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
+- Lighting can now be disabled, applied as one music-reactive uniform tint, or rendered as soft colored spots derived from the active lighting preset.
+- Desktop preview, opaque VR, and unsupported AR still use the same blend modes against a black fallback instead of live passthrough.
 - Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
+- The XR menu hit path no longer crashes when pointing at the menu after the generic section refactor; the earlier `undefined.length` hit-test regression is fixed.
+- XR menu controller state now drops stale hand ownership when a tracked-pointer hand disappears for a frame, so left/right controller buttons no longer stay blocked by a stuck menu hand state.
 - The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
 
 ## GitHub Pages

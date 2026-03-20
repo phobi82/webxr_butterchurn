@@ -84,6 +84,15 @@ const createFullscreenTextureMode = function(spec) {
 			if (this.programInfo.backgroundAlphaLoc) {
 				this.gl.uniform1f(this.programInfo.backgroundAlphaLoc, frameState.backgroundAlpha);
 			}
+			if (this.programInfo.backgroundMaskCountLoc) {
+				this.gl.uniform1f(this.programInfo.backgroundMaskCountLoc, frameState.backgroundMaskCount);
+			}
+			if (this.programInfo.backgroundMaskCentersLoc) {
+				this.gl.uniform2fv(this.programInfo.backgroundMaskCentersLoc, frameState.backgroundMaskCenters);
+			}
+			if (this.programInfo.backgroundMaskParamsLoc) {
+				this.gl.uniform2fv(this.programInfo.backgroundMaskParamsLoc, frameState.backgroundMaskParams);
+			}
 			if (this.programInfo.audioMetricsLoc) {
 				const audioMetrics = sourceState.audioMetrics || {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
 				this.gl.uniform4f(this.programInfo.audioMetricsLoc, audioMetrics.level, audioMetrics.peak, audioMetrics.bass, audioMetrics.transient);
@@ -112,6 +121,9 @@ const createVisualizerEngine = function(options) {
 		headHorizontalFov: Math.PI / 2,
 		headVerticalFov: Math.PI / 2,
 		backgroundAlpha: 1,
+		backgroundMaskCount: 0,
+		backgroundMaskCenters: new Float32Array(4),
+		backgroundMaskParams: new Float32Array(4),
 		headPositionX: 0,
 		headPositionY: 0,
 		headPositionZ: 0,
@@ -201,8 +213,31 @@ const createVisualizerEngine = function(options) {
 			frameState.headPositionY = y;
 			frameState.headPositionZ = z;
 		},
+		setBackgroundCompositeState: function(backgroundCompositeState) {
+			backgroundCompositeState = backgroundCompositeState || {};
+			frameState.backgroundAlpha = clampNumber(backgroundCompositeState.alpha == null ? 1 : backgroundCompositeState.alpha, 0, 1);
+			frameState.backgroundMaskCount = clampNumber(backgroundCompositeState.maskCount || 0, 0, 2);
+			for (let i = 0; i < frameState.backgroundMaskCenters.length; i += 1) {
+				frameState.backgroundMaskCenters[i] = 0;
+				frameState.backgroundMaskParams[i] = 0;
+			}
+			for (let i = 0; i < frameState.backgroundMaskCount; i += 1) {
+				const mask = backgroundCompositeState.masks[i];
+				if (!mask) {
+					continue;
+				}
+				frameState.backgroundMaskCenters[i * 2] = mask.x;
+				frameState.backgroundMaskCenters[i * 2 + 1] = mask.y;
+				frameState.backgroundMaskParams[i * 2] = mask.radius;
+				frameState.backgroundMaskParams[i * 2 + 1] = mask.softness;
+			}
+		},
 		setBackgroundBlend: function(passthroughMix, passthroughAvailableBool) {
-			frameState.backgroundAlpha = passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1;
+			this.setBackgroundCompositeState({
+				alpha: passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1,
+				maskCount: 0,
+				masks: []
+			});
 		},
 		drawPreScene: function() {
 			drawPhase("drawPreScene");

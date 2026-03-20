@@ -5,8 +5,10 @@ const createMenuView = function(options) {
 	const emptyPresetNames = ["No preset"];
 	const documentRef = options.documentRef || document;
 	const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
+	const menuLayoutWidth = options.canvasWidth || 1280;
+	const maxMenuTextureHeight = options.maxMenuTextureHeight || 1364;
 	const menuCanvas = documentRef.createElement("canvas");
-	menuCanvas.width = options.canvasWidth || 1280;
+	menuCanvas.width = menuLayoutWidth;
 	menuCanvas.height = options.canvasHeight || 960;
 	const menuCtx = menuCanvas.getContext("2d");
 	const previewCanvas = documentRef.createElement("canvas");
@@ -19,7 +21,7 @@ const createMenuView = function(options) {
 		right: "12px",
 		top: "12px",
 		width: previewWidthPixels + "px",
-		height: Math.round(previewWidthPixels * menuCanvas.height / menuCanvas.width) + "px",
+		height: Math.round(previewWidthPixels * menuCanvas.height / menuLayoutWidth) + "px",
 		border: "1px solid #ffff00",
 		backgroundColor: "rgba(0, 0, 32, 0.92)",
 		display: options.initialDesktopPreviewVisibleBool === false ? "none" : "block",
@@ -29,7 +31,69 @@ const createMenuView = function(options) {
 	});
 	applyStyles(previewCanvas, options.previewStyle);
 	previewParentElement.appendChild(previewCanvas);
-	const getLayoutMetrics = function() {
+	const getSectionPanelLayout = function(panelTop, section) {
+		section = section || {};
+		const controls = section.controls || [];
+		let cursorY = panelTop + 72;
+		const controlLayouts = [];
+		for (let i = 0; i < controls.length; i += 1) {
+			const control = controls[i];
+			const controlLayout = {key: control.key, type: control.type};
+			if (control.type === "cycler") {
+				controlLayout.labelY = cursorY + 20;
+				controlLayout.rowTop = cursorY + (control.label ? 28 : 4);
+				controlLayout.rowHeight = 78;
+				controlLayout.arrowButtonTop = controlLayout.rowTop - 10;
+				controlLayout.arrowButtonHeight = controlLayout.rowHeight + 10;
+				controlLayout.valueY = controlLayout.rowTop + 22;
+				controlLayout.metaY = controlLayout.rowTop + 50;
+				cursorY = controlLayout.arrowButtonTop + controlLayout.arrowButtonHeight + 10;
+			}
+			if (control.type === "choiceRow") {
+				controlLayout.labelY = cursorY;
+				controlLayout.rowTop = cursorY + (control.label ? 24 : 6);
+				controlLayout.rowHeight = 70;
+				cursorY = controlLayout.rowTop + controlLayout.rowHeight + 16;
+			}
+			if (control.type === "slider") {
+				controlLayout.labelY = cursorY;
+				controlLayout.trackY = cursorY + (control.label || control.valueText ? 34 : 10);
+				cursorY = controlLayout.trackY + 50;
+			}
+			controlLayouts.push(controlLayout);
+		}
+		const statusY = section.statusText ? cursorY + 2 : -1000;
+		if (section.statusText) {
+			cursorY = statusY + 18;
+		}
+		return {
+			key: section.key,
+			panelTop: panelTop,
+			panelHeight: cursorY - panelTop + 18,
+			titleY: panelTop + 24,
+			badgeY: panelTop + 24,
+			statusY: statusY,
+			controlLayouts: controlLayouts
+		};
+	};
+	const getSectionLayouts = function(menuSections, startTop, sectionGap) {
+		const layouts = [];
+		const layoutByKey = {};
+		let currentTop = startTop;
+		for (let i = 0; i < menuSections.length; i += 1) {
+			const sectionLayout = getSectionPanelLayout(currentTop, menuSections[i]);
+			layouts.push(sectionLayout);
+			layoutByKey[menuSections[i].key] = sectionLayout;
+			currentTop += sectionLayout.panelHeight + sectionGap;
+		}
+		return {
+			layouts: layouts,
+			layoutByKey: layoutByKey,
+			nextTop: currentTop
+		};
+	};
+	const getLayoutMetrics = function(menuSections) {
+		menuSections = menuSections || [];
 		const audioBarItems = 5;
 		const innerFrameInset = 24;
 		const audioPanelTop = 108;
@@ -37,64 +101,21 @@ const createMenuView = function(options) {
 		const audioBarSpacing = 12;
 		const audioPanelHeight = (audioBarTop - audioPanelTop) + (audioBarItems - 1) * audioBarSpacing + 18;
 		const sectionGap = 12;
-		const jumpPanelTop = audioPanelTop + audioPanelHeight + sectionGap;
-		const jumpPanelHeight = 164;
-		const jumpPanelTitleY = jumpPanelTop + 14;
-		const jumpButtonTop = jumpPanelTop + 54;
-		const jumpButtonHeight = 70;
-		const groundPanelTop = jumpPanelTop + jumpPanelHeight + sectionGap;
-		const groundPanelHeight = 160;
-		const groundTitleY = groundPanelTop + 22;
-		const floorTrackY = groundPanelTop + 76;
-		const passthroughPanelTop = groundPanelTop + groundPanelHeight + sectionGap;
-		const passthroughPanelHeight = 180;
-		const passthroughTitleY = passthroughPanelTop + 22;
-		const passthroughTrackY = passthroughPanelTop + 76;
-		const passthroughMetaY = passthroughPanelTop + 118;
-		const eyePanelTop = passthroughPanelTop + passthroughPanelHeight + sectionGap;
-		const eyePanelHeight = 156;
-		const eyeTitleY = eyePanelTop + 22;
-		const eyeTrackY = eyePanelTop + 76;
-		const modePanelTop = eyePanelTop + eyePanelHeight + sectionGap;
-		const modePanelHeight = 132;
-		const modeTitleY = modePanelTop + 26;
-		const modeRowTop = modePanelTop + 38;
-		const modeRowHeight = 78;
-		const modeArrowButtonTop = modeRowTop - 10;
-		const modeArrowButtonHeight = modeRowHeight + 10;
-		const modeValueY = modePanelTop + 58;
-		const modeMetaY = modePanelTop + 86;
-		const lightPanelTop = modePanelTop + modePanelHeight + sectionGap;
-		const lightPanelHeight = 132;
-		const lightTitleY = lightPanelTop + 26;
-		const lightRowTop = lightPanelTop + 38;
-		const lightRowHeight = 78;
-		const lightArrowButtonTop = lightRowTop - 10;
-		const lightArrowButtonHeight = lightRowHeight + 10;
-		const lightValueY = lightPanelTop + 58;
-		const lightMetaY = lightPanelTop + 86;
-		const presetPanelTop = lightPanelTop + lightPanelHeight + sectionGap;
-		const presetPanelHeight = 132;
-		const presetTitleY = presetPanelTop + 26;
-		const presetRowTop = presetPanelTop + 38;
-		const presetRowHeight = 78;
-		const presetArrowButtonTop = presetRowTop - 10;
-		const presetArrowButtonHeight = presetRowHeight + 10;
-		const presetValueY = presetPanelTop + 58;
-		const presetMetaY = presetPanelTop + 86;
-		const prevX = menuCanvas.width * options.presetPrevMinU;
-		const prevWidth = menuCanvas.width * (options.presetPrevMaxU - options.presetPrevMinU);
-		const nextX = menuCanvas.width * options.presetNextMinU;
-		const nextWidth = menuCanvas.width * (options.presetNextMaxU - options.presetNextMinU);
-		const centerX = menuCanvas.width * 0.5;
-		const trackStartX = menuCanvas.width * options.menuSliderMinU;
-		const trackEndX = menuCanvas.width * options.menuSliderMaxU;
+		const lowerSections = getSectionLayouts(menuSections, audioPanelTop + audioPanelHeight + sectionGap, sectionGap);
+		const prevX = menuLayoutWidth * options.presetPrevMinU;
+		const prevWidth = menuLayoutWidth * (options.presetPrevMaxU - options.presetPrevMinU);
+		const nextX = menuLayoutWidth * options.presetNextMinU;
+		const nextWidth = menuLayoutWidth * (options.presetNextMaxU - options.presetNextMinU);
+		const centerX = menuLayoutWidth * 0.5;
+		const trackStartX = menuLayoutWidth * options.menuSliderMinU;
+		const trackEndX = menuLayoutWidth * options.menuSliderMaxU;
 		const sliderReachPadPx = 28;
-		const canvasHeight = Math.ceil(presetPanelTop + presetPanelHeight + 30 + sectionGap);
-		const contentInset = canvasHeight - innerFrameInset - (presetPanelTop + presetPanelHeight);
+		const lastSectionBottom = lowerSections.layouts.length ? lowerSections.layouts[lowerSections.layouts.length - 1].panelTop + lowerSections.layouts[lowerSections.layouts.length - 1].panelHeight : audioPanelTop + audioPanelHeight;
+		const canvasHeight = Math.ceil(lastSectionBottom + 30 + sectionGap);
+		const contentInset = canvasHeight - innerFrameInset - lastSectionBottom;
 		const contentLeft = innerFrameInset + contentInset;
-		const contentRight = menuCanvas.width - innerFrameInset - contentInset;
-		return {
+		const contentRight = menuLayoutWidth - innerFrameInset - contentInset;
+		return Object.assign({
 			contentLeft: contentLeft,
 			contentWidth: contentRight - contentLeft,
 			contentRight: contentRight,
@@ -103,51 +124,6 @@ const createMenuView = function(options) {
 			audioBarTop: audioBarTop,
 			audioBarSpacing: audioBarSpacing,
 			audioPanelHeight: audioPanelHeight,
-			jumpPanelTop: jumpPanelTop,
-			jumpPanelHeight: jumpPanelHeight,
-			jumpPanelTitleY: jumpPanelTitleY,
-			jumpButtonTop: jumpButtonTop,
-			jumpButtonHeight: jumpButtonHeight,
-			groundPanelTop: groundPanelTop,
-			groundPanelHeight: groundPanelHeight,
-			groundTitleY: groundTitleY,
-			floorTrackY: floorTrackY,
-			passthroughPanelTop: passthroughPanelTop,
-			passthroughPanelHeight: passthroughPanelHeight,
-			passthroughTitleY: passthroughTitleY,
-			passthroughTrackY: passthroughTrackY,
-			passthroughMetaY: passthroughMetaY,
-			eyePanelTop: eyePanelTop,
-			eyePanelHeight: eyePanelHeight,
-			eyeTitleY: eyeTitleY,
-			eyeTrackY: eyeTrackY,
-			modePanelTop: modePanelTop,
-			modePanelHeight: modePanelHeight,
-			modeTitleY: modeTitleY,
-			modeRowTop: modeRowTop,
-			modeRowHeight: modeRowHeight,
-			modeArrowButtonTop: modeArrowButtonTop,
-			modeArrowButtonHeight: modeArrowButtonHeight,
-			modeValueY: modeValueY,
-			modeMetaY: modeMetaY,
-			lightPanelTop: lightPanelTop,
-			lightPanelHeight: lightPanelHeight,
-			lightTitleY: lightTitleY,
-			lightRowTop: lightRowTop,
-			lightRowHeight: lightRowHeight,
-			lightArrowButtonTop: lightArrowButtonTop,
-			lightArrowButtonHeight: lightArrowButtonHeight,
-			lightValueY: lightValueY,
-			lightMetaY: lightMetaY,
-			presetPanelTop: presetPanelTop,
-			presetPanelHeight: presetPanelHeight,
-			presetTitleY: presetTitleY,
-			presetRowTop: presetRowTop,
-			presetRowHeight: presetRowHeight,
-			presetArrowButtonTop: presetArrowButtonTop,
-			presetArrowButtonHeight: presetArrowButtonHeight,
-			presetValueY: presetValueY,
-			presetMetaY: presetMetaY,
 			prevX: prevX,
 			prevWidth: prevWidth,
 			nextX: nextX,
@@ -156,11 +132,14 @@ const createMenuView = function(options) {
 			trackStartX: trackStartX,
 			trackEndX: trackEndX,
 			sliderReachPadPx: sliderReachPadPx,
-			sliderHalfHeightPx: options.menuSliderHalfHeight * canvasHeight
-		};
+			sliderHalfHeightPx: options.menuSliderHalfHeight * canvasHeight,
+			menuSections: menuSections,
+			sectionLayoutByKey: lowerSections.layoutByKey,
+			sectionLayouts: lowerSections.layouts
+		});
 	};
 	const syncCanvasSize = function(layout) {
-		const targetHeight = layout.canvasHeight;
+		const targetHeight = Math.min(layout.canvasHeight, maxMenuTextureHeight);
 		if (menuCanvas.height !== targetHeight) {
 			menuCanvas.height = targetHeight;
 		}
@@ -169,7 +148,15 @@ const createMenuView = function(options) {
 			previewCanvas.height = targetHeight;
 		}
 		previewCanvas.style.width = previewWidthPixels + "px";
-		previewCanvas.style.height = Math.round(previewWidthPixels * targetHeight / menuCanvas.width) + "px";
+		previewCanvas.style.height = Math.round(previewWidthPixels * layout.canvasHeight / menuLayoutWidth) + "px";
+	};
+	const getMenuPlaneDimensions = function(menuSections) {
+		const layout = getLayoutMetrics(menuSections);
+		const worldMenuWidth = options.menuWorldWidth || options.menuWidth || 0.74;
+		return {
+			width: worldMenuWidth,
+			height: worldMenuWidth * (layout.canvasHeight / menuLayoutWidth)
+		};
 	};
 	const drawCenteredFittedText = function(text, centerX, topY, maxWidth, fontSize, minFontSize, color, weight) {
 		let currentFontSize = fontSize;
@@ -183,66 +170,94 @@ const createMenuView = function(options) {
 		menuCtx.fillStyle = color;
 		menuCtx.fillText(text, centerX, topY);
 	};
-	const getNonEmptyItems = function(items, fallbackItems) {
-		return items && items.length ? items : fallbackItems;
+	const getSectionInteraction = function(layout, x, y) {
+		const sliderReachPadPx = 8;
+		const sliderHalfHeightPx = 24;
+		let moduleCycleControlKey = "";
+		let moduleCycleAction = "";
+		let moduleChoiceControlKey = "";
+		let moduleChoiceItemKey = "";
+		let moduleSliderControlKey = "";
+		for (let i = 0; i < layout.menuSections.length; i += 1) {
+			const section = layout.menuSections[i];
+			const sectionLayout = layout.sectionLayoutByKey[section.key];
+			if (!sectionLayout) {
+				continue;
+			}
+			for (let j = 0; j < sectionLayout.controlLayouts.length; j += 1) {
+				const controlLayout = sectionLayout.controlLayouts[j];
+				const control = section.controls[j];
+				if (control.type === "cycler" && y >= controlLayout.arrowButtonTop && y <= controlLayout.arrowButtonTop + controlLayout.arrowButtonHeight) {
+					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
+						moduleCycleControlKey = control.key;
+						moduleCycleAction = "prev";
+					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
+						moduleCycleControlKey = control.key;
+						moduleCycleAction = "next";
+					}
+				}
+				if (control.type === "choiceRow" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight) {
+					const items = control.items || [];
+					const gap = 100;
+					const rowStartX = layout.prevX;
+					const rowEndX = layout.nextX + layout.nextWidth;
+					const rowWidth = rowEndX - rowStartX;
+					const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
+					for (let k = 0; k < items.length; k += 1) {
+						const itemX = rowStartX + k * (buttonWidth + gap);
+						if (x >= itemX && x <= itemX + buttonWidth) {
+							moduleChoiceControlKey = control.key;
+							moduleChoiceItemKey = items[k].key;
+						}
+					}
+				}
+				if (control.type === "slider" && Math.abs(y - controlLayout.trackY) <= sliderHalfHeightPx && x >= layout.trackStartX - sliderReachPadPx && x <= layout.trackEndX + sliderReachPadPx) {
+					moduleSliderControlKey = control.key;
+				}
+			}
+		}
+		if (moduleSliderControlKey) {
+			moduleCycleControlKey = "";
+			moduleCycleAction = "";
+			moduleChoiceControlKey = "";
+			moduleChoiceItemKey = "";
+		}
+		if (moduleChoiceControlKey) {
+			moduleCycleControlKey = "";
+			moduleCycleAction = "";
+		}
+		return {
+			moduleCycleControlKey: moduleCycleControlKey,
+			moduleCycleAction: moduleCycleAction,
+			moduleChoiceControlKey: moduleChoiceControlKey,
+			moduleChoiceItemKey: moduleChoiceItemKey,
+			moduleSliderControlKey: moduleSliderControlKey
+		};
 	};
 	return {
 		menuCanvas: menuCanvas,
 		previewCanvas: previewCanvas,
-		getPlaneHeight: function(menuWidth) {
-			return menuWidth * (getLayoutMetrics().canvasHeight / menuCanvas.width);
+		getPlaneDimensions: function(moduleSections) {
+			return getMenuPlaneDimensions(moduleSections);
 		},
-		getInteractionAtUv: function(u, v) {
-			const layout = getLayoutMetrics();
-			const x = u * menuCanvas.width;
+		getInteractionAtUv: function(u, v, moduleSections) {
+			const layout = getLayoutMetrics(moduleSections);
+			const x = u * menuLayoutWidth;
 			const y = v * layout.canvasHeight;
-			const floorAlphaSliderBool = Math.abs(y - layout.floorTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
-			const passthroughMixSliderBool = Math.abs(y - layout.passthroughTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
-			const eyeDistanceSliderBool = Math.abs(y - layout.eyeTrackY) <= layout.sliderHalfHeightPx && x >= layout.trackStartX - layout.sliderReachPadPx && x <= layout.trackEndX + layout.sliderReachPadPx;
-			let jumpMode = "";
-			let shaderModeAction = "";
-			let lightPresetAction = "";
-			let presetAction = "";
-			if (y >= layout.jumpButtonTop && y <= layout.jumpButtonTop + layout.jumpButtonHeight) {
-				if (u >= options.jumpModeDoubleMinU && u <= options.jumpModeDoubleMaxU) {
-					jumpMode = "double";
-				} else if (u >= options.jumpModeMultiMinU && u <= options.jumpModeMultiMaxU) {
-					jumpMode = "multi";
-				}
-			}
-			if (y >= layout.modeArrowButtonTop && y <= layout.modeArrowButtonTop + layout.modeArrowButtonHeight) {
-				if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-					shaderModeAction = "prev";
-				} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-					shaderModeAction = "next";
-				}
-			}
-			if (y >= layout.lightArrowButtonTop && y <= layout.lightArrowButtonTop + layout.lightArrowButtonHeight) {
-				if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-					lightPresetAction = "prev";
-				} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-					lightPresetAction = "next";
-				}
-			}
-			if (y >= layout.presetArrowButtonTop && y <= layout.presetArrowButtonTop + layout.presetArrowButtonHeight) {
-				if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-					presetAction = "prev";
-				} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-					presetAction = "next";
-				}
-			}
-			return {floorAlphaSliderBool, passthroughMixSliderBool, eyeDistanceSliderBool, jumpMode, shaderModeAction, lightPresetAction, presetAction};
+			const sectionHit = getSectionInteraction(layout, x, y);
+			return {
+				moduleCycleControlKey: sectionHit.moduleCycleControlKey,
+				moduleCycleAction: sectionHit.moduleCycleAction,
+				moduleChoiceControlKey: sectionHit.moduleChoiceControlKey,
+				moduleChoiceItemKey: sectionHit.moduleChoiceItemKey,
+				moduleSliderControlKey: sectionHit.moduleSliderControlKey
+			};
 		},
 		render: function(renderState) {
 			renderState = renderState || {};
-			const layout = getLayoutMetrics();
+			const moduleSections = renderState.moduleSections || [];
+			const layout = getLayoutMetrics(moduleSections);
 			const audioMetrics = renderState.audioMetrics || {};
-			const shaderModeNames = getNonEmptyItems(renderState.shaderModeNames, emptyModeNames);
-			const currentShaderModeIndex = clampNumber(renderState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
-			const lightPresetNames = getNonEmptyItems(renderState.lightPresetNames, emptyPresetNames);
-			const currentLightPresetIndex = clampNumber(renderState.currentLightPresetIndex || 0, 0, lightPresetNames.length - 1);
-			const presetNames = getNonEmptyItems(renderState.presetNames, emptyPresetNames);
-			const currentPresetIndex = clampNumber(renderState.currentPresetIndex || 0, 0, presetNames.length - 1);
 			const accentRgb = hslToRgb((renderState.sceneTimeSeconds || 0) * 0.03 + 0.04, 0.85, 0.62);
 			const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
 			const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
@@ -254,29 +269,33 @@ const createMenuView = function(options) {
 				{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)}
 			];
 			syncCanvasSize(layout);
-			const headerGradient = menuCtx.createLinearGradient(0, 0, menuCanvas.width, menuCanvas.height);
+			const logicalScaleY = menuCanvas.height / Math.max(1, layout.canvasHeight);
+			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
+			menuCtx.clearRect(0, 0, menuCanvas.width, menuCanvas.height);
+			menuCtx.setTransform(1, 0, 0, logicalScaleY, 0, 0);
+			const headerGradient = menuCtx.createLinearGradient(0, 0, menuLayoutWidth, layout.canvasHeight);
 			headerGradient.addColorStop(0, "#04111f");
 			headerGradient.addColorStop(0.55, "#071d33");
 			headerGradient.addColorStop(1, "#160c2f");
 			menuCtx.fillStyle = headerGradient;
-			menuCtx.fillRect(0, 0, menuCanvas.width, menuCanvas.height);
+			menuCtx.fillRect(0, 0, menuLayoutWidth, layout.canvasHeight);
 			menuCtx.fillStyle = "rgba(255,255,255,0.025)";
 			for (let i = 0; i < 24; i += 1) {
-				menuCtx.fillRect((i * 73 + (renderState.sceneTimeSeconds || 0) * 28) % (menuCanvas.width + 40) - 40, 0, 18, menuCanvas.height);
+				menuCtx.fillRect((i * 73 + (renderState.sceneTimeSeconds || 0) * 28) % (menuLayoutWidth + 40) - 40, 0, 18, layout.canvasHeight);
 			}
 			menuCtx.fillStyle = accentSoft;
 			menuCtx.beginPath();
-			menuCtx.arc(menuCanvas.width * 0.18, menuCanvas.height * 0.14, 160, 0, Math.PI * 2);
+			menuCtx.arc(menuLayoutWidth * 0.18, layout.canvasHeight * 0.14, 160, 0, Math.PI * 2);
 			menuCtx.fill();
 			menuCtx.beginPath();
-			menuCtx.arc(menuCanvas.width * 0.84, menuCanvas.height * 0.24, 210, 0, Math.PI * 2);
+			menuCtx.arc(menuLayoutWidth * 0.84, layout.canvasHeight * 0.24, 210, 0, Math.PI * 2);
 			menuCtx.fill();
 			menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
 			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(14, 14, menuCanvas.width - 28, menuCanvas.height - 28);
+			menuCtx.strokeRect(14, 14, menuLayoutWidth - 28, layout.canvasHeight - 28);
 			menuCtx.strokeStyle = accentColor;
 			menuCtx.lineWidth = 4;
-			menuCtx.strokeRect(24, 24, menuCanvas.width - 48, menuCanvas.height - 48);
+			menuCtx.strokeRect(24, 24, menuLayoutWidth - 48, layout.canvasHeight - 48);
 			menuCtx.textAlign = "left";
 			menuCtx.textBaseline = "top";
 			menuCtx.fillStyle = "#f8fbff";
@@ -307,190 +326,138 @@ const createMenuView = function(options) {
 				menuCtx.fillStyle = accentColor;
 				menuCtx.fillText(Math.round(item.value * 100) + "%", layout.contentRight - 16, rowY);
 			}
-			menuCtx.textAlign = "left";
-			menuCtx.fillStyle = "rgba(6,14,24,0.78)";
-			menuCtx.fillRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
-			menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(layout.contentLeft, layout.jumpPanelTop, layout.contentWidth, layout.jumpPanelHeight);
-			menuCtx.textAlign = "center";
-			menuCtx.fillStyle = "#ffffff";
-			menuCtx.font = "bold 34px Arial";
-			menuCtx.fillText("Jump Mode", menuCanvas.width * 0.5, layout.jumpPanelTitleY);
-			const doubleButtonX = menuCanvas.width * options.jumpModeDoubleMinU;
-			const doubleButtonWidth = menuCanvas.width * (options.jumpModeDoubleMaxU - options.jumpModeDoubleMinU);
-			const multiButtonX = menuCanvas.width * options.jumpModeMultiMinU;
-			const multiButtonWidth = menuCanvas.width * (options.jumpModeMultiMaxU - options.jumpModeMultiMinU);
-			menuCtx.fillStyle = renderState.jumpMode === "double" ? accentSoft : renderState.hoveredJumpMode === "double" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
-			menuCtx.fillRect(doubleButtonX, layout.jumpButtonTop, doubleButtonWidth, layout.jumpButtonHeight);
-			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(doubleButtonX, layout.jumpButtonTop, doubleButtonWidth, layout.jumpButtonHeight);
-			menuCtx.fillStyle = renderState.jumpMode === "multi" ? accentSoft : renderState.hoveredJumpMode === "multi" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
-			menuCtx.fillRect(multiButtonX, layout.jumpButtonTop, multiButtonWidth, layout.jumpButtonHeight);
-			menuCtx.strokeRect(multiButtonX, layout.jumpButtonTop, multiButtonWidth, layout.jumpButtonHeight);
-			menuCtx.fillStyle = "#ffffff";
-			menuCtx.font = "bold 30px Arial";
-			menuCtx.fillText("Double", doubleButtonX + doubleButtonWidth * 0.5, layout.jumpButtonTop + 16);
-			menuCtx.fillText("Multi", multiButtonX + multiButtonWidth * 0.5, layout.jumpButtonTop + 16);
-			menuCtx.fillStyle = "rgba(255,255,255,0.7)";
-			menuCtx.font = "20px Arial";
-			menuCtx.fillText("2 jumps total", doubleButtonX + doubleButtonWidth * 0.5, layout.jumpButtonTop + 48);
-			menuCtx.fillText("Unlimited jumps", multiButtonX + multiButtonWidth * 0.5, layout.jumpButtonTop + 48);
-			menuCtx.textAlign = "left";
-			menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-			menuCtx.fillRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
-			menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(layout.contentLeft, layout.groundPanelTop, layout.contentWidth, layout.groundPanelHeight);
-			menuCtx.fillStyle = "#ffffff";
-			menuCtx.font = "bold 30px Arial";
-			menuCtx.fillText("World Opacity", layout.contentLeft + 28, layout.groundTitleY);
-			menuCtx.textAlign = "right";
-			menuCtx.fillStyle = accentColor;
-			menuCtx.fillText(Math.round((renderState.floorAlpha || 0) * 100) + "%", layout.contentRight - 28, layout.groundTitleY);
-			menuCtx.textAlign = "left";
-			const floorKnobX = menuCanvas.width * renderState.floorAlphaSliderU;
-			menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
-			menuCtx.lineWidth = 18;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.floorTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.floorTrackY);
-			menuCtx.stroke();
-			const floorGradient = menuCtx.createLinearGradient(layout.trackStartX, layout.floorTrackY, layout.trackEndX, layout.floorTrackY);
-			for (let i = 0; i <= 6; i += 1) {
-				const stopColor = hslToRgb(i / 6, 0.88, 0.6);
-				floorGradient.addColorStop(i / 6, "rgb(" + Math.round(stopColor[0] * 255) + "," + Math.round(stopColor[1] * 255) + "," + Math.round(stopColor[2] * 255) + ")");
-			}
-			menuCtx.strokeStyle = floorGradient;
-			menuCtx.lineWidth = 10;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.floorTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.floorTrackY);
-			menuCtx.stroke();
-			menuCtx.fillStyle = renderState.floorAlphaHoverBool || renderState.floorAlphaSliderActiveBool ? accentColor : "#ffffff";
-			menuCtx.beginPath();
-			menuCtx.arc(floorKnobX, layout.floorTrackY, 22, 0, Math.PI * 2);
-			menuCtx.fill();
-			menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-			menuCtx.font = "18px Arial";
-			menuCtx.textAlign = "left";
-			menuCtx.fillText("Invisible", layout.trackStartX, layout.floorTrackY + 26);
-			menuCtx.textAlign = "right";
-			menuCtx.fillText("Solid", layout.trackEndX, layout.floorTrackY + 26);
-			menuCtx.textAlign = "left";
-			menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-			menuCtx.fillRect(layout.contentLeft, layout.passthroughPanelTop, layout.contentWidth, layout.passthroughPanelHeight);
-			menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(layout.contentLeft, layout.passthroughPanelTop, layout.contentWidth, layout.passthroughPanelHeight);
-			menuCtx.fillStyle = "#ffffff";
-			menuCtx.font = "bold 30px Arial";
-			menuCtx.fillText("Passthrough Mix", layout.contentLeft + 28, layout.passthroughTitleY);
-			menuCtx.textAlign = "right";
-			menuCtx.fillStyle = accentColor;
-			menuCtx.fillText(Math.round((renderState.passthroughMix || 0) * 100) + "%", layout.contentRight - 28, layout.passthroughTitleY);
-			menuCtx.textAlign = "left";
-			const passthroughKnobX = menuCanvas.width * renderState.passthroughMixSliderU;
-			menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
-			menuCtx.lineWidth = 18;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.passthroughTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.passthroughTrackY);
-			menuCtx.stroke();
-			const passthroughGradient = menuCtx.createLinearGradient(layout.trackStartX, layout.passthroughTrackY, layout.trackEndX, layout.passthroughTrackY);
-			passthroughGradient.addColorStop(0, "rgba(255,255,255,0.95)");
-			passthroughGradient.addColorStop(0.5, "rgba(130,210,255,0.9)");
-			passthroughGradient.addColorStop(1, "rgba(80,255,180,0.95)");
-			menuCtx.strokeStyle = passthroughGradient;
-			menuCtx.lineWidth = 10;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.passthroughTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.passthroughTrackY);
-			menuCtx.stroke();
-			menuCtx.fillStyle = renderState.passthroughHoverBool || renderState.passthroughSliderActiveBool ? accentColor : "#ffffff";
-			menuCtx.beginPath();
-			menuCtx.arc(passthroughKnobX, layout.passthroughTrackY, 22, 0, Math.PI * 2);
-			menuCtx.fill();
-			menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-			menuCtx.font = "18px Arial";
-			menuCtx.textAlign = "left";
-			menuCtx.fillText("Butterchurn", layout.trackStartX, layout.passthroughTrackY + 26);
-			menuCtx.textAlign = "right";
-			menuCtx.fillText("Passthrough", layout.trackEndX, layout.passthroughTrackY + 26);
-			menuCtx.textAlign = "center";
-			menuCtx.fillStyle = renderState.passthroughAvailableBool ? "rgba(255,255,255,0.68)" : "rgba(255,160,160,0.9)";
-			menuCtx.font = "18px Arial";
-			menuCtx.fillText(renderState.passthroughStatusText || "", layout.centerX, layout.passthroughMetaY);
-			menuCtx.textAlign = "left";
-			menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-			menuCtx.fillRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
-			menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
-			menuCtx.lineWidth = 2;
-			menuCtx.strokeRect(layout.contentLeft, layout.eyePanelTop, layout.contentWidth, layout.eyePanelHeight);
-			menuCtx.fillStyle = "#ffffff";
-			menuCtx.font = "bold 30px Arial";
-			menuCtx.fillText("Eye Distance", layout.contentLeft + 28, layout.eyeTitleY);
-			menuCtx.textAlign = "right";
-			menuCtx.fillStyle = accentColor;
-			menuCtx.fillText(Math.round((renderState.eyeDistanceMeters || 0) * 1000) + " mm", layout.contentRight - 28, layout.eyeTitleY);
-			menuCtx.textAlign = "left";
-			const eyeKnobX = menuCanvas.width * renderState.eyeDistanceSliderU;
-			menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
-			menuCtx.lineWidth = 18;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.eyeTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.eyeTrackY);
-			menuCtx.stroke();
-			menuCtx.strokeStyle = accentColor;
-			menuCtx.lineWidth = 10;
-			menuCtx.beginPath();
-			menuCtx.moveTo(layout.trackStartX, layout.eyeTrackY);
-			menuCtx.lineTo(layout.trackEndX, layout.eyeTrackY);
-			menuCtx.stroke();
-			menuCtx.fillStyle = renderState.eyeDistanceHoverBool || renderState.eyeDistanceSliderActiveBool ? accentColor : "#ffffff";
-			menuCtx.beginPath();
-			menuCtx.arc(eyeKnobX, layout.eyeTrackY, 22, 0, Math.PI * 2);
-			menuCtx.fill();
-			menuCtx.fillStyle = "rgba(255,255,255,0.65)";
-			menuCtx.font = "18px Arial";
-			menuCtx.textAlign = "left";
-			menuCtx.fillText(Math.round(renderState.eyeDistanceMin * 1000) + " mm", layout.trackStartX, layout.eyeTrackY + 26);
-			menuCtx.textAlign = "right";
-			menuCtx.fillText(Math.round(renderState.eyeDistanceMax * 1000) + " mm", layout.trackEndX, layout.eyeTrackY + 26);
-			menuCtx.textAlign = "center";
-			const drawNavigablePanel = function(panelOpts) {
-				menuCtx.textAlign = "center";
+			const drawChoiceRow = function(control, controlLayout) {
+				const items = control.items || [];
+				const gap = 100;
+				const rowStartX = layout.prevX;
+				const rowEndX = layout.nextX + layout.nextWidth;
+				const rowWidth = rowEndX - rowStartX;
+				const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
+				for (let i = 0; i < items.length; i += 1) {
+					const item = items[i];
+					const itemX = rowStartX + i * (buttonWidth + gap);
+					menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
+					menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+					menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
+					menuCtx.lineWidth = 2;
+					menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+					menuCtx.fillStyle = "#ffffff";
+					menuCtx.font = "bold 30px Arial";
+					menuCtx.textAlign = "center";
+					menuCtx.fillText(item.label, itemX + buttonWidth * 0.5, controlLayout.rowTop + 16);
+					if (item.metaText) {
+						menuCtx.fillStyle = "rgba(255,255,255,0.7)";
+						menuCtx.font = "20px Arial";
+						menuCtx.fillText(item.metaText, itemX + buttonWidth * 0.5, controlLayout.rowTop + 48);
+					}
+				}
+				menuCtx.textAlign = "left";
+			};
+			const drawDynamicSection = function(section) {
+				const sectionLayout = layout.sectionLayoutByKey[section.key];
+				if (!sectionLayout) {
+					return;
+				}
+				menuCtx.textAlign = "left";
 				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, panelOpts.panelTop, layout.contentWidth, panelOpts.panelHeight);
+				menuCtx.fillRect(layout.contentLeft, sectionLayout.panelTop, layout.contentWidth, sectionLayout.panelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
 				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, panelOpts.panelTop, layout.contentWidth, panelOpts.panelHeight);
+				menuCtx.strokeRect(layout.contentLeft, sectionLayout.panelTop, layout.contentWidth, sectionLayout.panelHeight);
 				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 28px Arial";
-				menuCtx.fillText(panelOpts.title, menuCanvas.width * 0.5, panelOpts.titleY);
-				menuCtx.fillStyle = panelOpts.hoveredAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(layout.prevX, panelOpts.arrowButtonTop, layout.prevWidth, panelOpts.arrowButtonHeight);
-				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.prevX, panelOpts.arrowButtonTop, layout.prevWidth, panelOpts.arrowButtonHeight);
-				menuCtx.fillStyle = panelOpts.hoveredAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
-				menuCtx.fillRect(layout.nextX, panelOpts.arrowButtonTop, layout.nextWidth, panelOpts.arrowButtonHeight);
-				menuCtx.strokeRect(layout.nextX, panelOpts.arrowButtonTop, layout.nextWidth, panelOpts.arrowButtonHeight);
-				menuCtx.fillStyle = "#ffffff";
-				menuCtx.font = "bold 44px Arial";
-				menuCtx.fillText("<", layout.prevX + layout.prevWidth * 0.5, panelOpts.rowTop + 14);
-				menuCtx.fillText(">", layout.nextX + layout.nextWidth * 0.5, panelOpts.rowTop + 14);
-				drawCenteredFittedText(panelOpts.valueText, layout.centerX, panelOpts.valueY, menuCanvas.width * 0.42, 28, 18, "#ffffff", "bold");
-				if (panelOpts.metaFitted) {
-					drawCenteredFittedText(panelOpts.metaText, layout.centerX, panelOpts.metaY, menuCanvas.width * 0.56, 18, 14, "rgba(255,255,255,0.65)");
-				} else {
-					menuCtx.fillStyle = "rgba(255,255,255,0.65)";
+				menuCtx.font = "bold 30px Arial";
+				menuCtx.fillText(section.title, layout.contentLeft + 28, sectionLayout.titleY);
+				if (section.badgeText) {
+					menuCtx.textAlign = "right";
+					menuCtx.fillStyle = accentColor;
+					menuCtx.fillText(section.badgeText, layout.contentRight - 28, sectionLayout.badgeY);
+					menuCtx.textAlign = "left";
+				}
+				for (let i = 0; i < section.controls.length; i += 1) {
+					const control = section.controls[i];
+					const controlLayout = sectionLayout.controlLayouts[i];
+					if (control.type === "cycler") {
+						if (control.label) {
+							menuCtx.fillStyle = "rgba(255,255,255,0.82)";
+							menuCtx.font = "bold 20px Arial";
+							menuCtx.textAlign = "center";
+							menuCtx.fillText(control.label, layout.centerX, controlLayout.labelY);
+						}
+						menuCtx.fillStyle = control.hoveredAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
+						menuCtx.fillRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
+						menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
+						menuCtx.lineWidth = 2;
+						menuCtx.strokeRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
+						menuCtx.fillStyle = control.hoveredAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
+						menuCtx.fillRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
+						menuCtx.strokeRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
+						menuCtx.fillStyle = "#ffffff";
+						menuCtx.font = "bold 44px Arial";
+						menuCtx.textAlign = "center";
+						menuCtx.fillText("<", layout.prevX + layout.prevWidth * 0.5, controlLayout.rowTop + 14);
+						menuCtx.fillText(">", layout.nextX + layout.nextWidth * 0.5, controlLayout.rowTop + 14);
+						drawCenteredFittedText(control.valueText || "", layout.centerX, controlLayout.valueY, menuLayoutWidth * 0.42, 28, 18, "#ffffff", "bold");
+						if (control.metaText) {
+							drawCenteredFittedText(control.metaText, layout.centerX, controlLayout.metaY, menuLayoutWidth * 0.56, 18, 14, "rgba(255,255,255,0.65)");
+						}
+						menuCtx.textAlign = "left";
+					}
+					if (control.type === "choiceRow") {
+						if (control.label) {
+							menuCtx.fillStyle = "#ffffff";
+							menuCtx.font = "bold 24px Arial";
+							menuCtx.fillText(control.label, layout.contentLeft + 28, controlLayout.labelY);
+						}
+						drawChoiceRow(control, controlLayout);
+					}
+					if (control.type === "slider") {
+						const knobX = menuLayoutWidth * control.sliderU;
+						if (control.label || control.valueText) {
+							menuCtx.fillStyle = "#ffffff";
+							menuCtx.font = "bold 26px Arial";
+							menuCtx.textAlign = "left";
+							menuCtx.fillText(control.label, layout.contentLeft + 28, controlLayout.labelY);
+							menuCtx.textAlign = "right";
+							menuCtx.fillStyle = accentColor;
+							menuCtx.fillText(control.valueText || "", layout.contentRight - 28, controlLayout.labelY);
+						}
+						menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
+						menuCtx.lineWidth = 18;
+						menuCtx.beginPath();
+						menuCtx.moveTo(layout.trackStartX, controlLayout.trackY);
+						menuCtx.lineTo(layout.trackEndX, controlLayout.trackY);
+						menuCtx.stroke();
+						menuCtx.strokeStyle = accentColor;
+						menuCtx.lineWidth = 10;
+						menuCtx.beginPath();
+						menuCtx.moveTo(layout.trackStartX, controlLayout.trackY);
+						menuCtx.lineTo(layout.trackEndX, controlLayout.trackY);
+						menuCtx.stroke();
+						menuCtx.fillStyle = control.hoveredBool || control.activeBool ? accentColor : "#ffffff";
+						menuCtx.beginPath();
+						menuCtx.arc(knobX, controlLayout.trackY, 22, 0, Math.PI * 2);
+						menuCtx.fill();
+						menuCtx.fillStyle = "rgba(255,255,255,0.65)";
+						menuCtx.font = "18px Arial";
+						menuCtx.textAlign = "left";
+						menuCtx.fillText(control.minLabel || "", layout.trackStartX, controlLayout.trackY + 26);
+						menuCtx.textAlign = "right";
+						menuCtx.fillText(control.maxLabel || "", layout.trackEndX, controlLayout.trackY + 26);
+						menuCtx.textAlign = "left";
+					}
+				}
+				if (section.statusText) {
+					menuCtx.textAlign = "center";
+					menuCtx.fillStyle = section.statusTone === "warning" ? "rgba(255,160,160,0.9)" : "rgba(255,255,255,0.68)";
 					menuCtx.font = "18px Arial";
-					menuCtx.fillText(panelOpts.metaText, layout.centerX, panelOpts.metaY);
+					menuCtx.fillText(section.statusText, layout.centerX, sectionLayout.statusY);
+					menuCtx.textAlign = "left";
 				}
 			};
-			drawNavigablePanel({panelTop: layout.modePanelTop, panelHeight: layout.modePanelHeight, title: "Visualizer Mode", titleY: layout.modeTitleY, hoveredAction: renderState.hoveredShaderModeAction, arrowButtonTop: layout.modeArrowButtonTop, arrowButtonHeight: layout.modeArrowButtonHeight, rowTop: layout.modeRowTop, valueText: shaderModeNames[currentShaderModeIndex], valueY: layout.modeValueY, metaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length, metaY: layout.modeMetaY});
-			drawNavigablePanel({panelTop: layout.lightPanelTop, panelHeight: layout.lightPanelHeight, title: "Light Preset", titleY: layout.lightTitleY, hoveredAction: renderState.hoveredLightPresetAction, arrowButtonTop: layout.lightArrowButtonTop, arrowButtonHeight: layout.lightArrowButtonHeight, rowTop: layout.lightRowTop, valueText: lightPresetNames[currentLightPresetIndex], valueY: layout.lightValueY, metaText: renderState.currentLightPresetDescription || "", metaY: layout.lightMetaY, metaFitted: true});
-			drawNavigablePanel({panelTop: layout.presetPanelTop, panelHeight: layout.presetPanelHeight, title: "Butterchurn Preset", titleY: layout.presetTitleY, hoveredAction: renderState.hoveredPresetAction, arrowButtonTop: layout.presetArrowButtonTop, arrowButtonHeight: layout.presetArrowButtonHeight, rowTop: layout.presetRowTop, valueText: presetNames[currentPresetIndex], valueY: layout.presetValueY, metaText: (currentPresetIndex + 1) + " / " + presetNames.length, metaY: layout.presetMetaY});
+			for (let i = 0; i < moduleSections.length; i += 1) {
+				drawDynamicSection(moduleSections[i]);
+			}
+			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
 			return menuCanvas;
 		},
 		updateDesktopPreview: function(previewState) {
@@ -513,6 +480,7 @@ const createMenuController = function(options) {
 	const menuView = options.menuView;
 	const menuCanvas = menuView.menuCanvas;
 	const previewCanvas = menuView.previewCanvas;
+	const passthroughController = options.passthroughController || null;
 	const controllerRays = [];
 	const triggerPressedByHand = new Map();
 	const state = {
@@ -520,18 +488,18 @@ const createMenuController = function(options) {
 		menuOpenBool: false,
 		menuTogglePressedBool: false,
 		floorAlpha: options.initialFloorAlpha == null ? 0.72 : options.initialFloorAlpha,
-		passthroughMix: options.initialPassthroughMix == null ? 0 : options.initialPassthroughMix,
 		eyeDistanceMeters: options.initialEyeDistanceMeters == null ? 0.064 : options.initialEyeDistanceMeters,
 		activeSliderHand: "",
 		activeFloorAlphaSliderHand: "",
-		activePassthroughSliderHand: "",
+		activePassthroughPrimarySliderHand: "",
+		activePassthroughSecondarySliderHand: "",
 		eyeDistanceHoverBool: false,
 		floorAlphaHoverBool: false,
-		passthroughHoverBool: false,
-		passthroughAvailableBool: false,
-		passthroughFallbackBool: true,
-		passthroughSupportedBool: false,
-		passthroughStatusText: "No passthrough here, using black fallback",
+		passthroughPrimaryHoverBool: false,
+		passthroughSecondaryHoverBool: false,
+		hoveredPassthroughBlendModeAction: "",
+		hoveredSceneLightingModeAction: "",
+		hoveredPassthroughUniformBlendModeKey: "",
 		hoveredJumpMode: "",
 		hoveredShaderModeAction: "",
 		hoveredLightPresetAction: "",
@@ -540,13 +508,93 @@ const createMenuController = function(options) {
 		desktopPointerActiveBool: false,
 		desktopPointerU: 0,
 		desktopPointerV: 0,
-		desktopPreviewEventsRegisteredBool: false
+		desktopPreviewEventsRegisteredBool: false,
+		cachedSceneLightingState: {
+			lightPresetNames: ["Aurora Drift"],
+			currentLightPresetIndex: 0,
+			currentLightPresetDescription: "Slow colorful overhead drift"
+		}
 	};
 	const menuPlane = {
 		center: {x: 0, y: 1.45, z: -0.8},
 		right: {x: 1, y: 0, z: 0},
 		up: {x: 0, y: 1, z: 0},
 		normal: {x: 0, y: 0, z: 1}
+	};
+	const getPassthroughUiState = function() {
+		return passthroughController && passthroughController.getUiState ? passthroughController.getUiState() : {
+			availableBool: false,
+			fallbackBool: true,
+			statusText: "Passthrough unsupported, using black fallback",
+			blendModes: passthroughBlendModeDefinitions,
+			lightingModes: passthroughLightingModeDefinitions,
+			uniformBlendModes: passthroughUniformBlendModeDefinitions,
+			selectedBlendModeKey: "uniform",
+			selectedUniformBlendModeKey: "manual",
+			selectedLightingModeKey: "uniform",
+			primaryControl: null,
+			secondaryControl: null,
+			uniformBlendModeVisibleBool: true,
+			visibleShare: 0
+		};
+	};
+	const updateCachedSceneLightingState = function(externalState) {
+		externalState = externalState || {};
+		if (externalState.lightPresetNames && externalState.lightPresetNames.length) {
+			state.cachedSceneLightingState = {
+				lightPresetNames: externalState.lightPresetNames,
+				currentLightPresetIndex: externalState.currentLightPresetIndex || 0,
+				currentLightPresetDescription: externalState.currentLightPresetDescription || ""
+			};
+		}
+	};
+	// The controller only gathers runtime state and delegates section creation.
+	const getModuleSections = function(externalState) {
+		updateCachedSceneLightingState(externalState);
+		const passthroughUiState = getPassthroughUiState();
+		const lightingState = state.cachedSceneLightingState;
+		const lightPresetNames = lightingState.lightPresetNames || ["Aurora Drift"];
+		const lightPresetIndex = clampNumber(lightingState.currentLightPresetIndex || 0, 0, Math.max(0, lightPresetNames.length - 1));
+		externalState = externalState || {};
+		const shaderModeNames = externalState.shaderModeNames && externalState.shaderModeNames.length ? externalState.shaderModeNames : ["No mode"];
+		const currentShaderModeIndex = clampNumber(externalState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
+		const presetNames = externalState.presetNames && externalState.presetNames.length ? externalState.presetNames : ["No preset"];
+		const currentPresetIndex = clampNumber(externalState.currentPresetIndex || 0, 0, presetNames.length - 1);
+		return createLowerMenuSections({
+			selectedJumpMode: state.jumpMode,
+			hoveredJumpMode: state.hoveredJumpMode,
+			floorAlpha: state.floorAlpha,
+			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
+			floorAlphaHoverBool: state.floorAlphaHoverBool,
+			floorAlphaActiveBool: !!state.activeFloorAlphaSliderHand,
+			passthroughUiState: passthroughUiState,
+			hoveredPassthroughBlendModeAction: state.hoveredPassthroughBlendModeAction,
+			hoveredPassthroughUniformBlendModeKey: state.hoveredPassthroughUniformBlendModeKey,
+			passthroughPrimarySliderU: getControlSliderU(passthroughUiState.primaryControl),
+			passthroughSecondarySliderU: getControlSliderU(passthroughUiState.secondaryControl),
+			passthroughPrimaryHoverBool: state.passthroughPrimaryHoverBool,
+			passthroughSecondaryHoverBool: state.passthroughSecondaryHoverBool,
+			passthroughPrimaryActiveBool: !!state.activePassthroughPrimarySliderHand,
+			passthroughSecondaryActiveBool: !!state.activePassthroughSecondarySliderHand,
+			eyeDistanceMeters: state.eyeDistanceMeters,
+			eyeDistanceMin: options.eyeDistanceMin,
+			eyeDistanceMax: options.eyeDistanceMax,
+			eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
+			eyeDistanceHoverBool: state.eyeDistanceHoverBool,
+			eyeDistanceActiveBool: !!state.activeSliderHand,
+			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
+			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
+			hoveredShaderModeAction: state.hoveredShaderModeAction,
+			lightingModes: passthroughUiState.lightingModes || [],
+			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
+			hoveredSceneLightingModeAction: state.hoveredSceneLightingModeAction,
+			currentLightPresetName: lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
+			hoveredLightPresetAction: state.hoveredLightPresetAction,
+			currentPresetName: presetNames[currentPresetIndex],
+			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
+			hoveredPresetAction: state.hoveredPresetAction
+		});
 	};
 	const createSliderMapping = function(minValue, maxValue) {
 		return {
@@ -560,11 +608,23 @@ const createMenuController = function(options) {
 	};
 	const eyeDistanceSlider = createSliderMapping(options.eyeDistanceMin, options.eyeDistanceMax);
 	const floorAlphaSlider = createSliderMapping(options.floorAlphaMin, options.floorAlphaMax);
-	const passthroughMixSlider = createSliderMapping(options.passthroughMixMin, options.passthroughMixMax);
+	const getControlSliderU = function(control) {
+		if (!control) {
+			return eyeDistanceSlider.toSliderU(options.eyeDistanceMin);
+		}
+		return options.menuSliderMinU + (clampNumber(control.value, control.min, control.max) - control.min) / (control.max - control.min) * (options.menuSliderMaxU - options.menuSliderMinU);
+	};
+	const getControlValueFromSliderU = function(control, u) {
+		return control.min + clampNumber((u - options.menuSliderMinU) / (options.menuSliderMaxU - options.menuSliderMinU), 0, 1) * (control.max - control.min);
+	};
 	const clearHoverState = function() {
 		state.eyeDistanceHoverBool = false;
 		state.floorAlphaHoverBool = false;
-		state.passthroughHoverBool = false;
+		state.passthroughPrimaryHoverBool = false;
+		state.passthroughSecondaryHoverBool = false;
+		state.hoveredPassthroughBlendModeAction = "";
+		state.hoveredSceneLightingModeAction = "";
+		state.hoveredPassthroughUniformBlendModeKey = "";
 		state.hoveredJumpMode = "";
 		state.hoveredShaderModeAction = "";
 		state.hoveredLightPresetAction = "";
@@ -577,51 +637,91 @@ const createMenuController = function(options) {
 		if (state.activeFloorAlphaSliderHand === hand) {
 			state.activeFloorAlphaSliderHand = "";
 		}
-		if (state.activePassthroughSliderHand === hand) {
-			state.activePassthroughSliderHand = "";
+		if (state.activePassthroughPrimarySliderHand === hand) {
+			state.activePassthroughPrimarySliderHand = "";
+		}
+		if (state.activePassthroughSecondarySliderHand === hand) {
+			state.activePassthroughSecondarySliderHand = "";
 		}
 	};
+	const applyActiveSliderCapture = function(hit, hand, passthroughUiState) {
+		if (!hit) {
+			return hit;
+		}
+		if (state.activeSliderHand === hand) {
+			hit.moduleSliderControlKey = "eyeDistance";
+		}
+		if (state.activeFloorAlphaSliderHand === hand) {
+			hit.moduleSliderControlKey = "floorAlpha";
+		}
+		if (state.activePassthroughPrimarySliderHand === hand && passthroughUiState && passthroughUiState.primaryControl) {
+			hit.moduleSliderControlKey = passthroughUiState.primaryControl.key;
+		}
+		if (state.activePassthroughSecondarySliderHand === hand && passthroughUiState && passthroughUiState.secondaryControl) {
+			hit.moduleSliderControlKey = passthroughUiState.secondaryControl.key;
+		}
+		if (hit.moduleSliderControlKey) {
+			hit.moduleCycleControlKey = "";
+			hit.moduleCycleAction = "";
+			hit.moduleChoiceControlKey = "";
+			hit.moduleChoiceItemKey = "";
+		}
+		return hit;
+	};
 	const applyPassthroughState = function(args) {
-		const uiState = getPassthroughUiState(args);
-		state.passthroughSupportedBool = !!(args && args.supportedBool);
-		state.passthroughAvailableBool = uiState.availableBool;
-		state.passthroughFallbackBool = uiState.fallbackBool;
-		state.passthroughStatusText = uiState.statusText;
+		if (passthroughController && passthroughController.setSessionState) {
+			passthroughController.setSessionState(args);
+		}
 	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
+		const passthroughUiState = getPassthroughUiState();
+		const moduleSections = getModuleSections();
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
 			state.eyeDistanceHoverBool = state.activeSliderHand === "desktop";
 			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
-			state.passthroughHoverBool = state.activePassthroughSliderHand === "desktop";
+			state.passthroughPrimaryHoverBool = state.activePassthroughPrimarySliderHand === "desktop";
+			state.passthroughSecondaryHoverBool = state.activePassthroughSecondarySliderHand === "desktop";
+			state.hoveredPassthroughBlendModeAction = "";
+			state.hoveredSceneLightingModeAction = "";
+			state.hoveredPassthroughUniformBlendModeKey = "";
 			state.hoveredJumpMode = "";
 			state.hoveredShaderModeAction = "";
 			state.hoveredLightPresetAction = "";
 			state.hoveredPresetAction = "";
 			return;
 		}
-		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
-		state.eyeDistanceHoverBool = !!hit.eyeDistanceSliderBool || state.activeSliderHand === "desktop";
-		state.floorAlphaHoverBool = !!hit.floorAlphaSliderBool || state.activeFloorAlphaSliderHand === "desktop";
-		state.passthroughHoverBool = !!hit.passthroughMixSliderBool || state.activePassthroughSliderHand === "desktop";
-		state.hoveredJumpMode = hit.jumpMode || "";
-		state.hoveredShaderModeAction = hit.shaderModeAction || "";
-		state.hoveredLightPresetAction = hit.lightPresetAction || "";
-		state.hoveredPresetAction = hit.presetAction || "";
+		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, moduleSections);
+		state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.activeSliderHand === "desktop";
+		state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.activeFloorAlphaSliderHand === "desktop";
+		state.passthroughPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.primaryControl && passthroughUiState.primaryControl.key) || state.activePassthroughPrimarySliderHand === "desktop";
+		state.passthroughSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.secondaryControl && passthroughUiState.secondaryControl.key) || state.activePassthroughSecondarySliderHand === "desktop";
+		state.hoveredPassthroughBlendModeAction = hit.moduleCycleControlKey === "passthroughBlendMode" ? hit.moduleCycleAction : "";
+		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
+		state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : "";
+		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
+		state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : "";
+		state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : "";
+		state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : "";
 		if (state.activeSliderHand === "desktop") {
 			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
 		}
 		if (state.activeFloorAlphaSliderHand === "desktop") {
 			state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
 		}
-		if (state.activePassthroughSliderHand === "desktop") {
-			state.passthroughMix = passthroughMixSlider.fromSliderU(state.desktopPointerU);
+		if (state.activePassthroughPrimarySliderHand === "desktop" && passthroughUiState.primaryControl && passthroughController && passthroughController.setControlValue) {
+			passthroughController.setControlValue(passthroughUiState.primaryControl.key, getControlValueFromSliderU(passthroughUiState.primaryControl, state.desktopPointerU));
+		}
+		if (state.activePassthroughSecondarySliderHand === "desktop" && passthroughUiState.secondaryControl && passthroughController && passthroughController.setControlValue) {
+			passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, state.desktopPointerU));
 		}
 	};
 	const intersectMenu = function(ray) {
 		if (!state.menuOpenBool) {
 			return null;
 		}
-		const menuPlaneHeight = menuView.getPlaneHeight(options.menuWidth);
+		const passthroughUiState = getPassthroughUiState();
+		const moduleSections = getModuleSections();
+		const planeDimensions = menuView.getPlaneDimensions(moduleSections);
 		const denom = dotVec3(menuPlane.normal.x, menuPlane.normal.y, menuPlane.normal.z, ray.dir.x, ray.dir.y, ray.dir.z);
 		if (Math.abs(denom) < 0.0001) {
 			return null;
@@ -636,10 +736,10 @@ const createMenuController = function(options) {
 		const relZ = point.z - menuPlane.center.z;
 		const localX = dotVec3(relX, relY, relZ, menuPlane.right.x, menuPlane.right.y, menuPlane.right.z);
 		const localY = dotVec3(relX, relY, relZ, menuPlane.up.x, menuPlane.up.y, menuPlane.up.z);
-		const u = 0.5 + localX / options.menuWidth;
-		const v = 0.5 - localY / menuPlaneHeight;
-		if (Math.abs(localX) > options.menuWidth * 0.5 || Math.abs(localY) > menuPlaneHeight * 0.5) {
-			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && state.activePassthroughSliderHand !== ray.hand) {
+		const u = 0.5 + localX / planeDimensions.width;
+		const v = 0.5 - localY / planeDimensions.height;
+		if (Math.abs(localX) > planeDimensions.width * 0.5 || Math.abs(localY) > planeDimensions.height * 0.5) {
+			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && state.activePassthroughPrimarySliderHand !== ray.hand && state.activePassthroughSecondarySliderHand !== ray.hand) {
 				return null;
 			}
 			return {
@@ -647,16 +747,14 @@ const createMenuController = function(options) {
 				point: point,
 				u: clampNumber(u, 0, 1),
 				v: clampNumber(v, 0, 1),
-				eyeDistanceSliderBool: state.activeSliderHand === ray.hand,
-				floorAlphaSliderBool: state.activeFloorAlphaSliderHand === ray.hand,
-				passthroughMixSliderBool: state.activePassthroughSliderHand === ray.hand,
-				jumpMode: "",
-				shaderModeAction: "",
-				lightPresetAction: "",
-				presetAction: ""
+				moduleCycleControlKey: "",
+				moduleCycleAction: "",
+				moduleChoiceControlKey: "",
+				moduleChoiceItemKey: "",
+				moduleSliderControlKey: state.activeSliderHand === ray.hand ? "eyeDistance" : (state.activeFloorAlphaSliderHand === ray.hand ? "floorAlpha" : (state.activePassthroughPrimarySliderHand === ray.hand && passthroughUiState.primaryControl ? passthroughUiState.primaryControl.key : (state.activePassthroughSecondarySliderHand === ray.hand && passthroughUiState.secondaryControl ? passthroughUiState.secondaryControl.key : "")))
 			};
 		}
-		return Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v));
+		return applyActiveSliderCapture(Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v, moduleSections)), ray.hand, passthroughUiState);
 	};
 	const updateControllerRays = function(frame, xrSession, xrRefSpace) {
 		controllerRays.length = 0;
@@ -690,19 +788,25 @@ const createMenuController = function(options) {
 				ray.hitBool = true;
 				ray.hitPoint = hit.point;
 				ray.hit = hit;
-				state.eyeDistanceHoverBool = hit.eyeDistanceSliderBool || state.eyeDistanceHoverBool;
-				state.floorAlphaHoverBool = hit.floorAlphaSliderBool || state.floorAlphaHoverBool;
-				state.passthroughHoverBool = hit.passthroughMixSliderBool || state.passthroughHoverBool;
-				state.hoveredJumpMode = hit.jumpMode || state.hoveredJumpMode;
-				state.hoveredShaderModeAction = hit.shaderModeAction || state.hoveredShaderModeAction;
-				state.hoveredLightPresetAction = hit.lightPresetAction || state.hoveredLightPresetAction;
-				state.hoveredPresetAction = hit.presetAction || state.hoveredPresetAction;
+				state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.eyeDistanceHoverBool;
+				state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.floorAlphaHoverBool;
+				const passthroughUiState = getPassthroughUiState();
+				state.passthroughPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.primaryControl && passthroughUiState.primaryControl.key) || state.passthroughPrimaryHoverBool;
+				state.passthroughSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.secondaryControl && passthroughUiState.secondaryControl.key) || state.passthroughSecondaryHoverBool;
+				state.hoveredPassthroughBlendModeAction = hit.moduleCycleControlKey === "passthroughBlendMode" ? hit.moduleCycleAction : state.hoveredPassthroughBlendModeAction;
+				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
+				state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : state.hoveredPassthroughUniformBlendModeKey;
+				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
+				state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : state.hoveredShaderModeAction;
+				state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : state.hoveredLightPresetAction;
+				state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : state.hoveredPresetAction;
 			}
 			controllerRays.push(ray);
 		}
 	};
 	return {
 		getState: function() {
+			const moduleSections = getModuleSections();
 			let rightRayHitsMenuBool = false;
 			for (let i = 0; i < controllerRays.length; i += 1) {
 				if (controllerRays[i].hand === "right" && controllerRays[i].hitBool) {
@@ -713,15 +817,13 @@ const createMenuController = function(options) {
 			return {
 				jumpMode: state.jumpMode,
 				menuOpenBool: state.menuOpenBool,
-				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || state.activePassthroughSliderHand === "right"),
+				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || state.activePassthroughPrimarySliderHand === "right" || state.activePassthroughSecondarySliderHand === "right"),
 				floorAlpha: state.floorAlpha,
-				passthroughMix: state.passthroughMix,
-				passthroughAvailableBool: state.passthroughAvailableBool,
-				passthroughFallbackBool: state.passthroughFallbackBool,
 				eyeDistanceMeters: state.eyeDistanceMeters,
 				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
 				plane: menuPlane,
-				planeHeight: menuView.getPlaneHeight(options.menuWidth)
+				planeWidth: menuView.getPlaneDimensions(moduleSections).width,
+				planeHeight: menuView.getPlaneDimensions(moduleSections).height
 			};
 		},
 		getControllerRays: function() {
@@ -729,38 +831,29 @@ const createMenuController = function(options) {
 		},
 		getRenderState: function(externalState) {
 			externalState = externalState || {};
+			const moduleSections = getModuleSections(externalState);
 			return {
 				sceneTimeSeconds: externalState.sceneTimeSeconds,
 				audioMetrics: externalState.audioMetrics,
 				jumpMode: state.jumpMode,
 				hoveredJumpMode: state.hoveredJumpMode,
 				hoveredShaderModeAction: state.hoveredShaderModeAction,
-				hoveredLightPresetAction: state.hoveredLightPresetAction,
 				hoveredPresetAction: state.hoveredPresetAction,
 				floorAlpha: state.floorAlpha,
-				passthroughMix: state.passthroughMix,
 				eyeDistanceMeters: state.eyeDistanceMeters,
 				floorAlphaHoverBool: state.floorAlphaHoverBool,
-				passthroughHoverBool: state.passthroughHoverBool,
 				eyeDistanceHoverBool: state.eyeDistanceHoverBool,
 				floorAlphaSliderActiveBool: !!state.activeFloorAlphaSliderHand,
-				passthroughSliderActiveBool: !!state.activePassthroughSliderHand,
 				eyeDistanceSliderActiveBool: !!state.activeSliderHand,
-				passthroughAvailableBool: state.passthroughAvailableBool,
-				passthroughFallbackBool: state.passthroughFallbackBool,
-				passthroughStatusText: state.passthroughStatusText,
+				moduleSections: moduleSections,
 				shaderModeNames: externalState.shaderModeNames,
 				currentShaderModeIndex: externalState.currentShaderModeIndex,
-				lightPresetNames: externalState.lightPresetNames,
-				currentLightPresetIndex: externalState.currentLightPresetIndex,
-				currentLightPresetDescription: externalState.currentLightPresetDescription,
 				presetNames: externalState.presetNames,
 				currentPresetIndex: externalState.currentPresetIndex,
 				eyeDistanceMin: options.eyeDistanceMin,
 				eyeDistanceMax: options.eyeDistanceMax,
 				eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
-				floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
-				passthroughMixSliderU: passthroughMixSlider.toSliderU(state.passthroughMix)
+				floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha)
 			};
 		},
 		setPassthroughState: function(args) {
@@ -803,7 +896,7 @@ const createMenuController = function(options) {
 			state.desktopPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
 			state.desktopPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
 			state.desktopPointerActiveBool = true;
-			return menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV);
+			return menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, getModuleSections());
 		},
 		registerDesktopPreviewEvents: function(args) {
 			args = args || {};
@@ -834,7 +927,7 @@ const createMenuController = function(options) {
 			return this.updateDesktopPointerFromEvent(event);
 		},
 		handleDesktopPointerLeave: function() {
-			if (state.activeSliderHand === "desktop" || state.activeFloorAlphaSliderHand === "desktop" || state.activePassthroughSliderHand === "desktop") {
+			if (state.activeSliderHand === "desktop" || state.activeFloorAlphaSliderHand === "desktop" || state.activePassthroughPrimarySliderHand === "desktop" || state.activePassthroughSecondarySliderHand === "desktop") {
 				return;
 			}
 			this.clearDesktopPointerState();
@@ -849,29 +942,45 @@ const createMenuController = function(options) {
 			if (!hit) {
 				return false;
 			}
-			if (hit.jumpMode) {
-				state.jumpMode = hit.jumpMode;
+			const passthroughUiState = getPassthroughUiState();
+			if (hit.moduleChoiceControlKey === "jumpMode" && hit.moduleChoiceItemKey) {
+				state.jumpMode = hit.moduleChoiceItemKey;
 			}
-			if (hit.shaderModeAction && callbacks.onShaderModeAction) {
-				callbacks.onShaderModeAction(hit.shaderModeAction === "prev" ? -1 : 1);
+			if (hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
+				callbacks.onShaderModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
-			if (hit.lightPresetAction && callbacks.onLightPresetAction) {
-				callbacks.onLightPresetAction(hit.lightPresetAction === "prev" ? -1 : 1);
+			if (hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
+				callbacks.onPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
-			if (hit.presetAction && callbacks.onPresetAction) {
-				callbacks.onPresetAction(hit.presetAction === "prev" ? -1 : 1);
+			if (hit.moduleCycleControlKey === "passthroughBlendMode" && passthroughController && passthroughController.cycleBlendMode) {
+				passthroughController.cycleBlendMode(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
-			if (hit.eyeDistanceSliderBool) {
+			if (hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
+				passthroughController.cycleLightingMode(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
+			if (hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
+				callbacks.onLightPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
+			if (hit.moduleChoiceControlKey === "passthroughUniformBlendMode" && passthroughController && passthroughController.selectUniformBlendMode) {
+				passthroughController.selectUniformBlendMode(hit.moduleChoiceItemKey);
+			}
+			if (hit.moduleSliderControlKey === "eyeDistance") {
 				state.activeSliderHand = "desktop";
 				state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
 			}
-			if (hit.floorAlphaSliderBool) {
+			if (hit.moduleSliderControlKey === "floorAlpha") {
 				state.activeFloorAlphaSliderHand = "desktop";
 				state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
 			}
-			if (hit.passthroughMixSliderBool) {
-				state.activePassthroughSliderHand = "desktop";
-				state.passthroughMix = passthroughMixSlider.fromSliderU(state.desktopPointerU);
+			if (hit.moduleSliderControlKey && passthroughUiState.primaryControl && hit.moduleSliderControlKey === passthroughUiState.primaryControl.key && passthroughController && passthroughController.setControlValue) {
+				state.activePassthroughPrimarySliderHand = "desktop";
+				state.activePassthroughSecondarySliderHand = "";
+				passthroughController.setControlValue(passthroughUiState.primaryControl.key, getControlValueFromSliderU(passthroughUiState.primaryControl, state.desktopPointerU));
+			}
+			if (hit.moduleSliderControlKey && passthroughUiState.secondaryControl && hit.moduleSliderControlKey === passthroughUiState.secondaryControl.key && passthroughController && passthroughController.setControlValue) {
+				state.activePassthroughSecondarySliderHand = "desktop";
+				state.activePassthroughPrimarySliderHand = "";
+				passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, state.desktopPointerU));
 			}
 			return true;
 		},
@@ -899,7 +1008,8 @@ const createMenuController = function(options) {
 			state.menuTogglePressedBool = false;
 			state.activeSliderHand = "";
 			state.activeFloorAlphaSliderHand = "";
-			state.activePassthroughSliderHand = "";
+			state.activePassthroughPrimarySliderHand = "";
+			state.activePassthroughSecondarySliderHand = "";
 			clearHoverState();
 			controllerRays.length = 0;
 			triggerPressedByHand.clear();
@@ -909,7 +1019,8 @@ const createMenuController = function(options) {
 			state.menuTogglePressedBool = false;
 			state.activeSliderHand = "";
 			state.activeFloorAlphaSliderHand = "";
-			state.activePassthroughSliderHand = "";
+			state.activePassthroughPrimarySliderHand = "";
+			state.activePassthroughSecondarySliderHand = "";
 			clearHoverState();
 			controllerRays.length = 0;
 			triggerPressedByHand.clear();
@@ -929,7 +1040,8 @@ const createMenuController = function(options) {
 				state.menuOpenBool = !state.menuOpenBool;
 				state.activeSliderHand = "";
 				state.activeFloorAlphaSliderHand = "";
-				state.activePassthroughSliderHand = "";
+				state.activePassthroughPrimarySliderHand = "";
+				state.activePassthroughSecondarySliderHand = "";
 				clearHoverState();
 				if (state.menuOpenBool) {
 					this.updateMenuPose(args.pose);
@@ -940,35 +1052,65 @@ const createMenuController = function(options) {
 			}
 			state.menuTogglePressedBool = togglePressedBool;
 			updateControllerRays(args.frame, args.xrSession, args.xrRefSpace);
+			const handsWithRays = new Set();
+			for (let i = 0; i < controllerRays.length; i += 1) {
+				handsWithRays.add(controllerRays[i].hand);
+			}
+			for (const hand of triggerPressedByHand.keys()) {
+				if (!handsWithRays.has(hand)) {
+					releaseSliderHand(hand);
+					triggerPressedByHand.set(hand, false);
+				}
+			}
 			for (let i = 0; i < controllerRays.length; i += 1) {
 				const ray = controllerRays[i];
 				const gamepad = ray.source.gamepad;
 				const hand = ray.hand;
 				const triggerPressedBool = !!(gamepad && gamepad.buttons[0] && gamepad.buttons[0].pressed);
 				const wasTriggerPressedBool = triggerPressedByHand.get(hand) || false;
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.jumpMode) {
-					state.jumpMode = ray.hit.jumpMode;
+				const passthroughUiState = getPassthroughUiState();
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "jumpMode" && ray.hit.moduleChoiceItemKey) {
+					state.jumpMode = ray.hit.moduleChoiceItemKey;
 				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.shaderModeAction && callbacks.onShaderModeAction) {
-					callbacks.onShaderModeAction(ray.hit.shaderModeAction === "prev" ? -1 : 1);
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
+					callbacks.onShaderModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.lightPresetAction && callbacks.onLightPresetAction) {
-					callbacks.onLightPresetAction(ray.hit.lightPresetAction === "prev" ? -1 : 1);
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
+					callbacks.onPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.presetAction && callbacks.onPresetAction) {
-					callbacks.onPresetAction(ray.hit.presetAction === "prev" ? -1 : 1);
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughBlendMode" && passthroughController && passthroughController.cycleBlendMode) {
+					passthroughController.cycleBlendMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
-				if (triggerPressedBool && ray.hit && ray.hit.eyeDistanceSliderBool && (!wasTriggerPressedBool || state.activeSliderHand === hand)) {
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
+					passthroughController.cycleLightingMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
+					callbacks.onLightPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughUniformBlendMode" && passthroughController && passthroughController.selectUniformBlendMode) {
+					passthroughController.selectUniformBlendMode(ray.hit.moduleChoiceItemKey);
+				}
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "eyeDistance" && (!wasTriggerPressedBool || state.activeSliderHand === hand)) {
 					state.activeSliderHand = hand;
 					state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(ray.hit.u);
 				}
-				if (triggerPressedBool && ray.hit && ray.hit.floorAlphaSliderBool && (!wasTriggerPressedBool || state.activeFloorAlphaSliderHand === hand)) {
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "floorAlpha" && (!wasTriggerPressedBool || state.activeFloorAlphaSliderHand === hand)) {
 					state.activeFloorAlphaSliderHand = hand;
 					state.floorAlpha = floorAlphaSlider.fromSliderU(ray.hit.u);
 				}
-				if (triggerPressedBool && ray.hit && ray.hit.passthroughMixSliderBool && (!wasTriggerPressedBool || state.activePassthroughSliderHand === hand)) {
-					state.activePassthroughSliderHand = hand;
-					state.passthroughMix = passthroughMixSlider.fromSliderU(ray.hit.u);
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === (passthroughUiState.primaryControl && passthroughUiState.primaryControl.key) && passthroughUiState.primaryControl && passthroughController && passthroughController.setControlValue && (!wasTriggerPressedBool || state.activePassthroughPrimarySliderHand === hand)) {
+					state.activePassthroughPrimarySliderHand = hand;
+					if (state.activePassthroughSecondarySliderHand === hand) {
+						state.activePassthroughSecondarySliderHand = "";
+					}
+					passthroughController.setControlValue(passthroughUiState.primaryControl.key, getControlValueFromSliderU(passthroughUiState.primaryControl, ray.hit.u));
+				}
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === (passthroughUiState.secondaryControl && passthroughUiState.secondaryControl.key) && passthroughUiState.secondaryControl && passthroughController && passthroughController.setControlValue && (!wasTriggerPressedBool || state.activePassthroughSecondarySliderHand === hand)) {
+					state.activePassthroughSecondarySliderHand = hand;
+					if (state.activePassthroughPrimarySliderHand === hand) {
+						state.activePassthroughPrimarySliderHand = "";
+					}
+					passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, ray.hit.u));
 				}
 				if (!triggerPressedBool && wasTriggerPressedBool) {
 					releaseSliderHand(hand);

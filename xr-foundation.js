@@ -269,6 +269,9 @@ const createFullscreenProgramInfo = function(gl, fragmentSource, includeAudioUni
 		eyeCenterOffsetLoc: gl.getUniformLocation(program, "eyeCenterOffset"),
 		orientationOffsetLoc: gl.getUniformLocation(program, "orientationOffset"),
 		backgroundAlphaLoc: gl.getUniformLocation(program, "backgroundAlpha"),
+		backgroundMaskCountLoc: gl.getUniformLocation(program, "backgroundMaskCount"),
+		backgroundMaskCentersLoc: gl.getUniformLocation(program, "backgroundMaskCenters"),
+		backgroundMaskParamsLoc: gl.getUniformLocation(program, "backgroundMaskParams"),
 		audioMetricsLoc: includeAudioUniformsBool ? gl.getUniformLocation(program, "audioMetrics") : null,
 		beatPulseLoc: includeAudioUniformsBool ? gl.getUniformLocation(program, "beatPulse") : null
 	};

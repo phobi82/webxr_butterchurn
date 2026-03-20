@@ -1040,11 +1040,26 @@ const createSceneRenderer = function(options) {
 
 	const renderScene = function(args) {
 		const menuState = args.menuController.getState();
+		const passthroughController = args.passthroughController || null;
+		const controllerRays = args.menuController.getControllerRays();
+		const sceneLightingState = args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null;
+		if (args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
+			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState({
+				viewMatrix: currentView,
+				projMatrix: currentProj,
+				controllerRays: controllerRays
+			}));
+		}
 		if (args.visualizerEngine) {
 			args.visualizerEngine.drawPreScene();
 		}
 		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
-			passthroughOverlayRenderer.draw(args, menuState.passthroughMix || 0);
+			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
+				viewMatrix: currentView,
+				projMatrix: currentProj,
+				controllerRays: controllerRays,
+				sceneLightingState: sceneLightingState
+			}) : null);
 		}
 		if (menuState.floorAlpha > 0.001) {
 			drawFloor(args.sceneLighting, args.getReactiveFloorColors());
@@ -1059,11 +1074,10 @@ const createSceneRenderer = function(options) {
 			args.menuController.renderTexture(gl, menuTexture, args.menuContentState);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
-			drawTexturedPlane(basisScale(menuState.plane.center.x, menuState.plane.center.y, menuState.plane.center.z, menuState.plane.right, menuState.plane.up, menuState.plane.normal, options.menuWidth, menuState.planeHeight, 1));
+			drawTexturedPlane(basisScale(menuState.plane.center.x, menuState.plane.center.y, menuState.plane.center.z, menuState.plane.right, menuState.plane.up, menuState.plane.normal, menuState.planeWidth, menuState.planeHeight, 1));
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);
 		}
-		const controllerRays = args.menuController.getControllerRays();
 		for (let i = 0; i < controllerRays.length; i += 1) {
 			const ray = controllerRays[i];
 			const end = {x: ray.origin.x + ray.dir.x * ray.length, y: ray.origin.y + ray.dir.y * ray.length, z: ray.origin.z + ray.dir.z * ray.length};
@@ -1114,7 +1128,7 @@ const createSceneRenderer = function(options) {
 			texViewLoc = gl.getUniformLocation(texProgram, "view");
 			texProjLoc = gl.getUniformLocation(texProgram, "proj");
 			texSamplerLoc = gl.getUniformLocation(texProgram, "tex");
-			passthroughOverlayRenderer = createPassthroughOverlayRenderer({clampNumber: options.clampNumber});
+			passthroughOverlayRenderer = createPassthroughOverlayRenderer();
 			passthroughOverlayRenderer.init(gl);
 			geometry = createSceneGeometry(gl);
 			menuTexture = gl.createTexture();

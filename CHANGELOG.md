@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-20
+
+### Changed
+- Split passthrough into a dedicated controller/orchestrator in `xr-passthrough.js` plus pure mode definitions in `xr-passthrough-modes.js`, so mode catalogs and blend formulas are separated cleanly from runtime fallback and overlay rendering.
+- Added `xr-menu-sections.js` and moved the lower interactive menu area onto generic section/control descriptors, so passthrough, scene lighting, jump mode, world opacity, eye distance, visualizer mode, and preset selection all share the same generic layout, render, and hit-test path.
+- Replaced the old single `Passthrough Mix` control with a structured passthrough menu: a `Blend Mode` cycler for `Uniform` and `Flashlight`, a separate `Scene Lighting` section with `Lighting Mode` and `Light Preset` cyclers, and a uniform-only submode row for `Manual` and `Music`.
+- Replaced the old directional audio toggle with one bipolar `Intensity` slider, so negative values push Butterchurn into passthrough and positive values push passthrough into Butterchurn.
+- Extended the visualizer background-composite path from one global alpha to a generic uniform-or-masked opacity state, allowing the new hand-driven `Flashlight` passthrough mode without moving headset-specific logic into the visualizer module.
+- Added soft music-reactive passthrough spot lighting derived from the active scene-lighting preset, alongside the retained uniform tint mode and black fallback path for non-passthrough sessions.
+- Changed the default `Lighting Mode` to `Spots`.
+- Tightened passthrough menu hit zones and slider ownership so lighting buttons no longer move sliders, the blend mode uses a proper cycler, and `Flashlight` drags no longer drive both sliders at once.
+- Rebuilt the lower menu as a state-driven flow layout so active passthrough controls stay grouped together, scene-lighting controls live in their own section, and the lower menu panels now move automatically with the active mode state.
+- Keep a grabbed XR slider captured even when the ray moves above or below its row, instead of only continuing while the pointer stays directly over the original slider track.
+- Strengthened the music-reactive uniform blend so full bipolar intensity reaches a much wider practical Butterchurn/passthrough range and positive vs. negative values now read more clearly apart, with the end labels now shown as `Vis -> Passthrough` and `Passthrough -> Vis`.
+- Fixed the XR menu hit-test regression from the generic menu refactor that could crash the XR frame loop with `Cannot read properties of undefined (reading 'length')` when pointing at the menu.
+- Released stale XR menu hand ownership when a tracked-pointer hand disappears for a frame, fixing the bug where left or right controller buttons could stop responding after menu interaction.
+
 ## [0.5.0] - 2026-03-20
 
 ### Added
@@ -19,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added clear menu feedback and a black fallback path when passthrough is unavailable, so the slider stays usable in desktop preview or plain VR/opaque AR sessions instead of becoming inert.
 - Make the Butterchurn fullscreen background write the configured XR background alpha directly, so `Passthrough Mix = 0` is fully opaque and semi-transparent world geometry now shows the intended Butterchurn/Passthrough mix behind it instead of exposing raw passthrough directly.
 - Darken the visible passthrough contribution by 50% and lift it with a music-reactive color tint from the active lighting preset, while keeping `Passthrough Mix = 0` opaque and `Passthrough Mix = 100%` free of residual Butterchurn.
-- Moved passthrough UI state, visualizer blend syncing, and the lighting-tinted fallback compositor into a dedicated `xr-passthrought.js` module so the visualizer stays independent of scene-lighting and session-specific passthrough policy.
+- Moved passthrough UI state, visualizer blend syncing, and the lighting-tinted fallback compositor into a dedicated `xr-passthrough.js` module so the visualizer stays independent of scene-lighting and session-specific passthrough policy.
 - Switch world, grid, controller-ray, and menu blending to `blendFuncSeparate(...)` so translucent draws preserve the correct XR framebuffer alpha instead of punching passthrough holes through an otherwise opaque Butterchurn background.
 - Keep held XR slider drags clamped to their end values even when the controller ray overshoots slightly past the visible menu edge, so fast movements still reach the full slider range.
 - Keep right-trigger air boost active while the menu is open unless the right controller is actually pointing at the menu or dragging a menu slider.

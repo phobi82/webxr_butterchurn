@@ -139,6 +139,8 @@ Recommended structure order:
 - For large file moves or refactors, never use one large `apply_patch` spanning multiple files.
 - Split the work into small patches with one clear purpose each.
 - In PowerShell `shell_command` calls, never use `&&`; run commands separately unless a PowerShell-safe separator is explicitly required.
+- Before implementing UI or module changes, decide the target architecture and grouping first, record the work as a detailed task list, and then implement in small verified steps instead of patching isolated examples.
+- Before claiming menu or layout work is done, inspect the actual local menu preview in the browser and verify the affected states visually.
 
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.

@@ -2,6 +2,26 @@
 
 const headYawBufferShiftFactor = 0.8;
 const headPitchBufferShiftFactor = 0.8;
+const visualizerBackgroundCompositeShaderChunk = [
+	"uniform float backgroundMaskCount;",
+	"uniform vec2 backgroundMaskCenters[2];",
+	"uniform vec2 backgroundMaskParams[2];",
+	"float circleReveal(vec2 uv, vec2 center, vec2 params){",
+	"float radius=max(params.x,0.0001);",
+	"float softness=max(params.y,0.0001);",
+	"float inner=max(0.0,radius-softness);",
+	"return 1.0-smoothstep(inner,radius,distance(uv,center));",
+	"}",
+	"float computeBackgroundAlpha(vec2 screenUv,float uniformAlpha){",
+	"float reveal=0.0;",
+	"for(int i=0;i<2;i+=1){",
+	"if(float(i)>=backgroundMaskCount){break;}",
+	"float localReveal=circleReveal(screenUv,backgroundMaskCenters[i],backgroundMaskParams[i]);",
+	"reveal=1.0-(1.0-reveal)*(1.0-localReveal);",
+	"}",
+	"return clamp(uniformAlpha*(1.0-reveal),0.0,1.0);",
+	"}"
+].join("");
 
 const toroidalFragmentSource = [
 	"precision highp float;",
@@ -10,6 +30,7 @@ const toroidalFragmentSource = [
 	"uniform vec2 eyeCenterOffset;",
 	"uniform vec2 orientationOffset;",
 	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -19,7 +40,7 @@ const toroidalFragmentSource = [
 	"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
 	"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y));",
 	"vec4 sampleColor=texture2D(sourceTexture,sampleUv);",
-	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
 ].join("");
 
@@ -45,6 +66,7 @@ const skysphereFragmentSource = [
 	"uniform vec4 projParams;",
 	"uniform vec2 texScale;",
 	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -59,7 +81,7 @@ const skysphereFragmentSource = [
 	"float pitch=asin(clamp(dir.y,-1.0,1.0));",
 	"vec2 uv=vec2(fract(yaw*texScale.x+0.5),mirrorRepeat(pitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
-	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
 ].join("");
 
@@ -103,6 +125,7 @@ const skyToroidFragmentSource = [
 	"uniform float headRoll;",
 	"uniform vec2 texScale;",
 	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -120,7 +143,7 @@ const skyToroidFragmentSource = [
 	"float totalPitch=headOrientation.y+atan(corrVy,1.0);",
 	"vec2 uv=vec2(fract(totalYaw*texScale.x+0.5),mirrorRepeat(totalPitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
-	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
 ].join("");
 
