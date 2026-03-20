@@ -19,6 +19,10 @@ const createRuntime = function(options) {
 	const state = {
 		gl: null,
 		xrSession: null,
+		xrSessionMode: "",
+		xrEnvironmentBlendMode: "opaque",
+		passthroughAvailableBool: false,
+		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
 		baseRefSpace: null,
 		xrRefSpace: null,
 		frameHandle: null,
@@ -75,6 +79,19 @@ const createRuntime = function(options) {
 	};
 	const updateReferenceSpace = function(viewerTransform) {
 		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
+	};
+	const updatePassthroughUiState = function() {
+		menuController.setPassthroughState({
+			supportedBool: !!state.xrSupportState.immersiveArSupportedBool,
+			availableBool: !!state.passthroughAvailableBool,
+			sessionMode: state.xrSessionMode,
+			environmentBlendMode: state.xrEnvironmentBlendMode
+		});
+	};
+	const syncVisualizerBackgroundBlend = function(passthroughAvailableBool) {
+		if (state.visualizerEngine && state.visualizerEngine.setBackgroundBlend) {
+			state.visualizerEngine.setBackgroundBlend(menuController.getState().passthroughMix, passthroughAvailableBool);
+		}
 	};
 	const cycleSelection = function(controller, getSelectionState, namesKey, indexKey, selectFn, direction) {
 		if (!controller) {
@@ -202,10 +219,11 @@ const createRuntime = function(options) {
 				state.visualizerEngine.setHeadPosition(renderPose.transform.position.x, renderPose.transform.position.y, renderPose.transform.position.z);
 				state.visualizerEngine.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 			}
+			syncVisualizerBackgroundBlend(state.passthroughAvailableBool);
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool});
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -217,6 +235,7 @@ const createRuntime = function(options) {
 		state.sceneTimeSeconds = previewTimeSeconds;
 		locomotion.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getState().jumpMode);
 		updateSceneLighting(previewTimeSeconds);
+		syncVisualizerBackgroundBlend(false);
 		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors});
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
@@ -227,13 +246,18 @@ const createRuntime = function(options) {
 		}
 		state.frameHandle = null;
 		state.xrSession = null;
+		state.xrSessionMode = "";
+		state.xrEnvironmentBlendMode = "opaque";
+		state.passthroughAvailableBool = false;
 		state.baseRefSpace = null;
 		state.xrRefSpace = null;
 		state.lastRenderTime = 0;
 		state.previewLastRenderTime = 0;
 		menuController.endSession();
-		shell.setXrState({statusText: sessionBridge.isAvailable() ? "ready" : "headset not detected.", enterEnabledBool: sessionBridge.isAvailable(), exitEnabledBool: false});
+		updatePassthroughUiState();
+		shell.setXrState({statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.", enterEnabledBool: !!state.xrSupportState.preferredSessionMode, exitEnabledBool: false});
 		if (state.visualizerEngine) {
+			syncVisualizerBackgroundBlend(false);
 			state.visualizerEngine.endSession();
 		}
 		xrMovementState.horizontalVelocityX = 0;
@@ -249,19 +273,27 @@ const createRuntime = function(options) {
 			updateDesktopMenuPreview(true);
 			const xrState = await sessionBridge.startSession(state.gl, endSession);
 			state.xrSession = xrState.session;
+			state.xrSessionMode = xrState.sessionMode || "immersive-vr";
+			state.xrEnvironmentBlendMode = xrState.environmentBlendMode || "opaque";
+			state.passthroughAvailableBool = !!xrState.passthroughAvailableBool;
 			state.baseRefSpace = xrState.baseRefSpace;
 			locomotion.resetXrState(xrMovementState);
 			menuController.resetSessionState();
+			updatePassthroughUiState();
 			state.xrRefSpace = state.baseRefSpace;
-			shell.setXrState({statusText: "session running", enterEnabledBool: false, exitEnabledBool: true});
+			shell.setXrState({statusText: state.xrSessionMode === "immersive-ar" ? "session running (AR)" : "session running (VR)", enterEnabledBool: false, exitEnabledBool: true});
 			state.lastRenderTime = 0;
 			if (state.visualizerEngine) {
 				state.visualizerEngine.startSession();
 			}
 			state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 		} catch (error) {
-			shell.setXrState({statusText: error.message || "session failed", enterEnabledBool: sessionBridge.isAvailable(), exitEnabledBool: false});
+			shell.setXrState({statusText: error.message || "session failed", enterEnabledBool: !!state.xrSupportState.preferredSessionMode, exitEnabledBool: false});
 			state.xrSession = null;
+			state.xrSessionMode = "";
+			state.xrEnvironmentBlendMode = "opaque";
+			state.passthroughAvailableBool = false;
+			updatePassthroughUiState();
 			updateDesktopMenuPreview();
 		}
 	};
@@ -360,12 +392,15 @@ const createRuntime = function(options) {
 			if (state.visualizerEngine) {
 				audioController.setAudioBackend(state.visualizerEngine);
 				audioController.activate().catch(function() {});
+				syncVisualizerBackgroundBlend(false);
 			}
 			if (!sessionBridge.isAvailable()) {
+				updatePassthroughUiState();
 				shell.setXrState({statusText: "WebXR not available.", enterEnabledBool: false, exitEnabledBool: false});
 			} else {
-				const supportedBool = await sessionBridge.isSupported();
-				shell.setXrState({statusText: supportedBool ? "ready" : "headset not detected.", enterEnabledBool: supportedBool, exitEnabledBool: false});
+				state.xrSupportState = await sessionBridge.getSupportState();
+				updatePassthroughUiState();
+				shell.setXrState({statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.", enterEnabledBool: !!state.xrSupportState.preferredSessionMode, exitEnabledBool: false});
 			}
 			shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
 			windowRef.requestAnimationFrame(renderPreview);
@@ -413,6 +448,8 @@ const appConfig = {
 		eyeDistanceMax: 0.2,
 		floorAlphaMin: 0,
 		floorAlphaMax: 1,
+		passthroughMixMin: 0,
+		passthroughMixMax: 1,
 		desktopMenuPreviewWidthPixels: 420,
 		jumpModeDoubleMinU: 0.1,
 		jumpModeDoubleMaxU: 0.45,
@@ -427,6 +464,7 @@ const appConfig = {
 		presetNextMaxU: 0.92,
 		initialJumpMode: "double",
 		initialFloorAlpha: 0.72,
+		initialPassthroughMix: 0,
 		initialEyeDistanceMeters: 0.064,
 		initialDesktopPreviewVisibleBool: false,
 		previewStyle: {right: "12px", top: "12px"}

@@ -268,6 +268,7 @@ const createFullscreenProgramInfo = function(gl, fragmentSource, includeAudioUni
 		viewportSizeLoc: gl.getUniformLocation(program, "viewportSize"),
 		eyeCenterOffsetLoc: gl.getUniformLocation(program, "eyeCenterOffset"),
 		orientationOffsetLoc: gl.getUniformLocation(program, "orientationOffset"),
+		backgroundAlphaLoc: gl.getUniformLocation(program, "backgroundAlpha"),
 		audioMetricsLoc: includeAudioUniformsBool ? gl.getUniformLocation(program, "audioMetrics") : null,
 		beatPulseLoc: includeAudioUniformsBool ? gl.getUniformLocation(program, "beatPulse") : null
 	};
@@ -490,18 +491,42 @@ const createXrSessionBridge = function(options) {
 	const xrApi = options.xrApi || null;
 	const xrWebGLLayer = options.xrWebGLLayer || null;
 	const xrRigidTransform = options.xrRigidTransform || null;
+	const getSupportState = async function() {
+		if (!xrApi) {
+			return {
+				immersiveArSupportedBool: false,
+				immersiveVrSupportedBool: false,
+				preferredSessionMode: ""
+			};
+		}
+		const immersiveArSupportedBool = await xrApi.isSessionSupported("immersive-ar").catch(function() {
+			return false;
+		});
+		const immersiveVrSupportedBool = await xrApi.isSessionSupported("immersive-vr").catch(function() {
+			return false;
+		});
+		return {
+			immersiveArSupportedBool: !!immersiveArSupportedBool,
+			immersiveVrSupportedBool: !!immersiveVrSupportedBool,
+			preferredSessionMode: immersiveArSupportedBool ? "immersive-ar" : immersiveVrSupportedBool ? "immersive-vr" : ""
+		};
+	};
 	return {
 		isAvailable: function() {
 			return !!xrApi;
 		},
+		getSupportState: getSupportState,
 		isSupported: async function() {
-			if (!xrApi) {
-				return false;
-			}
-			return xrApi.isSessionSupported("immersive-vr");
+			const supportState = await getSupportState();
+			return !!supportState.preferredSessionMode;
 		},
 		startSession: async function(gl, onEnd) {
-			const session = await xrApi.requestSession("immersive-vr", {requiredFeatures: ["local-floor"]});
+			const supportState = await getSupportState();
+			if (!supportState.preferredSessionMode) {
+				throw new Error("No immersive XR session mode available.");
+			}
+			const sessionMode = supportState.preferredSessionMode;
+			const session = await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]});
 			if (onEnd) {
 				session.addEventListener("end", onEnd);
 			}
@@ -511,10 +536,17 @@ const createXrSessionBridge = function(options) {
 				framebufferScaleFactor = xrWebGLLayer.getNativeFramebufferScaleFactor(session) || 1;
 			}
 			session.updateRenderState({
-				baseLayer: new xrWebGLLayer(session, gl, {framebufferScaleFactor: framebufferScaleFactor})
+				baseLayer: new xrWebGLLayer(session, gl, {framebufferScaleFactor: framebufferScaleFactor, alpha: sessionMode === "immersive-ar"})
 			});
 			const baseRefSpace = await session.requestReferenceSpace("local-floor");
-			return {session: session, baseRefSpace: baseRefSpace};
+			const environmentBlendMode = session.environmentBlendMode || (sessionMode === "immersive-ar" ? "alpha-blend" : "opaque");
+			return {
+				session: session,
+				baseRefSpace: baseRefSpace,
+				sessionMode: sessionMode,
+				environmentBlendMode: environmentBlendMode,
+				passthroughAvailableBool: sessionMode === "immersive-ar" && environmentBlendMode !== "opaque"
+			};
 		},
 		createOffsetReferenceSpace: function(baseRefSpace, movementState, viewerTransform) {
 			if (!baseRefSpace || !xrRigidTransform || !viewerTransform || !viewerTransform.position) {

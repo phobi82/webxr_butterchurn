@@ -1,0 +1,3 @@
+local-dev-https/local-dev-cert.pfx
+local-dev-https/local-https-server.log
+local-dev-https/local-https-server.err.log

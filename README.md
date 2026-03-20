@@ -4,7 +4,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 
 ## Current Feature Set
 
-- immersive VR startup with `immersive-vr` and `local-floor`
+- immersive XR startup with `local-floor`, preferring `immersive-ar` and falling back to `immersive-vr`
 - desktop preview when no XR session is active
 - immediate Butterchurn startup on page load
 - XR and desktop locomotion with jumping, sprinting, crouching, tiptoe head-height control, and airborne boost
@@ -32,6 +32,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - a modern desktop browser with WebGL support
 - a browser/runtime combination with WebXR support for immersive mode
 - a VR headset supported by that browser for actual headset sessions
+- a passthrough-capable headset/browser combination if the new passthrough background mix should take effect
 - microphone or screen/tab-capture permission if live audio input should drive the scene
 - popup permission if `YouTube Playlist` or `Suno Live Radio` should open their source tabs automatically
 
@@ -48,6 +49,21 @@ There is no build step and no backend.
 3. Wait for the XR status line to report readiness.
 4. Use the desktop shell to test audio input, menu options, and preview movement.
 5. Enter VR when the browser reports headset support.
+
+### Local HTTPS For Quest
+
+For headset testing in the Quest Browser on the same network, use:
+
+- `start-local-https-server.bat`
+
+That launcher:
+
+- starts a small HTTPS static server on port `8443`
+- uses helper files from `local-dev-https/`
+- generates a local self-signed certificate in `local-dev-https/local-dev-cert.pfx` when needed
+- prints the `https://...:8443/` URLs to open from the Quest on the same LAN
+
+If the Quest Browser shows a certificate warning, continue manually once for local development.
 
 ## Audio Sources
 
@@ -89,6 +105,7 @@ The current menu exposes:
 
 - jump mode: `Double`, `Multi`
 - world opacity slider for floor, grid, and level blocks; GLB props stay opaque
+- passthrough mix slider: `0%` keeps full Butterchurn, `100%` maximizes passthrough replacement when the current XR session exposes passthrough
 - eye distance slider
 - visualizer mode selector
 - light preset selector
@@ -106,6 +123,7 @@ The current menu exposes:
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
+- The passthrough mix slider is only active in XR sessions that actually expose non-opaque `immersive-ar` blending; in desktop preview and plain VR it stays visible but inactive.
 - The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
 
 ## GitHub Pages

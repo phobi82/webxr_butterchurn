@@ -9,6 +9,7 @@ const toroidalFragmentSource = [
 	"uniform vec2 viewportSize;",
 	"uniform vec2 eyeCenterOffset;",
 	"uniform vec2 orientationOffset;",
+	"uniform float backgroundAlpha;",
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -17,7 +18,8 @@ const toroidalFragmentSource = [
 	"void main(){",
 	"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
 	"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y));",
-	"gl_FragColor=texture2D(sourceTexture,sampleUv);",
+	"vec4 sampleColor=texture2D(sourceTexture,sampleUv);",
+	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
 	"}"
 ].join("");
 
@@ -42,6 +44,7 @@ const skysphereFragmentSource = [
 	"uniform vec3 camForward;",
 	"uniform vec4 projParams;",
 	"uniform vec2 texScale;",
+	"uniform float backgroundAlpha;",
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -55,7 +58,8 @@ const skysphereFragmentSource = [
 	"float yaw=atan(dir.x,-dir.z);",
 	"float pitch=asin(clamp(dir.y,-1.0,1.0));",
 	"vec2 uv=vec2(fract(yaw*texScale.x+0.5),mirrorRepeat(pitch*texScale.y+0.5));",
-	"gl_FragColor=texture2D(sourceTexture,uv);",
+	"vec4 sampleColor=texture2D(sourceTexture,uv);",
+	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
 	"}"
 ].join("");
 
@@ -98,6 +102,7 @@ const skyToroidFragmentSource = [
 	"uniform vec2 headOrientation;",
 	"uniform float headRoll;",
 	"uniform vec2 texScale;",
+	"uniform float backgroundAlpha;",
 	"varying vec2 vScreenUv;",
 	"float mirrorRepeat(float value){",
 	"float wrapped=value-floor(value*0.5)*2.0;",
@@ -114,7 +119,8 @@ const skyToroidFragmentSource = [
 	"float totalYaw=headOrientation.x+atan(corrVx,1.0);",
 	"float totalPitch=headOrientation.y+atan(corrVy,1.0);",
 	"vec2 uv=vec2(fract(totalYaw*texScale.x+0.5),mirrorRepeat(totalPitch*texScale.y+0.5));",
-	"gl_FragColor=texture2D(sourceTexture,uv);",
+	"vec4 sampleColor=texture2D(sourceTexture,uv);",
+	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
 	"}"
 ].join("");
 

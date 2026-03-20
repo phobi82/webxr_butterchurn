@@ -81,6 +81,9 @@ const createFullscreenTextureMode = function(spec) {
 			this.gl.uniform2f(this.programInfo.viewportSizeLoc, width, height);
 			this.gl.uniform2f(this.programInfo.eyeCenterOffsetLoc, frameState.eyeCenterOffsetX, frameState.eyeCenterOffsetY);
 			this.gl.uniform2f(this.programInfo.orientationOffsetLoc, orientationOffset.x, orientationOffset.y);
+			if (this.programInfo.backgroundAlphaLoc) {
+				this.gl.uniform1f(this.programInfo.backgroundAlphaLoc, frameState.backgroundAlpha);
+			}
 			if (this.programInfo.audioMetricsLoc) {
 				const audioMetrics = sourceState.audioMetrics || {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
 				this.gl.uniform4f(this.programInfo.audioMetricsLoc, audioMetrics.level, audioMetrics.peak, audioMetrics.bass, audioMetrics.transient);
@@ -108,6 +111,7 @@ const createVisualizerEngine = function(options) {
 		headPitch: 0,
 		headHorizontalFov: Math.PI / 2,
 		headVerticalFov: Math.PI / 2,
+		backgroundAlpha: 1,
 		headPositionX: 0,
 		headPositionY: 0,
 		headPositionZ: 0,
@@ -196,6 +200,9 @@ const createVisualizerEngine = function(options) {
 			frameState.headPositionX = x;
 			frameState.headPositionY = y;
 			frameState.headPositionZ = z;
+		},
+		setBackgroundBlend: function(passthroughMix, passthroughAvailableBool) {
+			frameState.backgroundAlpha = passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1;
 		},
 		drawPreScene: function() {
 			drawPhase("drawPreScene");

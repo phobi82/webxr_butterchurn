@@ -1078,7 +1078,7 @@ const createSceneRenderer = function(options) {
 			return createProgram(gl, vsSource, fsSource, "Scene renderer");
 		},
 		init: function() {
-			gl = canvas.getContext("webgl", {xrCompatible: true, antialias: true, alpha: false});
+			gl = canvas.getContext("webgl", {xrCompatible: true, antialias: true, alpha: true});
 			if (!gl) {
 				options.onInitFailure();
 				return null;
@@ -1138,7 +1138,11 @@ const createSceneRenderer = function(options) {
 		},
 		renderXrViews: function(args) {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, args.baseLayer.framebuffer);
-			gl.clearColor(0.01, 0.01, 0.08, 1);
+			if (args.transparentBackgroundBool) {
+				gl.clearColor(0, 0, 0, 0);
+			} else {
+				gl.clearColor(0.01, 0.01, 0.08, 1);
+			}
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			for (let i = 0; i < args.pose.views.length; i += 1) {
 				const view = args.pose.views[i];

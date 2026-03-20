@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added a `Passthrough Mix` slider to the in-headset menu so supported `immersive-ar` sessions can fade the Butterchurn background toward live headset passthrough from `0%` to `100%`.
+- Added a local HTTPS Quest-testing launcher (`start-local-https-server.bat`) plus helper scripts in `local-dev-https/` so the project can be served over LAN with a self-signed certificate.
+
+### Changed
+- XR session startup now prefers `immersive-ar` when the browser and headset support it, and falls back to `immersive-vr` otherwise.
+- Switched the XR WebGL path to alpha-capable rendering so AR sessions can keep the Butterchurn background partially transparent while leaving menu, floor, lights, and world geometry intact.
+- Added clear menu feedback when passthrough is unavailable, so the new slider stays visible in desktop preview or plain VR sessions without pretending to have an effect.
+
 ## [0.4.1] - 2026-03-19
 
 ### Changed
