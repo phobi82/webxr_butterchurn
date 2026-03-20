@@ -19,7 +19,7 @@ const toroidalFragmentSource = [
 	"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
 	"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y));",
 	"vec4 sampleColor=texture2D(sourceTexture,sampleUv);",
-	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
 	"}"
 ].join("");
 
@@ -59,7 +59,7 @@ const skysphereFragmentSource = [
 	"float pitch=asin(clamp(dir.y,-1.0,1.0));",
 	"vec2 uv=vec2(fract(yaw*texScale.x+0.5),mirrorRepeat(pitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
-	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
 	"}"
 ].join("");
 
@@ -120,7 +120,7 @@ const skyToroidFragmentSource = [
 	"float totalPitch=headOrientation.y+atan(corrVy,1.0);",
 	"vec2 uv=vec2(fract(totalYaw*texScale.x+0.5),mirrorRepeat(totalPitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
-	"gl_FragColor=vec4(sampleColor.rgb,sampleColor.a*backgroundAlpha);",
+	"gl_FragColor=vec4(sampleColor.rgb,backgroundAlpha);",
 	"}"
 ].join("");
 

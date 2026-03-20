@@ -953,7 +953,7 @@ const createSceneRenderer = function(options) {
 
 	const drawColor = function(buffer, count, mode, model, color) {
 		gl.enable(gl.BLEND);
-		gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.useProgram(colorProgram);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.enableVertexAttribArray(colorPositionLoc);
@@ -967,7 +967,7 @@ const createSceneRenderer = function(options) {
 
 	const drawLitColor = function(positionBuffer, normalBuffer, count, mode, model, color, sceneLighting) {
 		gl.enable(gl.BLEND);
-		gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.useProgram(litColorProgram);
 		gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 		gl.enableVertexAttribArray(litColorPositionLoc);
@@ -987,7 +987,7 @@ const createSceneRenderer = function(options) {
 
 	const drawTexturedPlane = function(model) {
 		gl.enable(gl.BLEND);
-		gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.useProgram(texProgram);
 		gl.bindBuffer(gl.ARRAY_BUFFER, geometry.menuBuffer);
 		gl.enableVertexAttribArray(texPositionLoc);
@@ -1118,7 +1118,7 @@ const createSceneRenderer = function(options) {
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 			gl.enable(gl.BLEND);
-			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			gl.enable(gl.DEPTH_TEST);
 			gl.enable(gl.CULL_FACE);
 			return gl;

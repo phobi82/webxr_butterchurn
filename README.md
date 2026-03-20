@@ -124,6 +124,8 @@ The current menu exposes:
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
 - The passthrough mix slider is only active in XR sessions that actually expose non-opaque `immersive-ar` blending; in desktop preview and plain VR it stays visible but inactive.
+- `Passthrough Mix = 0` now keeps the XR background fully opaque, and semi-transparent world geometry composites against the configured Butterchurn/Passthrough background mix instead of exposing raw passthrough directly behind those surfaces.
+- Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
 - The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
 
 ## GitHub Pages

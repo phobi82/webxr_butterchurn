@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - XR session startup now prefers `immersive-ar` when the browser and headset support it, and falls back to `immersive-vr` otherwise.
 - Switched the XR WebGL path to alpha-capable rendering so AR sessions can keep the Butterchurn background partially transparent while leaving menu, floor, lights, and world geometry intact.
 - Added clear menu feedback when passthrough is unavailable, so the new slider stays visible in desktop preview or plain VR sessions without pretending to have an effect.
+- Make the Butterchurn fullscreen background write the configured XR background alpha directly, so `Passthrough Mix = 0` is fully opaque and semi-transparent world geometry now shows the intended Butterchurn/Passthrough mix behind it instead of exposing raw passthrough directly.
+- Switch world, grid, controller-ray, and menu blending to `blendFuncSeparate(...)` so translucent draws preserve the correct XR framebuffer alpha instead of punching passthrough holes through an otherwise opaque Butterchurn background.
 
 ## [0.4.1] - 2026-03-19
 
