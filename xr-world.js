@@ -874,6 +874,8 @@ const createSceneRenderer = function(options) {
 	let geometry = null;
 	const currentView = new Float32Array(16);
 	const currentProj = new Float32Array(16);
+	const currentPassthroughView = new Float32Array(16);
+	const currentPassthroughProj = new Float32Array(16);
 	const adjustedView = new Float32Array(16);
 	const colorVec4 = new Float32Array(4);
 
@@ -1043,6 +1045,8 @@ const createSceneRenderer = function(options) {
 		const passthroughController = args.passthroughController || null;
 		const controllerRays = args.menuController.getControllerRays();
 		const sceneLightingState = args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null;
+		const passthroughViewMatrix = args.passthroughViewMatrix || currentView;
+		const passthroughProjMatrix = args.passthroughProjMatrix || currentProj;
 		if (args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
 			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState({
 				viewMatrix: currentView,
@@ -1055,8 +1059,8 @@ const createSceneRenderer = function(options) {
 		}
 		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
 			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
-				viewMatrix: currentView,
-				projMatrix: currentProj,
+				viewMatrix: passthroughViewMatrix,
+				projMatrix: passthroughProjMatrix,
 				controllerRays: controllerRays,
 				sceneLightingState: sceneLightingState
 			}) : null);
@@ -1150,6 +1154,10 @@ const createSceneRenderer = function(options) {
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			currentView.set(createViewMatrixFromYawPitch(args.desktopMovementState.origin.x, args.desktopMovementState.origin.y + args.desktopMovementState.eyeHeightMeters, args.desktopMovementState.origin.z, args.desktopMovementState.lookYaw, args.desktopMovementState.lookPitch));
 			currentProj.set(perspectiveMatrix(Math.PI / 3, canvas.width / canvas.height, 0.05, 100));
+			currentPassthroughView.set(currentView);
+			currentPassthroughProj.set(currentProj);
+			args.passthroughViewMatrix = currentPassthroughView;
+			args.passthroughProjMatrix = currentPassthroughProj;
 			if (args.visualizerEngine) {
 				args.visualizerEngine.setPreviewView(currentView, currentProj);
 				args.visualizerEngine.update(args.previewTimeSeconds);
@@ -1172,6 +1180,22 @@ const createSceneRenderer = function(options) {
 				invertRigidViewMatrix(adjustedView, view.transform.matrix, eye.x, eye.y, eye.z);
 				currentView.set(adjustedView);
 				currentProj.set(view.projectionMatrix);
+				if (args.passthroughPose && args.passthroughPose.views && args.passthroughPose.views[i]) {
+					const passthroughView = args.passthroughPose.views[i];
+					invertRigidViewMatrix(
+						currentPassthroughView,
+						passthroughView.transform.matrix,
+						passthroughView.transform.position.x,
+						passthroughView.transform.position.y,
+						passthroughView.transform.position.z
+					);
+					currentPassthroughProj.set(passthroughView.projectionMatrix);
+				} else {
+					currentPassthroughView.set(currentView);
+					currentPassthroughProj.set(currentProj);
+				}
+				args.passthroughViewMatrix = currentPassthroughView;
+				args.passthroughProjMatrix = currentPassthroughProj;
 				if (args.visualizerEngine) {
 					args.visualizerEngine.setRenderView(currentView, currentProj);
 				}

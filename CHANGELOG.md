@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Re-anchored passthrough `Spots` lighting to the real `local-floor` room space with approximate ceiling, floor, and side-wall anchors, so real headset movement changes the colored passthrough spots like room lights while stick locomotion no longer shifts them through passthrough.
+
 ## [0.6.0] - 2026-03-20
 
 ### Changed

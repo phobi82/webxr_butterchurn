@@ -142,6 +142,7 @@ The current menu exposes:
 - The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
 - Lighting can now be disabled, applied as one music-reactive uniform tint, or rendered as soft colored spots derived from the active lighting preset.
+- The `Spots` overlay now approximates fixed room lighting in `local-floor` space with anchors on the ceiling, floor, and side walls, so real headset movement changes the passthrough spots as if the lights were in the room, while stick locomotion no longer drags those spots through passthrough.
 - Desktop preview, opaque VR, and unsupported AR still use the same blend modes against a black fallback instead of live passthrough.
 - Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
 - The XR menu hit path no longer crashes when pointing at the menu after the generic section refactor; the earlier `undefined.length` hit-test regression is fixed.

@@ -1,5 +1,12 @@
 const PASSTHROUGH_MAX_FLASHLIGHTS = 2;
-const PASSTHROUGH_MAX_SPOTS = 3;
+const PASSTHROUGH_MAX_SPOTS = 9;
+const PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT = 2.6;
+const PASSTHROUGH_ROOM_LIGHT_MIN_DISTANCE = 2.4;
+const PASSTHROUGH_ROOM_LIGHT_MAX_DISTANCE = 5.6;
+const PASSTHROUGH_ROOM_HALF_WIDTH = 3.6;
+const PASSTHROUGH_ROOM_HALF_DEPTH = 4.4;
+const PASSTHROUGH_ROOM_FLOOR_Y = 0.08;
+const PASSTHROUGH_ROOM_WALL_Y = 1.35;
 
 const getPassthroughAvailabilityState = function(args) {
 	args = args || {};
@@ -97,6 +104,50 @@ const getAveragedLightingColor = function(lightingState) {
 	];
 };
 
+const getRoomCeilingLightPoint = function(directionX, directionY, directionZ) {
+	if (directionY <= 0.05) {
+		return null;
+	}
+	const roomDistance = clampNumber(
+		PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT / directionY,
+		PASSTHROUGH_ROOM_LIGHT_MIN_DISTANCE,
+		PASSTHROUGH_ROOM_LIGHT_MAX_DISTANCE
+	);
+	return {
+		x: clampNumber(directionX * roomDistance, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
+		y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
+		z: clampNumber(directionZ * roomDistance, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
+	};
+};
+
+const getRoomFloorLightPoint = function(ceilingPoint) {
+	if (!ceilingPoint) {
+		return null;
+	}
+	return {
+		x: ceilingPoint.x,
+		y: PASSTHROUGH_ROOM_FLOOR_Y,
+		z: ceilingPoint.z
+	};
+};
+
+const getRoomWallLightPoint = function(ceilingPoint) {
+	if (!ceilingPoint) {
+		return null;
+	}
+	const absX = Math.abs(ceilingPoint.x);
+	const absZ = Math.abs(ceilingPoint.z);
+	if (absX <= 0.05 && absZ <= 0.05) {
+		return null;
+	}
+	const scaleToWall = absX > absZ ? PASSTHROUGH_ROOM_HALF_WIDTH / Math.max(absX, 0.0001) : PASSTHROUGH_ROOM_HALF_DEPTH / Math.max(absZ, 0.0001);
+	return {
+		x: clampNumber(ceilingPoint.x * scaleToWall, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
+		y: PASSTHROUGH_ROOM_WALL_Y,
+		z: clampNumber(ceilingPoint.z * scaleToWall, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
+	};
+};
+
 // Runtime controller owns session state, fallback policy, and overlay assembly.
 const createPassthroughController = function(options) {
 	options = options || {};
@@ -157,7 +208,6 @@ const createPassthroughController = function(options) {
 		if (!lightingState) {
 			return [];
 		}
-		const cameraPosition = extractCameraPositionFromViewMatrix(args.viewMatrix);
 		const rankedLights = [];
 		for (let i = 0; i < lightingState.lightStrengths.length; i += 1) {
 			const strength = Math.max(0, lightingState.lightStrengths[i] || 0);
@@ -165,21 +215,12 @@ const createPassthroughController = function(options) {
 				continue;
 			}
 			const directionOffset = i * 3;
-			const projectedUv = projectWorldPointToUv(
-				args.viewMatrix,
-				args.projMatrix,
-				cameraPosition.x + lightingState.lightDirections[directionOffset] * 6,
-				cameraPosition.y + lightingState.lightDirections[directionOffset + 1] * 6,
-				cameraPosition.z + lightingState.lightDirections[directionOffset + 2] * 6
-			);
-			if (!projectedUv) {
-				continue;
-			}
 			const colorOffset = i * 3;
 			rankedLights.push({
 				strength: strength,
-				x: projectedUv.x,
-				y: projectedUv.y,
+				dirX: lightingState.lightDirections[directionOffset],
+				dirY: lightingState.lightDirections[directionOffset + 1],
+				dirZ: lightingState.lightDirections[directionOffset + 2],
 				r: lightingState.lightColors[colorOffset],
 				g: lightingState.lightColors[colorOffset + 1],
 				b: lightingState.lightColors[colorOffset + 2]
@@ -191,16 +232,55 @@ const createPassthroughController = function(options) {
 		const audioDrive = state.smoothedAudioDrive;
 		const spots = [];
 		for (let i = 0; i < rankedLights.length && i < PASSTHROUGH_MAX_SPOTS; i += 1) {
-			spots.push({
-				x: rankedLights[i].x,
-				y: rankedLights[i].y,
-				r: rankedLights[i].r,
-				g: rankedLights[i].g,
-				b: rankedLights[i].b,
-				radius: clampNumber(0.12 + audioDrive * 0.12 + i * 0.015, 0.08, 0.32),
-				softness: 0.12,
-				strength: clampNumber(0.15 + rankedLights[i].strength * 0.22 + audioDrive * 0.24, 0, 0.7)
-			});
+			const light = rankedLights[i];
+			const ceilingPoint = getRoomCeilingLightPoint(
+				light.dirX,
+				light.dirY,
+				light.dirZ
+			);
+			const anchoredPoints = [
+				{
+					point: ceilingPoint,
+					radius: clampNumber(0.12 + audioDrive * 0.1 + i * 0.012, 0.08, 0.3),
+					strength: clampNumber(0.18 + light.strength * 0.24 + audioDrive * 0.22, 0, 0.72)
+				},
+				{
+					point: getRoomFloorLightPoint(ceilingPoint),
+					radius: clampNumber(0.16 + audioDrive * 0.14 + i * 0.015, 0.1, 0.38),
+					strength: clampNumber(0.08 + light.strength * 0.16 + audioDrive * 0.18, 0, 0.46)
+				},
+				{
+					point: getRoomWallLightPoint(ceilingPoint),
+					radius: clampNumber(0.14 + audioDrive * 0.1 + i * 0.012, 0.09, 0.32),
+					strength: clampNumber(0.1 + light.strength * 0.18 + audioDrive * 0.18, 0, 0.52)
+				}
+			];
+			for (let j = 0; j < anchoredPoints.length && spots.length < PASSTHROUGH_MAX_SPOTS; j += 1) {
+				const anchoredPoint = anchoredPoints[j];
+				if (!anchoredPoint.point) {
+					continue;
+				}
+				const projectedUv = projectWorldPointToUv(
+					args.viewMatrix,
+					args.projMatrix,
+					anchoredPoint.point.x,
+					anchoredPoint.point.y,
+					anchoredPoint.point.z
+				);
+				if (!projectedUv) {
+					continue;
+				}
+				spots.push({
+					x: projectedUv.x,
+					y: projectedUv.y,
+					r: light.r,
+					g: light.g,
+					b: light.b,
+					radius: anchoredPoint.radius,
+					softness: 0.12,
+					strength: anchoredPoint.strength
+				});
+			}
 		}
 		return spots;
 	};
