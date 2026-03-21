@@ -78,6 +78,11 @@ const getWeightedAudioDrive = function(audioMetrics) {
 	);
 };
 
+const getPassthroughBlendDrive = function(audioMetrics) {
+	audioMetrics = audioMetrics || emptyAudioMetrics;
+	return clampNumber(audioMetrics.beatPulse || 0, 0, 1);
+};
+
 const getAveragedLightingColor = function(lightingState) {
 	if (!lightingState) {
 		return [1, 1, 1];
@@ -148,23 +153,89 @@ const getRoomWallLightPoint = function(ceilingPoint) {
 	};
 };
 
-const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix) {
+const getFixtureSurfaceKey = function(anchorType) {
+	if (anchorType === "floor") {
+		return "floor";
+	}
+	if (anchorType === "wall") {
+		return "wall";
+	}
+	return "ceiling";
+};
+
+const getClubSurfaceBudget = function(surfaceKey, audioMetrics, clubState) {
+	audioMetrics = audioMetrics || emptyAudioMetrics;
+	const fillMix = clampNumber((audioMetrics.roomFill || 0) * 0.82 + (audioMetrics.bass || 0) * 0.12, 0, 1);
+	const clubIntensity = clampNumber((audioMetrics.level || 0) * 0.4 + (audioMetrics.beatPulse || 0) * 0.3 + 0.3, 0.3, 1);
+	if (surfaceKey === "floor") {
+		return {
+			strengthScale: 1.04 + fillMix * 0.18 + (audioMetrics.bass || 0) * 0.12 + (audioMetrics.bassHit || 0) * 0.22 + (audioMetrics.kickGate || 0) * 0.14,
+			minimumStrength: 0.12 + clubIntensity * 0.1 + fillMix * 0.08 + (audioMetrics.roomFill || 0) * 0.06,
+			radiusScale: 1.18 + fillMix * 0.08 + (audioMetrics.bass || 0) * 0.1,
+			softnessBias: 0.03,
+			radialScale: 0.72,
+			depthScale: 0.62,
+			variantCountBoost: 1,
+			washRadiusXScale: 1.12,
+			washRadiusYScale: 1.34,
+			beamRadiusXScale: 1,
+			beamRadiusYScale: 1,
+			strobeRadiusXScale: 1.04,
+			strobeRadiusYScale: 1.12
+		};
+	}
+	if (surfaceKey === "wall") {
+		return {
+			strengthScale: 0.92 + (1 - fillMix) * 0.08 + (audioMetrics.stereoWidth || 0) * 0.12 + (audioMetrics.transient || 0) * 0.08,
+			minimumStrength: 0.05 + (audioMetrics.stereoWidth || 0) * 0.04,
+			radiusScale: 0.98,
+			softnessBias: -0.01,
+			radialScale: 1,
+			depthScale: 1,
+			variantCountBoost: 0,
+			washRadiusXScale: 0.92,
+			washRadiusYScale: 0.84,
+			beamRadiusXScale: 1.32,
+			beamRadiusYScale: 0.72,
+			strobeRadiusXScale: 0.94,
+			strobeRadiusYScale: 0.88
+		};
+	}
+	return {
+		strengthScale: 0.88 + fillMix * 0.16 + (audioMetrics.roomFill || 0) * 0.1,
+		minimumStrength: 0.04 + fillMix * 0.03,
+		radiusScale: 1.02 + fillMix * 0.06,
+		softnessBias: 0.02,
+		radialScale: 0.94,
+		depthScale: 0.92,
+		variantCountBoost: 0,
+		washRadiusXScale: 1.18,
+		washRadiusYScale: 1.08,
+		beamRadiusXScale: 0.96,
+		beamRadiusYScale: 1.04,
+		strobeRadiusXScale: 1,
+		strobeRadiusYScale: 1
+	};
+};
+
+const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix, surfaceBudget, stereoBiasOffset) {
 	group = group || {};
 	const anchorType = group.anchorType || "ceiling";
-	const azimuth = (group.azimuth || 0) + variantOffset;
-	const radialScale = clampNumber((group.radius == null ? 0.5 : group.radius) * (0.58 + fillMix * 0.42), 0.18, 1.18);
+	const azimuth = (group.azimuth || 0) + variantOffset + (stereoBiasOffset || 0);
+	surfaceBudget = surfaceBudget || getClubSurfaceBudget(getFixtureSurfaceKey(anchorType), emptyAudioMetrics, null);
+	const radialScale = clampNumber((group.radius == null ? 0.5 : group.radius) * (0.58 + fillMix * 0.42) * surfaceBudget.radialScale, 0.18, 1.18);
 	if (anchorType === "ceiling") {
 		return {
 			x: Math.cos(azimuth) * PASSTHROUGH_ROOM_HALF_WIDTH * radialScale,
 			y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
-			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale
+			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale * surfaceBudget.depthScale
 		};
 	}
 	if (anchorType === "floor") {
 		return {
 			x: Math.cos(azimuth) * PASSTHROUGH_ROOM_HALF_WIDTH * radialScale,
 			y: PASSTHROUGH_ROOM_FLOOR_Y,
-			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale
+			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale * surfaceBudget.depthScale
 		};
 	}
 	const wallScaleX = PASSTHROUGH_ROOM_HALF_WIDTH / Math.max(Math.abs(Math.cos(azimuth)), 0.0001);
@@ -172,7 +243,7 @@ const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix) {
 	const wallScale = Math.min(wallScaleX, wallScaleZ) * radialScale;
 	return {
 		x: clampNumber(Math.cos(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
-		y: lerpNumber(PASSTHROUGH_ROOM_FLOOR_Y + 0.42, PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT - 0.32, group.vertical == null ? 0.55 : group.vertical),
+		y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
 		z: clampNumber(Math.sin(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
 	};
 };
@@ -181,25 +252,28 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 	if (!target || !group || !args || !args.viewMatrix || !args.projMatrix) {
 		return;
 	}
-	const fillMix = clampNumber((clubState.clubRoomFill || 0) * 0.8 + (group.type === "wash" ? 0.2 : 0), 0.18, 1);
+	const surfaceKey = getFixtureSurfaceKey(group.anchorType);
+	const surfaceBudget = getClubSurfaceBudget(surfaceKey, args.audioMetrics, clubState);
+	const fillMix = clampNumber((args.audioMetrics && args.audioMetrics.roomFill || 0) * 0.8 + (group.type === "wash" ? 0.2 : 0), 0.18, 1);
+	const stereoBiasOffset = clampNumber(((group.stereoBias || 0) * ((args.audioMetrics && args.audioMetrics.stereoBalance) || 0)) * 0.34, -0.34, 0.34);
 	const sweep = clampNumber(group.sweep == null ? 0.2 : group.sweep, 0, 1.5);
-	const baseStrength = Math.max(0, group.intensity || 0) * clampNumber(clubState.clubIntensity || 0, 0, 1);
+	const baseStrength = Math.max(0, group.intensity || 0);
 	if (baseStrength <= 0.0001) {
 		return;
 	}
-	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * (clubState.clubStrobeAmount || 0) * 1.4, 0, 1.4);
-	const typeIntensityScale = group.type === "wash" ? (0.7 + (clubState.clubRoomFill || 0) * 0.4) : (group.type === "beam" ? (0.88 - (clubState.clubRoomFill || 0) * 0.16) : (0.8 + (clubState.clubStrobeAmount || 0) * 0.65));
-	const variantCount = group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1);
+	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * 0.55, 0, 0.55);
+	const typeIntensityScale = group.type === "wash" ? (0.78 + fillMix * 0.24) : (group.type === "beam" ? (0.92 - fillMix * 0.08) : 0.92);
+	const variantCount = Math.min(PASSTHROUGH_MAX_SPOTS, (group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1)) + surfaceBudget.variantCountBoost);
 	for (let i = 0; i < variantCount && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
 		const variantCenter = variantCount === 1 ? 0 : (i / (variantCount - 1)) - 0.5;
-		const variantOffset = variantCenter * sweep * (group.type === "beam" ? 0.52 : 0.24);
-		const point = getRoomPointForFixtureGroup(group, variantOffset, fillMix);
+		const variantOffset = variantCenter * sweep * (group.type === "beam" ? 0.52 : (surfaceKey === "floor" ? 0.3 : 0.24));
+		const point = getRoomPointForFixtureGroup(group, variantOffset, fillMix, surfaceBudget, stereoBiasOffset);
 		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
 		if (!projectedUv) {
 			continue;
 		}
 		let rotation = 0;
-		const tangentPoint = getRoomPointForFixtureGroup(group, variantOffset + 0.08, fillMix);
+		const tangentPoint = getRoomPointForFixtureGroup(group, variantOffset + 0.08, fillMix, surfaceBudget, stereoBiasOffset);
 		const projectedTangentUv = tangentPoint ? projectWorldPointToUv(args.viewMatrix, args.projMatrix, tangentPoint.x, tangentPoint.y, tangentPoint.z) : null;
 		if (projectedTangentUv) {
 			rotation = Math.atan2(projectedTangentUv.y - projectedUv.y, projectedTangentUv.x - projectedUv.x);
@@ -216,6 +290,18 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			radiusX = clampNumber((group.radius || 0.22) * 0.18, 0.09, 0.2);
 			radiusY = clampNumber(radiusX * 0.6, 0.05, 0.14);
 		}
+		if (group.type === "wash") {
+			radiusX *= surfaceBudget.washRadiusXScale;
+			radiusY *= surfaceBudget.washRadiusYScale;
+		} else if (group.type === "beam") {
+			radiusX *= surfaceBudget.beamRadiusXScale;
+			radiusY *= surfaceBudget.beamRadiusYScale;
+		} else {
+			radiusX *= surfaceBudget.strobeRadiusXScale;
+			radiusY *= surfaceBudget.strobeRadiusYScale;
+		}
+		radiusX = clampNumber(radiusX * surfaceBudget.radiusScale * (surfaceKey === "floor" && group.type === "wash" ? 1.08 : 1), 0.08, 0.5);
+		radiusY = clampNumber(radiusY * surfaceBudget.radiusScale * (surfaceKey === "floor" ? 1.12 : 1), 0.04, 0.48);
 		target.push({
 			x: projectedUv.x,
 			y: projectedUv.y,
@@ -225,8 +311,13 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			radiusX: radiusX,
 			radiusY: radiusY,
 			rotation: rotation,
-			softness: clampNumber(group.softness == null ? 0.16 : group.softness, 0.04, 0.4),
-			strength: clampNumber(baseStrength * typeIntensityScale * strobeBoost * (group.type === "beam" ? 0.72 : 1) * (1 - Math.abs(variantCenter) * 0.16), 0, group.type === "strobe" ? 0.88 : 0.72)
+			softness: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
+			strength: clampNumber(
+				surfaceBudget.minimumStrength +
+				baseStrength * surfaceBudget.strengthScale * typeIntensityScale * strobeBoost * (group.type === "beam" ? 0.72 : 1) * (1 - Math.abs(variantCenter) * 0.16),
+				0,
+				group.type === "strobe" ? 0.88 : 0.72
+			)
 		});
 	}
 };
@@ -242,14 +333,13 @@ const createPassthroughController = function(options) {
 		blendModeKey: options.initialBlendModeKey || "uniform",
 		uniformBlendModeKey: options.initialUniformBlendModeKey || "manual",
 		lightingModeKey: options.initialLightingModeKey || "uniform",
+		lightingDarkness: options.initialLightingDarkness == null ? 0.05 : options.initialLightingDarkness,
 		manualMix: options.initialManualMix == null ? 0 : options.initialManualMix,
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
-		clubIntensity: options.initialClubIntensity == null ? 0.82 : options.initialClubIntensity,
-		clubRoomFill: options.initialClubRoomFill == null ? 0.74 : options.initialClubRoomFill,
-		clubStrobeAmount: options.initialClubStrobeAmount == null ? 0.35 : options.initialClubStrobeAmount,
-		smoothedAudioDrive: 0
+		smoothedAudioDrive: 0,
+		smoothedBlendDrive: 0
 	};
 
 	const getFlashlightMasks = function(args) {
@@ -403,9 +493,11 @@ const createPassthroughController = function(options) {
 		updateFrame: function(args) {
 			args = args || {};
 			const targetDrive = getWeightedAudioDrive(args.audioMetrics);
+			const targetBlendDrive = getPassthroughBlendDrive(args.audioMetrics);
 			const delta = clampNumber(args.delta == null ? 1 / 60 : args.delta, 0, 0.1);
 			const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
 			state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
+			state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
 		},
 		getUiState: function() {
 			const controlState = getPassthroughControlDefinitions(state);
@@ -426,8 +518,8 @@ const createPassthroughController = function(options) {
 				lightingSecondaryControl: lightingControlState.secondaryControl,
 				lightingTertiaryControl: lightingControlState.tertiaryControl,
 				uniformBlendModeVisibleBool: controlState.uniformBlendModeVisibleBool,
-				audioDrive: state.smoothedAudioDrive,
-				visibleShare: getPassthroughVisibleShare(state, state.smoothedAudioDrive)
+				audioDrive: state.smoothedBlendDrive,
+				visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive)
 			};
 		},
 		cycleBlendMode: function(direction) {
@@ -465,21 +557,15 @@ const createPassthroughController = function(options) {
 			if (key === "flashlightSoftness") {
 				state.flashlightSoftness = clampNumber(value, 0.01, 0.35);
 			}
-			if (key === "clubIntensity") {
-				state.clubIntensity = clampNumber(value, 0, 1);
-			}
-			if (key === "clubRoomFill") {
-				state.clubRoomFill = clampNumber(value, 0, 1);
-			}
-			if (key === "clubStrobeAmount") {
-				state.clubStrobeAmount = clampNumber(value, 0, 1);
+			if (key === "lightingDarkness") {
+				state.lightingDarkness = clampNumber(value, 0, 1);
 			}
 		},
 		getBackgroundCompositeState: function(args) {
 			args = args || {};
 			const flashlightMasks = getFlashlightMasks(args);
 			return {
-				alpha: state.blendModeKey === "flashlight" ? 1 : clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedAudioDrive), 0, 1),
+				alpha: state.blendModeKey === "flashlight" ? 1 : clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
 				maskCount: flashlightMasks.length,
 				masks: flashlightMasks
 			};
@@ -487,15 +573,16 @@ const createPassthroughController = function(options) {
 		getOverlayRenderState: function(args) {
 			args = args || {};
 			const flashlightMasks = getFlashlightMasks(args);
-			const visibleShare = state.blendModeKey === "flashlight" ? 0 : getPassthroughVisibleShare(state, state.smoothedAudioDrive);
+			const visibleShare = state.blendModeKey === "flashlight" ? 0 : getPassthroughVisibleShare(state, state.smoothedBlendDrive);
 			const lightingState = args.sceneLightingState || null;
 			const lightingColor = getAveragedLightingColor(lightingState);
 			const tintStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
+			const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
 			return {
 				visibleShare: visibleShare,
 				maskCount: flashlightMasks.length,
 				masks: flashlightMasks,
-				darkAlpha: 0.5,
+				darkAlpha: 1 - darkness,
 				uniformTintColor: lightingColor,
 				uniformTintStrength: tintStrength,
 				lightingModeKey: state.lightingModeKey,
@@ -582,12 +669,15 @@ const createPassthroughOverlayRenderer = function() {
 		"reveal=1.0-(1.0-reveal)*(1.0-localMask);",
 		"}",
 		"vec3 color=uniformTintColor*uniformTintStrength*reveal;",
+		"float lightReveal=0.0;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
 		"if(float(i)>=spotCount){break;}",
 		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
-		"color+=spotColors[i].rgb*(spotColors[i].a*spotMask*reveal);",
+		"float spotStrength=spotColors[i].a*spotMask*reveal;",
+		"color+=spotColors[i].rgb*spotStrength;",
+		"lightReveal=max(lightReveal,clamp(spotStrength*1.65,0.0,1.0));",
 		"}",
-		"gl_FragColor=vec4(color,darkAlpha*reveal);",
+		"gl_FragColor=vec4(color,darkAlpha*reveal*(1.0-lightReveal));",
 		"}"
 	].join("");
 

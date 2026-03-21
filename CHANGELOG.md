@@ -7,15 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-21
+
 ### Added
 - Added a new passthrough lighting mode `Club` with fixture-rig-driven washes, wall beams, and controlled strobe accents, plus three new hybrid club presets: `Neon Wash`, `Stereo Chase`, and `Pulse Strobe`.
-- Added club-lighting VR menu controls for `Club Intensity`, `Room Fill`, and `Strobe Amount` under the existing `Scene Lighting` section.
 - Extended the shared audio analysis output with club-oriented derived metrics including `kickGate`, `bassHit`, `transientGate`, `strobeGate`, `colorMomentum`, `motionEnergy`, `roomFill`, and stereo impact values for left/right accents.
 - Expanded the VR menu audio meter block beyond the old five values so the new club-lighting debug metrics are visible in-headset.
+- Added one shared `Darkness` slider under `Scene Lighting` so passthrough can range from nearly lights-only darkening to fully additive lighting without exposing Club-specific macro sliders.
 
 ### Changed
 - Rebuilt the lighting preset layer around shared fixture groups and derived scene lights, so passthrough and virtual scene lighting now follow the same preset-defined musical intent instead of only sharing a small directional-light set.
 - Upgraded the passthrough overlay masks from circle-only spots to oriented ellipses, so `Club` washes and beams read more like distinct fixture types instead of the same rounded blobs.
+- Added explicit ceiling, wall, and floor surface budgets inside the `Club` passthrough renderer, including a floor-visibility lift and stronger surface-specific shaping so floor spill stays visible more reliably and walls read more differently from ceiling wash.
+- Removed the `Club Intensity`, `Room Fill`, and `Strobe Amount` menu sliders again, so Club passthrough behavior is driven by the active preset and audio response while the new shared `Darkness` slider handles passthrough darkening across lighting modes.
+- Changed the passthrough overlay compositing so lit masks now open the local darkening instead of only drawing additive color, making low-darkness Club and Spots lighting reveal the real passthrough image inside the light hits.
+- Lowered the shared `Darkness` default from `20%` to `5%` and moved the moving Club wall-light track up to the same ceiling-height anchor used by the passthrough spots.
+- Changed the audio-reactive `Uniform -> Music` passthrough blend to follow `beatPulse` specifically instead of the broader weighted audio drive, and renamed the VR menu readout from `Beat` to `Beat Pulse` for clarity.
+- Strengthened `Left Hit` and `Right Hit` so stereo-heavy material now produces more obvious side-biased Club beam intensity and a small extra left/right spatial offset in passthrough.
+- Changed the startup defaults to `Passthrough = Uniform -> Music` with `Intensity = -100%`, and `Scene Lighting = Club` with `Pulse Strobe` as the initial light preset.
 
 ### Fixed
 - Re-anchored passthrough `Spots` lighting to the real `local-floor` room space with approximate ceiling, floor, and side-wall anchors, so real headset movement changes the colored passthrough spots like room lights while stick locomotion no longer shifts them through passthrough.

@@ -295,11 +295,11 @@ const createAudioAnalyser = function() {
 			motionEnergy += (motionEnergyInstant - motionEnergy) * motionBlend;
 			const roomFillInstant = clampNumber(smoothedLevel * 0.5 + smoothedBassLevel * 0.8 + beatPulse * 0.18, 0, 1);
 			roomFill += (roomFillInstant - roomFill) * Math.min(1, elapsedTimeSeconds * 4.6);
-			const stereoAccentScale = clampNumber(stereoWidthInstant * 0.9 + Math.abs(stereoBalanceInstant) * 0.45, 0, 1);
-			const leftImpactInstant = clampNumber((leftLevelInstant * 0.42 + leftBassInstant * 0.48 + Math.max(0, -stereoBalanceInstant) * 0.35) * stereoAccentScale, 0, 1);
-			const rightImpactInstant = clampNumber((rightLevelInstant * 0.42 + rightBassInstant * 0.48 + Math.max(0, stereoBalanceInstant) * 0.35) * stereoAccentScale, 0, 1);
-			leftImpact += (leftImpactInstant - leftImpact) * Math.min(1, elapsedTimeSeconds * 7.5);
-			rightImpact += (rightImpactInstant - rightImpact) * Math.min(1, elapsedTimeSeconds * 7.5);
+			const stereoAccentScale = clampNumber(0.24 + stereoWidthInstant * 0.98 + Math.abs(stereoBalanceInstant) * 0.58 + sideLevelInstant * 0.3, 0, 1);
+			const leftImpactInstant = clampNumber((leftLevelInstant * 0.34 + leftBassInstant * 0.54 + Math.max(0, -stereoBalanceInstant) * 0.42 + sideLevelInstant * 0.18 + beatPulse * 0.1) * stereoAccentScale, 0, 1);
+			const rightImpactInstant = clampNumber((rightLevelInstant * 0.34 + rightBassInstant * 0.54 + Math.max(0, stereoBalanceInstant) * 0.42 + sideLevelInstant * 0.18 + beatPulse * 0.1) * stereoAccentScale, 0, 1);
+			leftImpact += (leftImpactInstant - leftImpact) * Math.min(1, elapsedTimeSeconds * 10.5);
+			rightImpact += (rightImpactInstant - rightImpact) * Math.min(1, elapsedTimeSeconds * 10.5);
 		},
 		getMetrics: function() {
 			return {

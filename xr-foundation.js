@@ -537,9 +537,10 @@ const applyLightingUniforms = function(gl, uniformLocations, lightingState) {
 	gl.uniform1fv(uniformLocations.lightStrengthsLoc, lightingState.lightStrengths);
 };
 
-const createSceneLighting = function() {
+const createSceneLighting = function(options) {
+	options = options || {};
 	const state = createEmptyLightingState();
-	let currentPresetIndex = 0;
+	let currentPresetIndex = clampNumber(options.initialPresetIndex == null ? 0 : options.initialPresetIndex, 0, Math.max(0, lightingPresetDefinitions.length - 1));
 	const getPresetNames = function() {
 		const names = [];
 		for (let i = 0; i < lightingPresetDefinitions.length; i += 1) {

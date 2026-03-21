@@ -63,6 +63,18 @@ Target result:
 - [ ] Real headset validation is still missing for the current Club tuning
 - [ ] Scene-light derivation is still less expressive than the passthrough path
 
+## Active Execution Slices
+
+Use this section to track the current small implementation blocks inside the larger phases.
+
+### Slice 1: Surface Visibility Baseline
+
+- [x] Step 1.1 Implement explicit Club surface budgets in `xr-passthrough.js`
+- [x] Step 1.2 Add floor-biased strength, radius, and anchor compression so floor light has a minimum visible presence
+- [x] Step 1.3 Increase ceiling-versus-wall surface shaping inside the Club renderer
+- [ ] Step 1.4 Visually validate the new floor behavior and retune default values if needed
+- [ ] Step 1.5 Tune the default room anchor layout once the new surface budgets are observed in-headset
+
 ## Working Protocol For Future AI Sessions
 
 1. Read this file first.

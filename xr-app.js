@@ -468,15 +468,16 @@ const appConfig = {
 	},
 	passthrough: {
 		initialBlendModeKey: "uniform",
-		initialUniformBlendModeKey: "manual",
-		initialLightingModeKey: "spots",
+		initialUniformBlendModeKey: "audioReactive",
+		initialLightingModeKey: "club",
+		initialLightingDarkness: 0.05,
 		initialManualMix: 0,
-		initialAudioReactiveIntensity: 0.7,
-		initialClubIntensity: 0.82,
-		initialClubRoomFill: 0.74,
-		initialClubStrobeAmount: 0.35,
+		initialAudioReactiveIntensity: -1,
 		initialFlashlightRadius: 0.18,
 		initialFlashlightSoftness: 0.1
+	},
+	lighting: {
+		initialPresetIndex: 4
 	},
 	runtime: {
 		desktopMouseSensitivity: 0.0024,
@@ -515,6 +516,7 @@ const createApp = function(projectConfig) {
 		locomotion: Object.assign({}, appConfig.locomotion, projectConfig.locomotion || {}),
 		menu: Object.assign({}, appConfig.menu, projectConfig.menu || {}),
 		passthrough: Object.assign({}, appConfig.passthrough, projectConfig.passthrough || {}),
+		lighting: Object.assign({}, appConfig.lighting, projectConfig.lighting || {}),
 		runtime: Object.assign({}, appConfig.runtime, projectConfig.runtime || {}),
 		scene: Object.assign({}, appConfig.scene, projectConfig.scene || {})
 	};
@@ -534,7 +536,7 @@ const createApp = function(projectConfig) {
 		},
 		onStateChange: shell.setAudioState
 	});
-	const sceneLighting = createSceneLighting();
+	const sceneLighting = createSceneLighting(config.lighting);
 	const collisionWorld = createCollisionWorld({
 		staticBoxes: config.scene.levelBoxes,
 		dynamicBoxSources: [function() {

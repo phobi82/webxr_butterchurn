@@ -120,11 +120,11 @@ The current menu exposes:
 - scene lighting group:
   - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club` with `Spots` as the default
   - `Light Preset` cycler
-  - `Club`: `Club Intensity`, `Room Fill`, `Strobe Amount`
+  - all lighting modes except `None`: `Darkness`
 - eye distance slider
 - visualizer mode selector
 - Butterchurn preset selector
-- live audio meters for `Level`, `Bass`, `Kick`, `Bass Hit`, `Transient`, `Beat`, `Strobe`, `Fill`, `Left Hit`, and `Right Hit`
+- live audio meters for `Level`, `Bass`, `Kick`, `Bass Hit`, `Transient`, `Beat Pulse`, `Strobe`, `Fill`, `Left Hit`, and `Right Hit`
 
 ## Visualizer Modes
 
@@ -140,12 +140,19 @@ The current menu exposes:
 - Passthrough now runs through a dedicated controller/orchestrator plus a separate pure mode-definition module instead of mixing mode logic into the visualizer or menu.
 - `Uniform` keeps one shared full-screen blend path, while `Flashlight` reveals passthrough through two soft hand-controlled masks.
 - `Uniform` splits into `Manual` and `Music`; the bipolar `Intensity` slider now spans a stronger full-range audio blend, clearly separates positive from negative direction, and labels the two directions as `Vis -> Passthrough` and `Passthrough -> Vis`.
+- The audio-reactive `Uniform -> Music` blend now follows `beatPulse` specifically, while the other passthrough lighting behavior still uses broader audio-derived lighting metrics.
+- `Left Hit` and `Right Hit` now drive stronger stereo-biased Club beam accents, with more obvious left/right intensity separation and a small additional lateral placement shift on stereo-heavy material.
 - The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
+- Default startup now uses `Passthrough = Uniform -> Music` with `Intensity = -100%`, and `Scene Lighting = Club` with the `Pulse Strobe` preset selected.
 - Lighting can now be disabled, applied as one music-reactive uniform tint, or rendered as soft colored spots derived from the active lighting preset.
 - The `Spots` overlay now approximates fixed room lighting in `local-floor` space with anchors on the ceiling, floor, and side walls, so real headset movement changes the passthrough spots as if the lights were in the room, while stick locomotion no longer drags those spots through passthrough.
 - `Club` extends the passthrough lighting path with fixture-rig-driven washes, wall beams, and controlled strobe accents derived from the active light preset and new audio-reactive metrics such as `kickGate`, `bassHit`, `transientGate`, `strobeGate`, `roomFill`, and stereo impact values.
 - `Club` now renders those passthrough fixtures as oriented elliptical masks instead of only round blobs, so washes read broader and beams read more directional in the room.
+- `Club` now applies explicit ceiling, wall, and floor surface budgets in the passthrough renderer, with a floor-biased visibility lift and stronger surface-specific shaping so floor spill stays present more reliably and walls versus ceiling read less alike.
+- The former Club macro sliders were removed again, so Club intensity, fill, and strobe behavior now come from the active preset and audio response; one shared `Darkness` slider controls how much the passthrough environment is darkened behind `Uniform`, `Spots`, and `Club`, with `5%` as the default.
+- Lit passthrough masks now also reduce the local darkening alpha instead of only adding color, so at low `Darkness` values the real passthrough image can show through inside the light hits rather than appearing as flat colored blobs on black.
+- The moving Club wall lights now run on the same ceiling-height anchor as the passthrough spots instead of tracking lower down the wall.
 - Desktop preview, opaque VR, and unsupported AR still use the same blend modes against a black fallback instead of live passthrough.
 - Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
 - The XR menu hit path no longer crashes when pointing at the menu after the generic section refactor; the earlier `undefined.length` hit-test regression is fixed.

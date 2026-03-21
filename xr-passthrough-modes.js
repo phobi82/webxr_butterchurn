@@ -104,7 +104,7 @@ const getPassthroughControlDefinitions = function(state) {
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {
-	if (state.lightingModeKey !== "club") {
+	if (state.lightingModeKey === "none") {
 		return {
 			primaryControl: null,
 			secondaryControl: null,
@@ -113,31 +113,15 @@ const getPassthroughLightingControlDefinitions = function(state) {
 	}
 	return {
 		primaryControl: {
-			key: "clubIntensity",
-			label: "Club Intensity",
-			value: state.clubIntensity == null ? 0.82 : state.clubIntensity,
+			key: "lightingDarkness",
+			label: "Darkness",
+			value: state.lightingDarkness == null ? 0.05 : state.lightingDarkness,
 			min: 0,
 			max: 1,
-			minLabel: "Subtle",
-			maxLabel: "Huge"
+			minLabel: "Lights Only",
+			maxLabel: "Additive"
 		},
-		secondaryControl: {
-			key: "clubRoomFill",
-			label: "Room Fill",
-			value: state.clubRoomFill == null ? 0.74 : state.clubRoomFill,
-			min: 0,
-			max: 1,
-			minLabel: "Tight",
-			maxLabel: "Full Room"
-		},
-		tertiaryControl: {
-			key: "clubStrobeAmount",
-			label: "Strobe Amount",
-			value: state.clubStrobeAmount == null ? 0.35 : state.clubStrobeAmount,
-			min: 0,
-			max: 1,
-			minLabel: "Soft",
-			maxLabel: "Hard"
-		}
+		secondaryControl: null,
+		tertiaryControl: null
 	};
 };

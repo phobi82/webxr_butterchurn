@@ -100,7 +100,7 @@ const createMenuView = function(options) {
 			{label: "Kick", value: clampNumber(audioMetrics.kickGate || 0, 0, 1)},
 			{label: "Bass Hit", value: clampNumber(audioMetrics.bassHit || 0, 0, 1)},
 			{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
-			{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)},
+			{label: "Beat Pulse", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)},
 			{label: "Strobe", value: clampNumber(audioMetrics.strobeGate || 0, 0, 1)},
 			{label: "Fill", value: clampNumber(audioMetrics.roomFill || 0, 0, 1)},
 			{label: "Left Hit", value: clampNumber(audioMetrics.leftImpact || 0, 0, 1)},
