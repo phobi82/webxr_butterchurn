@@ -3,6 +3,22 @@ const createMenuView = function(options) {
 	options = options || {};
 	const emptyModeNames = ["No mode"];
 	const emptyPresetNames = ["No preset"];
+	const titleText = options.titleText || "VR Control Deck";
+	const buildAudioBarItems = options.getAudioBarItems || function(audioMetrics) {
+		audioMetrics = audioMetrics || emptyAudioMetrics;
+		return [
+			{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
+			{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
+			{label: "Kick", value: clampNumber(audioMetrics.kickGate || 0, 0, 1)},
+			{label: "Bass Hit", value: clampNumber(audioMetrics.bassHit || 0, 0, 1)},
+			{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
+			{label: "Beat Pulse", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)},
+			{label: "Strobe", value: clampNumber(audioMetrics.strobeGate || 0, 0, 1)},
+			{label: "Fill", value: clampNumber(audioMetrics.roomFill || 0, 0, 1)},
+			{label: "Left Hit", value: clampNumber(audioMetrics.leftImpact || 0, 0, 1)},
+			{label: "Right Hit", value: clampNumber(audioMetrics.rightImpact || 0, 0, 1)}
+		];
+	};
 	const documentRef = options.documentRef || document;
 	const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
 	const menuLayoutWidth = options.canvasWidth || 1280;
@@ -92,24 +108,9 @@ const createMenuView = function(options) {
 			nextTop: currentTop
 		};
 	};
-	const getAudioBarItems = function(audioMetrics) {
-		audioMetrics = audioMetrics || emptyAudioMetrics;
-		return [
-			{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
-			{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
-			{label: "Kick", value: clampNumber(audioMetrics.kickGate || 0, 0, 1)},
-			{label: "Bass Hit", value: clampNumber(audioMetrics.bassHit || 0, 0, 1)},
-			{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
-			{label: "Beat Pulse", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)},
-			{label: "Strobe", value: clampNumber(audioMetrics.strobeGate || 0, 0, 1)},
-			{label: "Fill", value: clampNumber(audioMetrics.roomFill || 0, 0, 1)},
-			{label: "Left Hit", value: clampNumber(audioMetrics.leftImpact || 0, 0, 1)},
-			{label: "Right Hit", value: clampNumber(audioMetrics.rightImpact || 0, 0, 1)}
-		];
-	};
 	const getLayoutMetrics = function(menuSections) {
 		menuSections = menuSections || [];
-		const audioBarItems = getAudioBarItems(emptyAudioMetrics).length;
+		const audioBarItems = buildAudioBarItems(emptyAudioMetrics).length;
 		const innerFrameInset = 24;
 		const audioPanelTop = 108;
 		const audioBarTop = 116;
@@ -276,7 +277,7 @@ const createMenuView = function(options) {
 			const accentRgb = hslToRgb((renderState.sceneTimeSeconds || 0) * 0.03 + 0.04, 0.85, 0.62);
 			const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
 			const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
-			const audioBarItems = getAudioBarItems(audioMetrics);
+			const audioBarItems = buildAudioBarItems(audioMetrics);
 			syncCanvasSize(layout);
 			const logicalScaleY = menuCanvas.height / Math.max(1, layout.canvasHeight);
 			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -309,7 +310,7 @@ const createMenuView = function(options) {
 			menuCtx.textBaseline = "top";
 			menuCtx.fillStyle = "#f8fbff";
 			menuCtx.font = "bold 46px Arial";
-			menuCtx.fillText("VR Control Deck", layout.contentLeft, 34);
+			menuCtx.fillText(titleText, layout.contentLeft, 34);
 			menuCtx.fillStyle = accentSoft;
 			menuCtx.fillRect(layout.contentLeft, layout.audioPanelTop, layout.contentWidth, layout.audioPanelHeight);
 			menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
@@ -487,6 +488,7 @@ const createMenuView = function(options) {
 // core/menu-controller.js
 const createMenuController = function(options) {
 	const menuView = options.menuView;
+	const buildModuleSections = options.buildModuleSections || createLowerMenuSections;
 	const menuCanvas = menuView.menuCanvas;
 	const previewCanvas = menuView.previewCanvas;
 	const passthroughController = options.passthroughController || null;
@@ -578,7 +580,7 @@ const createMenuController = function(options) {
 		const currentShaderModeIndex = clampNumber(externalState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
 		const presetNames = externalState.presetNames && externalState.presetNames.length ? externalState.presetNames : ["No preset"];
 		const currentPresetIndex = clampNumber(externalState.currentPresetIndex || 0, 0, presetNames.length - 1);
-		return createLowerMenuSections({
+		return buildModuleSections({
 			selectedJumpMode: state.jumpMode,
 			hoveredJumpMode: state.hoveredJumpMode,
 			floorAlpha: state.floorAlpha,
@@ -606,6 +608,8 @@ const createMenuController = function(options) {
 			lightingModes: passthroughUiState.lightingModes || [],
 			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
 			hoveredSceneLightingModeAction: state.hoveredSceneLightingModeAction,
+			lightPresetNames: lightPresetNames,
+			currentLightPresetIndex: lightPresetIndex,
 			currentLightPresetName: lightPresetNames[lightPresetIndex] || "Aurora Drift",
 			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
 			hoveredLightPresetAction: state.hoveredLightPresetAction,

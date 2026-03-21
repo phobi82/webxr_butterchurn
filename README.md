@@ -1,4 +1,4 @@
-# WebXR Visualizer Foundation
+# WebXR Visualizer
 
 Local WebXR prototype built with plain HTML and vanilla JavaScript. The project currently focuses on a stable XR baseline for an audiovisualizer: reliable movement, a usable in-headset menu, shared audio-reactive scene lighting, and Butterchurn-driven visuals that already run before a live audio source is selected.
 
@@ -10,6 +10,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - XR and desktop locomotion with jumping, sprinting, crouching, tiptoe head-height control, and airborne boost
 - collision world with floor, platforms, walls, and a remote goat GLB prop
 - in-headset menu plus mirrored desktop preview for debugging the same menu
+- separate [`TestLab.html`](./TestLab.html) page for isolated single-effect lighting tests on desktop and in VR
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - passthrough blend modes: `Uniform`, `Flashlight`
@@ -24,6 +25,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-foundation.js`: shared browser, XR, math, and rendering helpers
 - `xr-audio-controller.js`: audio capture, analyser pipeline, stereo metrics, club-lighting derived metrics, and debug synth
 - `xr-light-fixture-effects.js`: shared fixture-effect families and passthrough effect semantics
+- `test-lab-lighting-presets.js`: isolated single-effect preset catalog used by `TestLab.html`
 - `xr-light-presets.js`: lighting preset catalog, fixture-rig builders, and scene-light derivation
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
@@ -32,7 +34,9 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
-- `xr-app.js`: app config, composition, startup, and runtime orchestration
+- `xr-shell.js`: explicit DOM-shell contract plus reusable shell normalization/builder helpers
+- `xr-runtime.js`: shared runtime orchestration for XR sessions, desktop preview, audio wiring, and render-loop flow
+- `app-composition.js`: default app configuration and shared app composition over the shell/runtime modules
 
 ## Requirements
 
@@ -81,6 +85,14 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 - `YT House/Disco`: opens the configured house/disco YouTube playlist tab at its first selected track and expects tab-audio sharing
 - `Suno Live Radio`: opens Suno Live Radio and expects tab-audio sharing
 - `Stop Audio`: disconnects the active source
+
+## Effect Test Lab
+
+- Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect family at a time instead of testing full presets.
+- The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, so Butterchurn is suppressed and the effect overlay stays isolated against the fallback/room test setup.
+- `Prev Effect` and `Next Effect` cycle through isolated effect families: `Soft Wash`, `Shutters`, `Edge Runner`, `Silhouette Cut`, `Room Window Beat`, `Aurora Curtain`, and `Floor Halo`.
+- The page keeps the normal XR enter path, so the same isolated effects can be inspected in headset instead of only on desktop.
+- Its in-headset menu is also reduced to the active effect, the key lighting slider, and focused audio meters instead of mirroring the full production menu.
 
 ## Desktop Preview Controls
 
@@ -153,6 +165,8 @@ The current menu exposes:
 - Fixture effect families are now defined in one shared lighting module, so presets choose shuttered washes, edge-running beams, silhouette cuts, or room-window beats without duplicating the effect rules inside the passthrough renderer.
 - Those passthrough-native effect families now also include aurora-curtain ceiling bands and floor-halo underglow, so `Aurora Drift` reads more like a moving northern-light canopy and the room-fill presets get a more deliberate floor spill instead of only soft blobs.
 - The remaining Club presets are now pulled further apart as well: `Disco Storm` is busier and more cutout-heavy, `Neon Wash` pushes stronger ceiling-plus-wall color fill, `Stereo Chase` emphasizes mirrored side runners and split floor color, and `Pulse Strobe` keeps a darker base with sharper ceiling and wall hits.
+- A separate `TestLab.html` page now isolates one effect family at a time through the normal Club/passthrough pipeline, so effect families can be judged on their own before being recomposed into presets.
+- The app shell is now passed into `createApp(...)` explicitly instead of being read from an implicit global, and the shared runtime lives in `xr-runtime.js`, so alternative entry pages can reuse the same engine stack without baking test-specific hooks into the main app module.
 - The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
 - Default startup now uses `Passthrough = Uniform -> Music` with `Intensity = -100%`, and `Scene Lighting = Club` with the `Pulse Strobe` preset selected.

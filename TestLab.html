@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>WebXR Effect Test Lab</title>
+	</head>
+	<body>
+		<script src="butterchurn.min.js"></script>
+		<script src="butterchurnPresets.min.js"></script>
+		<script src="xr-foundation.js"></script>
+		<script src="xr-audio-controller.js"></script>
+		<script src="xr-light-fixture-effects.js"></script>
+		<script src="xr-light-presets.js"></script>
+		<script src="test-lab-lighting-presets.js"></script>
+		<script src="xr-visualizer.js"></script>
+		<script src="xr-visualizer-modes.js"></script>
+		<script src="xr-passthrough-modes.js"></script>
+		<script src="xr-passthrough.js"></script>
+		<script src="xr-world.js"></script>
+		<script src="xr-menu-sections.js"></script>
+		<script src="test-lab-menu.js"></script>
+		<script src="xr-menu.js"></script>
+		<script src="xr-shell.js"></script>
+		<script src="xr-runtime.js"></script>
+		<script>
+			document.body.style.backgroundColor = "#000020";
+			document.body.style.color = "#ffff00";
+			document.body.style.margin = "0";
+			document.body.style.overflow = "hidden";
+			document.body.style.fontFamily = "Arial, sans-serif";
+
+			const panel = document.createElement("div");
+			applyStyles(panel, {
+				position: "fixed",
+				left: "12px",
+				top: "12px",
+				display: "flex",
+				flexDirection: "column",
+				gap: "8px",
+				padding: "10px",
+				backgroundColor: "rgba(0, 0, 32, 0.9)",
+				border: "1px solid #ffff00",
+				zIndex: "10",
+				maxWidth: "420px"
+			});
+			document.body.appendChild(panel);
+
+			const title = document.createElement("div");
+			title.textContent = "WebXR Effect Test Lab";
+			title.style.fontWeight = "bold";
+			panel.appendChild(title);
+
+			const statusLabel = document.createElement("div");
+			statusLabel.textContent = "XR: checking support...";
+			panel.appendChild(statusLabel);
+
+			const hintLabel = document.createElement("div");
+			hintLabel.textContent = "Use this page to inspect one lighting effect at a time in desktop preview or in VR.";
+			hintLabel.style.fontSize = "12px";
+			hintLabel.style.color = "#00ff00";
+			panel.appendChild(hintLabel);
+
+			const xrRow = document.createElement("div");
+			xrRow.style.display = "flex";
+			xrRow.style.flexWrap = "wrap";
+			xrRow.style.gap = "8px";
+			panel.appendChild(xrRow);
+
+			const enterButton = document.createElement("button");
+			enterButton.textContent = "Enter VR";
+			xrRow.appendChild(enterButton);
+
+			const exitButton = document.createElement("button");
+			exitButton.textContent = "Exit VR";
+			exitButton.disabled = true;
+			xrRow.appendChild(exitButton);
+
+			const audioRow = document.createElement("div");
+			audioRow.style.display = "flex";
+			audioRow.style.flexWrap = "wrap";
+			audioRow.style.gap = "8px";
+			panel.appendChild(audioRow);
+
+			const audioButton = document.createElement("button");
+			audioButton.textContent = "Share Audio";
+			audioRow.appendChild(audioButton);
+
+			const microphoneButton = document.createElement("button");
+			microphoneButton.textContent = "Use Microphone";
+			audioRow.appendChild(microphoneButton);
+
+			const debugAudioButton = document.createElement("button");
+			debugAudioButton.textContent = "Debug Audio";
+			audioRow.appendChild(debugAudioButton);
+
+			const stopAudioButton = document.createElement("button");
+			stopAudioButton.textContent = "Stop Audio";
+			stopAudioButton.disabled = true;
+			audioRow.appendChild(stopAudioButton);
+
+			const effectRow = document.createElement("div");
+			effectRow.style.display = "flex";
+			effectRow.style.flexWrap = "wrap";
+			effectRow.style.gap = "8px";
+			panel.appendChild(effectRow);
+
+			const previousLightingButton = document.createElement("button");
+			previousLightingButton.textContent = "Prev Effect";
+			effectRow.appendChild(previousLightingButton);
+
+			const nextLightingButton = document.createElement("button");
+			nextLightingButton.textContent = "Next Effect";
+			effectRow.appendChild(nextLightingButton);
+
+			const effectNameLabel = document.createElement("div");
+			effectNameLabel.textContent = "Effect: loading...";
+			effectNameLabel.style.fontWeight = "bold";
+			panel.appendChild(effectNameLabel);
+
+			const effectDescriptionLabel = document.createElement("div");
+			effectDescriptionLabel.textContent = "";
+			effectDescriptionLabel.style.fontSize = "12px";
+			effectDescriptionLabel.style.color = "#00ff00";
+			panel.appendChild(effectDescriptionLabel);
+
+			const audioLabel = document.createElement("div");
+			audioLabel.textContent = "Audio: none";
+			panel.appendChild(audioLabel);
+
+			const labNotes = document.createElement("div");
+			labNotes.textContent = "The test lab starts with full passthrough/fallback share so Butterchurn is hidden and the effect overlay stays isolated.";
+			labNotes.style.fontSize = "12px";
+			labNotes.style.color = "#00ff00";
+			panel.appendChild(labNotes);
+
+			const canvas = document.createElement("canvas");
+			applyStyles(canvas, {display: "block", width: "100vw", height: "100vh"});
+			document.body.appendChild(canvas);
+
+			const appShell = createDomAppShell({
+				documentRef: document,
+				canvas: canvas,
+				enterButton: enterButton,
+				exitButton: exitButton,
+				audioButton: audioButton,
+				microphoneButton: microphoneButton,
+				debugAudioButton: debugAudioButton,
+				stopAudioButton: stopAudioButton,
+				setStatus: function(text) {
+					statusLabel.textContent = "XR: " + text;
+				},
+				setXrState: function(args) {
+					args = args || {};
+					if (args.statusText != null) {
+						statusLabel.textContent = "XR: " + args.statusText;
+					}
+					if (args.enterEnabledBool != null) {
+						enterButton.disabled = !args.enterEnabledBool;
+					}
+					if (args.exitEnabledBool != null) {
+						exitButton.disabled = !args.exitEnabledBool;
+					}
+				},
+				setAudioState: function(audioState) {
+					audioState = audioState || {};
+					audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
+					stopAudioButton.disabled = !audioState.stopEnabledBool;
+				}
+			});
+		</script>
+		<script src="app-composition.js"></script>
+		<script>
+			const testLabApp = createApp({
+				shell: appShell,
+				locomotion: {
+					desktopStartZ: 0,
+					desktopStartPitch: 0
+				},
+				menu: {
+					initialDesktopPreviewVisibleBool: false,
+					titleText: "Effect Test Lab",
+					getAudioBarItems: createTestLabAudioBarItems,
+					buildModuleSections: createTestLabMenuSections
+				},
+				passthrough: {
+					initialBlendModeKey: "uniform",
+					initialUniformBlendModeKey: "manual",
+					initialManualMix: 1,
+					initialLightingModeKey: "club",
+					initialLightingDarkness: 0.05
+				},
+				lighting: {
+					initialPresetIndex: 0,
+					presetDefinitions: testLabLightingPresetDefinitions
+				},
+				scene: {
+					floorHalfSize: 4.8,
+					sceneGlbAssets: [],
+					levelBoxes: [
+						{x: 0, y: 1.35, z: -4.2, width: 8.4, height: 2.7, depth: 0.2, color: [0.12, 0.16, 0.24, 0.34]},
+						{x: 0, y: 1.35, z: 4.2, width: 8.4, height: 2.7, depth: 0.2, color: [0.12, 0.16, 0.24, 0.2]},
+						{x: -4.2, y: 1.35, z: 0, width: 0.2, height: 2.7, depth: 8.4, color: [0.14, 0.18, 0.26, 0.28]},
+						{x: 4.2, y: 1.35, z: 0, width: 0.2, height: 2.7, depth: 8.4, color: [0.14, 0.18, 0.26, 0.28]},
+						{x: 0, y: 2.72, z: 0, width: 8.4, height: 0.18, depth: 8.4, color: [0.16, 0.2, 0.28, 0.24]}
+					]
+				}
+			});
+
+			const syncEffectLabels = function() {
+				const selectionState = testLabApp.getLightingSelectionState() || {};
+				const names = selectionState.presetNames || [];
+				const index = selectionState.currentPresetIndex || 0;
+				const effectName = names.length ? names[index] : "Unknown";
+				effectNameLabel.textContent = "Effect " + (names.length ? (index + 1) : 0) + " / " + names.length + ": " + effectName;
+				effectDescriptionLabel.textContent = selectionState.currentPresetDescription || "";
+			};
+
+			previousLightingButton.addEventListener("click", function() {
+				testLabApp.cycleLightingPreset(-1);
+				syncEffectLabels();
+			});
+
+			nextLightingButton.addEventListener("click", function() {
+				testLabApp.cycleLightingPreset(1);
+				syncEffectLabels();
+			});
+
+			testLabApp.start().then(function() {
+				syncEffectLabels();
+			});
+		</script>
+	</body>
+</html>

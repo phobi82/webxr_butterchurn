@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta name="viewport" content="width=device-width, initial-scale=1">
-		<title>WebXR Visualizer Foundation</title>
+		<title>WebXR Visualizer</title>
 	</head>
 	<body>
 		<script src="butterchurn.min.js"></script>
@@ -18,6 +18,8 @@
 		<script src="xr-world.js"></script>
 		<script src="xr-menu-sections.js"></script>
 		<script src="xr-menu.js"></script>
+		<script src="xr-shell.js"></script>
+		<script src="xr-runtime.js"></script>
 		<script>
 			document.body.style.backgroundColor = "#000020";
 			document.body.style.color = "#ffff00";
@@ -41,7 +43,7 @@
 			document.body.appendChild(panel);
 
 			const title = document.createElement("div");
-			title.textContent = "WebXR Visualizer Foundation";
+			title.textContent = "WebXR Visualizer";
 			title.style.fontWeight = "bold";
 			panel.appendChild(title);
 
@@ -164,8 +166,8 @@
 			applyStyles(canvas, {display: "block", width: "100vw", height: "100vh"});
 			document.body.appendChild(canvas);
 
-			window.appShell = {
-				panel: panel,
+			const appShell = createDomAppShell({
+				documentRef: document,
 				canvas: canvas,
 				enterButton: enterButton,
 				exitButton: exitButton,
@@ -195,26 +197,12 @@
 					audioState = audioState || {};
 					audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
 					stopAudioButton.disabled = !audioState.stopEnabledBool;
-				},
-				syncCanvasToViewport: function(viewport) {
-					viewport = viewport || {};
-					const width = viewport.width == null ? 0 : viewport.width;
-					const height = viewport.height == null ? 0 : viewport.height;
-					const pixelRatio = viewport.pixelRatio == null ? 1 : viewport.pixelRatio;
-					canvas.width = width * pixelRatio;
-					canvas.height = height * pixelRatio;
-				},
-				requestCanvasPointerLock: function() {
-					if (canvas.requestPointerLock) {
-						canvas.requestPointerLock();
-					}
-				},
-				isCanvasPointerLocked: function(activeDocumentRef) {
-					const pointerDocumentRef = activeDocumentRef || document;
-					return pointerDocumentRef.pointerLockElement === canvas;
 				}
-			};
+			});
 		</script>
-		<script src="xr-app.js"></script>
+		<script src="app-composition.js"></script>
+		<script>
+			createApp({shell: appShell}).start();
+		</script>
 	</body>
 </html>

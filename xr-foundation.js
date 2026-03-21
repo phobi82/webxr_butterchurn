@@ -542,17 +542,18 @@ const applyLightingUniforms = function(gl, uniformLocations, lightingState) {
 const createSceneLighting = function(options) {
 	options = options || {};
 	const state = createEmptyLightingState();
-	let currentPresetIndex = clampNumber(options.initialPresetIndex == null ? 0 : options.initialPresetIndex, 0, Math.max(0, lightingPresetDefinitions.length - 1));
+	const presetDefinitions = options.presetDefinitions && options.presetDefinitions.length ? options.presetDefinitions : lightingPresetDefinitions;
+	let currentPresetIndex = clampNumber(options.initialPresetIndex == null ? 0 : options.initialPresetIndex, 0, Math.max(0, presetDefinitions.length - 1));
 	const getPresetNames = function() {
 		const names = [];
-		for (let i = 0; i < lightingPresetDefinitions.length; i += 1) {
-			names.push(lightingPresetDefinitions[i].name);
+		for (let i = 0; i < presetDefinitions.length; i += 1) {
+			names.push(presetDefinitions[i].name);
 		}
 		return names;
 	};
 	return {
 		update: function(timeSeconds, audioMetrics) {
-			const preset = lightingPresetDefinitions[currentPresetIndex] || lightingPresetDefinitions[0];
+			const preset = presetDefinitions[currentPresetIndex] || presetDefinitions[0];
 			clearLightingState(state);
 			preset.buildState(state, timeSeconds || 0, audioMetrics || {});
 			state.name = preset.name;
@@ -566,14 +567,14 @@ const createSceneLighting = function(options) {
 			return {
 				presetNames: getPresetNames(),
 				currentPresetIndex: currentPresetIndex,
-				currentPresetDescription: lightingPresetDefinitions[currentPresetIndex] ? lightingPresetDefinitions[currentPresetIndex].description : ""
+				currentPresetDescription: presetDefinitions[currentPresetIndex] ? presetDefinitions[currentPresetIndex].description : ""
 			};
 		},
 		selectPreset: function(index) {
-			if (!lightingPresetDefinitions.length) {
+			if (!presetDefinitions.length) {
 				return Promise.resolve();
 			}
-			currentPresetIndex = (index + lightingPresetDefinitions.length) % lightingPresetDefinitions.length;
+			currentPresetIndex = (index + presetDefinitions.length) % presetDefinitions.length;
 			return Promise.resolve();
 		}
 	};

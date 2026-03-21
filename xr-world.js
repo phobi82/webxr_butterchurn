@@ -878,6 +878,26 @@ const createSceneRenderer = function(options) {
 	const currentPassthroughProj = new Float32Array(16);
 	const adjustedView = new Float32Array(16);
 	const colorVec4 = new Float32Array(4);
+	const emptyMenuController = {
+		getState: function() {
+			return {
+				floorAlpha: 0.72,
+				menuOpenBool: false,
+				plane: {
+					center: {x: 0, y: 0, z: 0},
+					right: {x: 1, y: 0, z: 0},
+					up: {x: 0, y: 1, z: 0},
+					normal: {x: 0, y: 0, z: 1}
+				},
+				planeWidth: options.menuWidth || 0.74,
+				planeHeight: (options.menuWidth || 0.74) * 0.75
+			};
+		},
+		getControllerRays: function() {
+			return [];
+		},
+		renderTexture: function() {}
+	};
 
 	const perspectiveMatrix = function(fovRadians, aspect, near, far) {
 		const f = 1 / Math.tan(fovRadians * 0.5);
@@ -1041,9 +1061,10 @@ const createSceneRenderer = function(options) {
 	};
 
 	const renderScene = function(args) {
-		const menuState = args.menuController.getState();
+		const menuController = args.menuController || emptyMenuController;
+		const menuState = menuController.getState();
 		const passthroughController = args.passthroughController || null;
-		const controllerRays = args.menuController.getControllerRays();
+		const controllerRays = menuController.getControllerRays();
 		const sceneLightingState = args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null;
 		const passthroughViewMatrix = args.passthroughViewMatrix || currentView;
 		const passthroughProjMatrix = args.passthroughProjMatrix || currentProj;
@@ -1075,7 +1096,7 @@ const createSceneRenderer = function(options) {
 			args.visualizerEngine.drawWorld();
 		}
 		if (menuState.menuOpenBool) {
-			args.menuController.renderTexture(gl, menuTexture, args.menuContentState);
+			menuController.renderTexture(gl, menuTexture, args.menuContentState);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			drawTexturedPlane(basisScale(menuState.plane.center.x, menuState.plane.center.y, menuState.plane.center.z, menuState.plane.right, menuState.plane.up, menuState.plane.normal, menuState.planeWidth, menuState.planeHeight, 1));
