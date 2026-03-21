@@ -69,7 +69,19 @@ const createAudioAnalyser = function() {
 	let audioBeatBaseline = 0;
 	let audioTransientBaseline = 0;
 	let beatPulse = 0;
+	let kickGate = 0;
+	let bassHit = 0;
+	let transientGate = 0;
+	let strobeGate = 0;
+	let colorMomentum = 0;
+	let motionEnergy = 0;
+	let roomFill = 0;
+	let leftImpact = 0;
+	let rightImpact = 0;
 	let beatCooldownSeconds = 0;
+	let kickCooldownSeconds = 0;
+	let transientCooldownSeconds = 0;
+	let strobeCooldownSeconds = 0;
 	let lastFrameTimeSeconds = 0;
 	let debugAudioNodes = null;
 
@@ -114,7 +126,19 @@ const createAudioAnalyser = function() {
 			audioBeatBaseline = 0;
 			audioTransientBaseline = 0;
 			beatPulse = 0;
+			kickGate = 0;
+			bassHit = 0;
+			transientGate = 0;
+			strobeGate = 0;
+			colorMomentum = 0;
+			motionEnergy = 0;
+			roomFill = 0;
+			leftImpact = 0;
+			rightImpact = 0;
 			beatCooldownSeconds = 0;
+			kickCooldownSeconds = 0;
+			transientCooldownSeconds = 0;
+			strobeCooldownSeconds = 0;
 			lastFrameTimeSeconds = 0;
 			if (previousFrequencyData) { previousFrequencyData.fill(0); }
 			if (previousFrequencyDataLeft) { previousFrequencyDataLeft.fill(0); }
@@ -145,7 +169,19 @@ const createAudioAnalyser = function() {
 				audioBeatBaseline *= 0.88;
 				audioTransientBaseline *= 0.88;
 				beatPulse *= 0.82;
+				kickGate *= 0.76;
+				bassHit *= 0.84;
+				transientGate *= 0.74;
+				strobeGate *= 0.68;
+				colorMomentum *= 0.9;
+				motionEnergy *= 0.86;
+				roomFill *= 0.88;
+				leftImpact *= 0.82;
+				rightImpact *= 0.82;
 				beatCooldownSeconds = 0;
+				kickCooldownSeconds = 0;
+				transientCooldownSeconds = 0;
+				strobeCooldownSeconds = 0;
 				return;
 			}
 			analyserNode.getByteFrequencyData(frequencyData);
@@ -198,6 +234,7 @@ const createAudioAnalyser = function() {
 			const bassBlend = Math.min(1, elapsedTimeSeconds * 12);
 			const transientBlend = Math.min(1, elapsedTimeSeconds * 16);
 			const stereoBlend = Math.min(1, elapsedTimeSeconds * 8.5);
+			const motionBlend = Math.min(1, elapsedTimeSeconds * 6.5);
 			const bassBaselineBefore = audioBeatBaseline;
 			const transientBaselineBefore = audioTransientBaseline;
 			const baselineBlend = Math.min(1, elapsedTimeSeconds * 2.4);
@@ -222,12 +259,47 @@ const createAudioAnalyser = function() {
 			audioBeatBaseline += (bassLevel - audioBeatBaseline) * baselineBlend;
 			audioTransientBaseline += (transientInstant - audioTransientBaseline) * transientBaselineBlend;
 			beatCooldownSeconds = Math.max(0, beatCooldownSeconds - elapsedTimeSeconds);
+			kickCooldownSeconds = Math.max(0, kickCooldownSeconds - elapsedTimeSeconds);
+			transientCooldownSeconds = Math.max(0, transientCooldownSeconds - elapsedTimeSeconds);
+			strobeCooldownSeconds = Math.max(0, strobeCooldownSeconds - elapsedTimeSeconds);
 			if (beatCooldownSeconds <= 0 && bassRise > bassRiseThreshold && transientInstant > transientThreshold && combinedLevel > 0.035) {
 				beatPulse = 1;
 				beatCooldownSeconds = 0.18;
 			} else {
 				beatPulse = Math.max(0, beatPulse - elapsedTimeSeconds * 3.6);
 			}
+			const kickThreshold = Math.max(0.016, bassBaselineBefore * 0.024);
+			if (kickCooldownSeconds <= 0 && bassRise > kickThreshold && combinedLevel > 0.032) {
+				kickGate = 1;
+				kickCooldownSeconds = 0.12;
+			} else {
+				kickGate = Math.max(0, kickGate - elapsedTimeSeconds * 6.2);
+			}
+			if (transientCooldownSeconds <= 0 && transientInstant > transientThreshold && combinedLevel > 0.03) {
+				transientGate = 1;
+				transientCooldownSeconds = 0.07;
+			} else {
+				transientGate = Math.max(0, transientGate - elapsedTimeSeconds * 8.4);
+			}
+			if (strobeCooldownSeconds <= 0 && transientInstant > transientThreshold * 1.16 && bassRise > kickThreshold * 0.7 && combinedLevel > 0.05) {
+				strobeGate = 1;
+				strobeCooldownSeconds = 0.17;
+			} else {
+				strobeGate = Math.max(0, strobeGate - elapsedTimeSeconds * 10.5);
+			}
+			const bassHitInstant = clampNumber(bassRise * 18 + beatPulse * 0.35, 0, 1);
+			bassHit += (bassHitInstant - bassHit) * Math.min(1, elapsedTimeSeconds * 9.5);
+			const colorMomentumInstant = clampNumber(spectralFluxLevel * 4.8 + transientInstant * 0.32 + stereoWidthInstant * 0.22, 0, 1);
+			colorMomentum += (colorMomentumInstant - colorMomentum) * Math.min(1, elapsedTimeSeconds * 4.2);
+			const motionEnergyInstant = clampNumber(smoothedLevel * 0.28 + bassHit * 0.24 + transientGate * 0.22 + stereoWidthInstant * 0.16 + beatPulse * 0.22, 0, 1);
+			motionEnergy += (motionEnergyInstant - motionEnergy) * motionBlend;
+			const roomFillInstant = clampNumber(smoothedLevel * 0.5 + smoothedBassLevel * 0.8 + beatPulse * 0.18, 0, 1);
+			roomFill += (roomFillInstant - roomFill) * Math.min(1, elapsedTimeSeconds * 4.6);
+			const stereoAccentScale = clampNumber(stereoWidthInstant * 0.9 + Math.abs(stereoBalanceInstant) * 0.45, 0, 1);
+			const leftImpactInstant = clampNumber((leftLevelInstant * 0.42 + leftBassInstant * 0.48 + Math.max(0, -stereoBalanceInstant) * 0.35) * stereoAccentScale, 0, 1);
+			const rightImpactInstant = clampNumber((rightLevelInstant * 0.42 + rightBassInstant * 0.48 + Math.max(0, stereoBalanceInstant) * 0.35) * stereoAccentScale, 0, 1);
+			leftImpact += (leftImpactInstant - leftImpact) * Math.min(1, elapsedTimeSeconds * 7.5);
+			rightImpact += (rightImpactInstant - rightImpact) * Math.min(1, elapsedTimeSeconds * 7.5);
 		},
 		getMetrics: function() {
 			return {
@@ -243,7 +315,16 @@ const createAudioAnalyser = function() {
 				midLevel: audioMidLevel,
 				sideLevel: audioSideLevel,
 				stereoBalance: audioStereoBalance,
-				stereoWidth: audioStereoWidth
+				stereoWidth: audioStereoWidth,
+				kickGate: kickGate,
+				bassHit: bassHit,
+				transientGate: transientGate,
+				strobeGate: strobeGate,
+				colorMomentum: colorMomentum,
+				motionEnergy: motionEnergy,
+				roomFill: roomFill,
+				leftImpact: leftImpact,
+				rightImpact: rightImpact
 			};
 		},
 		createDebugAudioNodes: function(audioContext) {

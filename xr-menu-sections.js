@@ -223,24 +223,61 @@ const createPassthroughMenuSectionState = function(args) {
 
 const createSceneLightingMenuSectionState = function(args) {
 	args = args || {};
+	const controls = [
+		createCyclerMenuControlState({
+			key: "sceneLightingMode",
+			label: "Lighting Mode",
+			valueText: getMenuModeLabelByKey(args.lightingModes, args.selectedLightingModeKey, "Uniform"),
+			hoveredAction: args.hoveredLightingModeAction || ""
+		}),
+		createCyclerMenuControlState({
+			key: "sceneLightPreset",
+			label: "Light Preset",
+			valueText: args.currentLightPresetName || "Aurora Drift",
+			metaText: args.currentLightPresetDescription || "",
+			hoveredAction: args.hoveredLightPresetAction || ""
+		})
+	];
+	if (args.primaryControl) {
+		controls.push(createSliderMenuControlState({
+			key: args.primaryControl.key,
+			label: args.primaryControl.label,
+			valueText: formatMenuPercentText(args.primaryControl.value),
+			sliderU: args.primarySliderU || 0,
+			minLabel: args.primaryControl.minLabel,
+			maxLabel: args.primaryControl.maxLabel,
+			hoveredBool: !!args.primaryHoverBool,
+			activeBool: !!args.primaryActiveBool
+		}));
+	}
+	if (args.secondaryControl) {
+		controls.push(createSliderMenuControlState({
+			key: args.secondaryControl.key,
+			label: args.secondaryControl.label,
+			valueText: formatMenuPercentText(args.secondaryControl.value),
+			sliderU: args.secondarySliderU || 0,
+			minLabel: args.secondaryControl.minLabel,
+			maxLabel: args.secondaryControl.maxLabel,
+			hoveredBool: !!args.secondaryHoverBool,
+			activeBool: !!args.secondaryActiveBool
+		}));
+	}
+	if (args.tertiaryControl) {
+		controls.push(createSliderMenuControlState({
+			key: args.tertiaryControl.key,
+			label: args.tertiaryControl.label,
+			valueText: formatMenuPercentText(args.tertiaryControl.value),
+			sliderU: args.tertiarySliderU || 0,
+			minLabel: args.tertiaryControl.minLabel,
+			maxLabel: args.tertiaryControl.maxLabel,
+			hoveredBool: !!args.tertiaryHoverBool,
+			activeBool: !!args.tertiaryActiveBool
+		}));
+	}
 	return createMenuSectionState({
 		key: "sceneLighting",
 		title: "Scene Lighting",
-		controls: [
-			createCyclerMenuControlState({
-				key: "sceneLightingMode",
-				label: "Lighting Mode",
-				valueText: getMenuModeLabelByKey(args.lightingModes, args.selectedLightingModeKey, "Uniform"),
-				hoveredAction: args.hoveredLightingModeAction || ""
-			}),
-			createCyclerMenuControlState({
-				key: "sceneLightPreset",
-				label: "Light Preset",
-				valueText: args.currentLightPresetName || "Aurora Drift",
-				metaText: args.currentLightPresetDescription || "",
-				hoveredAction: args.hoveredLightPresetAction || ""
-			})
-		]
+		controls: controls
 	});
 };
 
@@ -288,7 +325,19 @@ const createLowerMenuSections = function(args) {
 			hoveredLightingModeAction: args.hoveredSceneLightingModeAction,
 			currentLightPresetName: args.currentLightPresetName,
 			currentLightPresetDescription: args.currentLightPresetDescription,
-			hoveredLightPresetAction: args.hoveredLightPresetAction
+			hoveredLightPresetAction: args.hoveredLightPresetAction,
+			primaryControl: args.sceneLightingPrimaryControl,
+			secondaryControl: args.sceneLightingSecondaryControl,
+			tertiaryControl: args.sceneLightingTertiaryControl,
+			primarySliderU: args.sceneLightingPrimarySliderU,
+			secondarySliderU: args.sceneLightingSecondarySliderU,
+			tertiarySliderU: args.sceneLightingTertiarySliderU,
+			primaryHoverBool: args.sceneLightingPrimaryHoverBool,
+			secondaryHoverBool: args.sceneLightingSecondaryHoverBool,
+			tertiaryHoverBool: args.sceneLightingTertiaryHoverBool,
+			primaryActiveBool: args.sceneLightingPrimaryActiveBool,
+			secondaryActiveBool: args.sceneLightingSecondaryActiveBool,
+			tertiaryActiveBool: args.sceneLightingTertiaryActiveBool
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,

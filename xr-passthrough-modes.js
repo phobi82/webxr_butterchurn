@@ -7,7 +7,8 @@ const passthroughBlendModeDefinitions = [
 const passthroughLightingModeDefinitions = [
 	{key: "none", label: "None"},
 	{key: "uniform", label: "Uniform"},
-	{key: "spots", label: "Spots"}
+	{key: "spots", label: "Spots"},
+	{key: "club", label: "Club"}
 ];
 
 const passthroughUniformBlendModeDefinitions = [
@@ -98,6 +99,45 @@ const getPassthroughControlDefinitions = function(state) {
 			maxLabel: "Passthrough"
 		},
 		secondaryControl: null,
-		uniformBlendModeVisibleBool: true
+			uniformBlendModeVisibleBool: true
+	};
+};
+
+const getPassthroughLightingControlDefinitions = function(state) {
+	if (state.lightingModeKey !== "club") {
+		return {
+			primaryControl: null,
+			secondaryControl: null,
+			tertiaryControl: null
+		};
+	}
+	return {
+		primaryControl: {
+			key: "clubIntensity",
+			label: "Club Intensity",
+			value: state.clubIntensity == null ? 0.82 : state.clubIntensity,
+			min: 0,
+			max: 1,
+			minLabel: "Subtle",
+			maxLabel: "Huge"
+		},
+		secondaryControl: {
+			key: "clubRoomFill",
+			label: "Room Fill",
+			value: state.clubRoomFill == null ? 0.74 : state.clubRoomFill,
+			min: 0,
+			max: 1,
+			minLabel: "Tight",
+			maxLabel: "Full Room"
+		},
+		tertiaryControl: {
+			key: "clubStrobeAmount",
+			label: "Strobe Amount",
+			value: state.clubStrobeAmount == null ? 0.35 : state.clubStrobeAmount,
+			min: 0,
+			max: 1,
+			minLabel: "Soft",
+			maxLabel: "Hard"
+		}
 	};
 };

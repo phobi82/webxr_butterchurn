@@ -1,5 +1,5 @@
 const PASSTHROUGH_MAX_FLASHLIGHTS = 2;
-const PASSTHROUGH_MAX_SPOTS = 9;
+const PASSTHROUGH_MAX_SPOTS = 24;
 const PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT = 2.6;
 const PASSTHROUGH_ROOM_LIGHT_MIN_DISTANCE = 2.4;
 const PASSTHROUGH_ROOM_LIGHT_MAX_DISTANCE = 5.6;
@@ -148,6 +148,89 @@ const getRoomWallLightPoint = function(ceilingPoint) {
 	};
 };
 
+const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix) {
+	group = group || {};
+	const anchorType = group.anchorType || "ceiling";
+	const azimuth = (group.azimuth || 0) + variantOffset;
+	const radialScale = clampNumber((group.radius == null ? 0.5 : group.radius) * (0.58 + fillMix * 0.42), 0.18, 1.18);
+	if (anchorType === "ceiling") {
+		return {
+			x: Math.cos(azimuth) * PASSTHROUGH_ROOM_HALF_WIDTH * radialScale,
+			y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
+			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale
+		};
+	}
+	if (anchorType === "floor") {
+		return {
+			x: Math.cos(azimuth) * PASSTHROUGH_ROOM_HALF_WIDTH * radialScale,
+			y: PASSTHROUGH_ROOM_FLOOR_Y,
+			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale
+		};
+	}
+	const wallScaleX = PASSTHROUGH_ROOM_HALF_WIDTH / Math.max(Math.abs(Math.cos(azimuth)), 0.0001);
+	const wallScaleZ = PASSTHROUGH_ROOM_HALF_DEPTH / Math.max(Math.abs(Math.sin(azimuth)), 0.0001);
+	const wallScale = Math.min(wallScaleX, wallScaleZ) * radialScale;
+	return {
+		x: clampNumber(Math.cos(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
+		y: lerpNumber(PASSTHROUGH_ROOM_FLOOR_Y + 0.42, PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT - 0.32, group.vertical == null ? 0.55 : group.vertical),
+		z: clampNumber(Math.sin(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
+	};
+};
+
+const appendClubFixtureMasks = function(target, args, group, clubState) {
+	if (!target || !group || !args || !args.viewMatrix || !args.projMatrix) {
+		return;
+	}
+	const fillMix = clampNumber((clubState.clubRoomFill || 0) * 0.8 + (group.type === "wash" ? 0.2 : 0), 0.18, 1);
+	const sweep = clampNumber(group.sweep == null ? 0.2 : group.sweep, 0, 1.5);
+	const baseStrength = Math.max(0, group.intensity || 0) * clampNumber(clubState.clubIntensity || 0, 0, 1);
+	if (baseStrength <= 0.0001) {
+		return;
+	}
+	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * (clubState.clubStrobeAmount || 0) * 1.4, 0, 1.4);
+	const typeIntensityScale = group.type === "wash" ? (0.7 + (clubState.clubRoomFill || 0) * 0.4) : (group.type === "beam" ? (0.88 - (clubState.clubRoomFill || 0) * 0.16) : (0.8 + (clubState.clubStrobeAmount || 0) * 0.65));
+	const variantCount = group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1);
+	for (let i = 0; i < variantCount && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
+		const variantCenter = variantCount === 1 ? 0 : (i / (variantCount - 1)) - 0.5;
+		const variantOffset = variantCenter * sweep * (group.type === "beam" ? 0.52 : 0.24);
+		const point = getRoomPointForFixtureGroup(group, variantOffset, fillMix);
+		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
+		if (!projectedUv) {
+			continue;
+		}
+		let rotation = 0;
+		const tangentPoint = getRoomPointForFixtureGroup(group, variantOffset + 0.08, fillMix);
+		const projectedTangentUv = tangentPoint ? projectWorldPointToUv(args.viewMatrix, args.projMatrix, tangentPoint.x, tangentPoint.y, tangentPoint.z) : null;
+		if (projectedTangentUv) {
+			rotation = Math.atan2(projectedTangentUv.y - projectedUv.y, projectedTangentUv.x - projectedUv.x);
+		}
+		let radiusX = 0.18;
+		let radiusY = 0.18;
+		if (group.type === "wash") {
+			radiusX = clampNumber((group.radius || 0.4) * (0.22 + fillMix * 0.16), 0.14, 0.46);
+			radiusY = clampNumber(radiusX * lerpNumber(0.74, 0.92, fillMix), 0.12, 0.42);
+		} else if (group.type === "beam") {
+			radiusX = clampNumber((group.radius || 0.3) * (0.18 + (1 - fillMix) * 0.12), 0.12, 0.34);
+			radiusY = clampNumber(radiusX * 0.28, 0.035, 0.11);
+		} else {
+			radiusX = clampNumber((group.radius || 0.22) * 0.18, 0.09, 0.2);
+			radiusY = clampNumber(radiusX * 0.6, 0.05, 0.14);
+		}
+		target.push({
+			x: projectedUv.x,
+			y: projectedUv.y,
+			r: group.color[0],
+			g: group.color[1],
+			b: group.color[2],
+			radiusX: radiusX,
+			radiusY: radiusY,
+			rotation: rotation,
+			softness: clampNumber(group.softness == null ? 0.16 : group.softness, 0.04, 0.4),
+			strength: clampNumber(baseStrength * typeIntensityScale * strobeBoost * (group.type === "beam" ? 0.72 : 1) * (1 - Math.abs(variantCenter) * 0.16), 0, group.type === "strobe" ? 0.88 : 0.72)
+		});
+	}
+};
+
 // Runtime controller owns session state, fallback policy, and overlay assembly.
 const createPassthroughController = function(options) {
 	options = options || {};
@@ -163,6 +246,9 @@ const createPassthroughController = function(options) {
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
+		clubIntensity: options.initialClubIntensity == null ? 0.82 : options.initialClubIntensity,
+		clubRoomFill: options.initialClubRoomFill == null ? 0.74 : options.initialClubRoomFill,
+		clubStrobeAmount: options.initialClubStrobeAmount == null ? 0.35 : options.initialClubStrobeAmount,
 		smoothedAudioDrive: 0
 	};
 
@@ -276,11 +362,31 @@ const createPassthroughController = function(options) {
 					r: light.r,
 					g: light.g,
 					b: light.b,
-					radius: anchoredPoint.radius,
+					radiusX: anchoredPoint.radius,
+					radiusY: anchoredPoint.radius,
+					rotation: 0,
 					softness: 0.12,
 					strength: anchoredPoint.strength
 				});
 			}
+		}
+		return spots;
+	};
+
+	const getClubLights = function(args) {
+		if (state.lightingModeKey !== "club") {
+			return [];
+		}
+		const lightingState = args.sceneLightingState;
+		if (!lightingState || !lightingState.fixtureGroups || !lightingState.fixtureGroups.length) {
+			return [];
+		}
+		const rankedGroups = lightingState.fixtureGroups.slice().sort(function(a, b) {
+			return (b.intensity || 0) - (a.intensity || 0);
+		});
+		const spots = [];
+		for (let i = 0; i < rankedGroups.length && spots.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
+			appendClubFixtureMasks(spots, args, rankedGroups[i], state);
 		}
 		return spots;
 	};
@@ -303,6 +409,7 @@ const createPassthroughController = function(options) {
 		},
 		getUiState: function() {
 			const controlState = getPassthroughControlDefinitions(state);
+			const lightingControlState = getPassthroughLightingControlDefinitions(state);
 			return {
 				availableBool: state.availableBool,
 				fallbackBool: state.fallbackBool,
@@ -315,6 +422,9 @@ const createPassthroughController = function(options) {
 				uniformBlendModes: passthroughUniformBlendModeDefinitions,
 				primaryControl: controlState.primaryControl,
 				secondaryControl: controlState.secondaryControl,
+				lightingPrimaryControl: lightingControlState.primaryControl,
+				lightingSecondaryControl: lightingControlState.secondaryControl,
+				lightingTertiaryControl: lightingControlState.tertiaryControl,
 				uniformBlendModeVisibleBool: controlState.uniformBlendModeVisibleBool,
 				audioDrive: state.smoothedAudioDrive,
 				visibleShare: getPassthroughVisibleShare(state, state.smoothedAudioDrive)
@@ -355,6 +465,15 @@ const createPassthroughController = function(options) {
 			if (key === "flashlightSoftness") {
 				state.flashlightSoftness = clampNumber(value, 0.01, 0.35);
 			}
+			if (key === "clubIntensity") {
+				state.clubIntensity = clampNumber(value, 0, 1);
+			}
+			if (key === "clubRoomFill") {
+				state.clubRoomFill = clampNumber(value, 0, 1);
+			}
+			if (key === "clubStrobeAmount") {
+				state.clubStrobeAmount = clampNumber(value, 0, 1);
+			}
 		},
 		getBackgroundCompositeState: function(args) {
 			args = args || {};
@@ -380,7 +499,7 @@ const createPassthroughController = function(options) {
 				uniformTintColor: lightingColor,
 				uniformTintStrength: tintStrength,
 				lightingModeKey: state.lightingModeKey,
-				spots: getSpotLights(args)
+				spots: state.lightingModeKey === "club" ? getClubLights(args) : getSpotLights(args)
 			};
 		}
 	};
@@ -419,7 +538,7 @@ const createPassthroughOverlayRenderer = function() {
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const spotCenters = new Float32Array(PASSTHROUGH_MAX_SPOTS * 2);
 	const spotColors = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
-	const spotParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 2);
+	const spotParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
 	const uniformTintColor = new Float32Array(3);
 
 	const fragmentSource = [
@@ -434,13 +553,26 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float spotCount;",
 		"uniform vec4 spotColors[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec2 spotCenters[" + PASSTHROUGH_MAX_SPOTS + "];",
-		"uniform vec2 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){",
 		"float radius=max(params.x,0.0001);",
 		"float softness=max(params.y,0.0001);",
 		"float inner=max(0.0,radius-softness);",
 		"return 1.0-smoothstep(inner,radius,distance(uv,center));",
+		"}",
+		"float ellipseMask(vec2 uv, vec2 center, vec4 params){",
+		"float radiusX=max(params.x,0.0001);",
+		"float radiusY=max(params.y,0.0001);",
+		"float softness=max(params.z,0.0001);",
+		"float rotation=params.w;",
+		"vec2 delta=uv-center;",
+		"float cosAngle=cos(rotation);",
+		"float sinAngle=sin(rotation);",
+		"vec2 local=vec2(delta.x*cosAngle+delta.y*sinAngle,-delta.x*sinAngle+delta.y*cosAngle);",
+		"float normalizedDistance=length(vec2(local.x/radiusX,local.y/radiusY));",
+		"float edge=max(softness/max(radiusX,radiusY),0.0001);",
+		"return 1.0-smoothstep(max(0.0,1.0-edge),1.0,normalizedDistance);",
 		"}",
 		"void main(){",
 		"float reveal=visibleShare;",
@@ -452,7 +584,7 @@ const createPassthroughOverlayRenderer = function() {
 		"vec3 color=uniformTintColor*uniformTintStrength*reveal;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
 		"if(float(i)>=spotCount){break;}",
-		"float spotMask=circleMask(vScreenUv,spotCenters[i],spotParams[i]);",
+		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
 		"color+=spotColors[i].rgb*(spotColors[i].a*spotMask*reveal);",
 		"}",
 		"gl_FragColor=vec4(color,darkAlpha*reveal);",
@@ -491,6 +623,8 @@ const createPassthroughOverlayRenderer = function() {
 			}
 			for (let i = 0; i < spotCenters.length; i += 1) {
 				spotCenters[i] = 0;
+			}
+			for (let i = 0; i < spotParams.length; i += 1) {
 				spotParams[i] = 0;
 			}
 			for (let i = 0; i < spotColors.length; i += 1) {
@@ -505,8 +639,10 @@ const createPassthroughOverlayRenderer = function() {
 			for (let i = 0; i < renderState.spots.length && i < PASSTHROUGH_MAX_SPOTS; i += 1) {
 				spotCenters[i * 2] = renderState.spots[i].x;
 				spotCenters[i * 2 + 1] = renderState.spots[i].y;
-				spotParams[i * 2] = renderState.spots[i].radius;
-				spotParams[i * 2 + 1] = renderState.spots[i].softness;
+				spotParams[i * 4] = renderState.spots[i].radiusX == null ? renderState.spots[i].radius : renderState.spots[i].radiusX;
+				spotParams[i * 4 + 1] = renderState.spots[i].radiusY == null ? renderState.spots[i].radius : renderState.spots[i].radiusY;
+				spotParams[i * 4 + 2] = renderState.spots[i].softness;
+				spotParams[i * 4 + 3] = renderState.spots[i].rotation || 0;
 				spotColors[i * 4] = renderState.spots[i].r;
 				spotColors[i * 4 + 1] = renderState.spots[i].g;
 				spotColors[i * 4 + 2] = renderState.spots[i].b;
@@ -533,7 +669,7 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform1f(spotCountLoc, renderState.spots.length);
 			gl.uniform2fv(spotCentersLoc, spotCenters);
 			gl.uniform4fv(spotColorsLoc, spotColors);
-			gl.uniform2fv(spotParamsLoc, spotParams);
+			gl.uniform4fv(spotParamsLoc, spotParams);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);

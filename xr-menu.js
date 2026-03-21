@@ -92,9 +92,24 @@ const createMenuView = function(options) {
 			nextTop: currentTop
 		};
 	};
+	const getAudioBarItems = function(audioMetrics) {
+		audioMetrics = audioMetrics || emptyAudioMetrics;
+		return [
+			{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
+			{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
+			{label: "Kick", value: clampNumber(audioMetrics.kickGate || 0, 0, 1)},
+			{label: "Bass Hit", value: clampNumber(audioMetrics.bassHit || 0, 0, 1)},
+			{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
+			{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)},
+			{label: "Strobe", value: clampNumber(audioMetrics.strobeGate || 0, 0, 1)},
+			{label: "Fill", value: clampNumber(audioMetrics.roomFill || 0, 0, 1)},
+			{label: "Left Hit", value: clampNumber(audioMetrics.leftImpact || 0, 0, 1)},
+			{label: "Right Hit", value: clampNumber(audioMetrics.rightImpact || 0, 0, 1)}
+		];
+	};
 	const getLayoutMetrics = function(menuSections) {
 		menuSections = menuSections || [];
-		const audioBarItems = 5;
+		const audioBarItems = getAudioBarItems(emptyAudioMetrics).length;
 		const innerFrameInset = 24;
 		const audioPanelTop = 108;
 		const audioBarTop = 116;
@@ -261,13 +276,7 @@ const createMenuView = function(options) {
 			const accentRgb = hslToRgb((renderState.sceneTimeSeconds || 0) * 0.03 + 0.04, 0.85, 0.62);
 			const accentColor = "rgb(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ")";
 			const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
-			const audioBarItems = [
-				{label: "Level", value: clampNumber(audioMetrics.level || 0, 0, 1)},
-				{label: "Peak", value: clampNumber(audioMetrics.peak || 0, 0, 1)},
-				{label: "Bass", value: clampNumber(audioMetrics.bass || 0, 0, 1)},
-				{label: "Transient", value: clampNumber(audioMetrics.transient || 0, 0, 1)},
-				{label: "Beat", value: clampNumber(audioMetrics.beatPulse || 0, 0, 1)}
-			];
+			const audioBarItems = getAudioBarItems(audioMetrics);
 			syncCanvasSize(layout);
 			const logicalScaleY = menuCanvas.height / Math.max(1, layout.canvasHeight);
 			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -493,10 +502,16 @@ const createMenuController = function(options) {
 		activeFloorAlphaSliderHand: "",
 		activePassthroughPrimarySliderHand: "",
 		activePassthroughSecondarySliderHand: "",
+		activeSceneLightingPrimarySliderHand: "",
+		activeSceneLightingSecondarySliderHand: "",
+		activeSceneLightingTertiarySliderHand: "",
 		eyeDistanceHoverBool: false,
 		floorAlphaHoverBool: false,
 		passthroughPrimaryHoverBool: false,
 		passthroughSecondaryHoverBool: false,
+		sceneLightingPrimaryHoverBool: false,
+		sceneLightingSecondaryHoverBool: false,
+		sceneLightingTertiaryHoverBool: false,
 		hoveredPassthroughBlendModeAction: "",
 		hoveredSceneLightingModeAction: "",
 		hoveredPassthroughUniformBlendModeKey: "",
@@ -534,6 +549,9 @@ const createMenuController = function(options) {
 			selectedLightingModeKey: "uniform",
 			primaryControl: null,
 			secondaryControl: null,
+			lightingPrimaryControl: null,
+			lightingSecondaryControl: null,
+			lightingTertiaryControl: null,
 			uniformBlendModeVisibleBool: true,
 			visibleShare: 0
 		};
@@ -591,6 +609,18 @@ const createMenuController = function(options) {
 			currentLightPresetName: lightPresetNames[lightPresetIndex] || "Aurora Drift",
 			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
 			hoveredLightPresetAction: state.hoveredLightPresetAction,
+			sceneLightingPrimaryControl: passthroughUiState.lightingPrimaryControl,
+			sceneLightingSecondaryControl: passthroughUiState.lightingSecondaryControl,
+			sceneLightingTertiaryControl: passthroughUiState.lightingTertiaryControl,
+			sceneLightingPrimarySliderU: getControlSliderU(passthroughUiState.lightingPrimaryControl),
+			sceneLightingSecondarySliderU: getControlSliderU(passthroughUiState.lightingSecondaryControl),
+			sceneLightingTertiarySliderU: getControlSliderU(passthroughUiState.lightingTertiaryControl),
+			sceneLightingPrimaryHoverBool: state.sceneLightingPrimaryHoverBool,
+			sceneLightingSecondaryHoverBool: state.sceneLightingSecondaryHoverBool,
+			sceneLightingTertiaryHoverBool: state.sceneLightingTertiaryHoverBool,
+			sceneLightingPrimaryActiveBool: !!state.activeSceneLightingPrimarySliderHand,
+			sceneLightingSecondaryActiveBool: !!state.activeSceneLightingSecondarySliderHand,
+			sceneLightingTertiaryActiveBool: !!state.activeSceneLightingTertiarySliderHand,
 			currentPresetName: presetNames[currentPresetIndex],
 			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
 			hoveredPresetAction: state.hoveredPresetAction
@@ -622,6 +652,9 @@ const createMenuController = function(options) {
 		state.floorAlphaHoverBool = false;
 		state.passthroughPrimaryHoverBool = false;
 		state.passthroughSecondaryHoverBool = false;
+		state.sceneLightingPrimaryHoverBool = false;
+		state.sceneLightingSecondaryHoverBool = false;
+		state.sceneLightingTertiaryHoverBool = false;
 		state.hoveredPassthroughBlendModeAction = "";
 		state.hoveredSceneLightingModeAction = "";
 		state.hoveredPassthroughUniformBlendModeKey = "";
@@ -643,6 +676,39 @@ const createMenuController = function(options) {
 		if (state.activePassthroughSecondarySliderHand === hand) {
 			state.activePassthroughSecondarySliderHand = "";
 		}
+		if (state.activeSceneLightingPrimarySliderHand === hand) {
+			state.activeSceneLightingPrimarySliderHand = "";
+		}
+		if (state.activeSceneLightingSecondarySliderHand === hand) {
+			state.activeSceneLightingSecondarySliderHand = "";
+		}
+		if (state.activeSceneLightingTertiarySliderHand === hand) {
+			state.activeSceneLightingTertiarySliderHand = "";
+		}
+	};
+	const getCapturedModuleSliderKey = function(hand, passthroughUiState) {
+		if (state.activeSliderHand === hand) {
+			return "eyeDistance";
+		}
+		if (state.activeFloorAlphaSliderHand === hand) {
+			return "floorAlpha";
+		}
+		if (state.activePassthroughPrimarySliderHand === hand && passthroughUiState && passthroughUiState.primaryControl) {
+			return passthroughUiState.primaryControl.key;
+		}
+		if (state.activePassthroughSecondarySliderHand === hand && passthroughUiState && passthroughUiState.secondaryControl) {
+			return passthroughUiState.secondaryControl.key;
+		}
+		if (state.activeSceneLightingPrimarySliderHand === hand && passthroughUiState && passthroughUiState.lightingPrimaryControl) {
+			return passthroughUiState.lightingPrimaryControl.key;
+		}
+		if (state.activeSceneLightingSecondarySliderHand === hand && passthroughUiState && passthroughUiState.lightingSecondaryControl) {
+			return passthroughUiState.lightingSecondaryControl.key;
+		}
+		if (state.activeSceneLightingTertiarySliderHand === hand && passthroughUiState && passthroughUiState.lightingTertiaryControl) {
+			return passthroughUiState.lightingTertiaryControl.key;
+		}
+		return "";
 	};
 	const applyActiveSliderCapture = function(hit, hand, passthroughUiState) {
 		if (!hit) {
@@ -659,6 +725,15 @@ const createMenuController = function(options) {
 		}
 		if (state.activePassthroughSecondarySliderHand === hand && passthroughUiState && passthroughUiState.secondaryControl) {
 			hit.moduleSliderControlKey = passthroughUiState.secondaryControl.key;
+		}
+		if (state.activeSceneLightingPrimarySliderHand === hand && passthroughUiState && passthroughUiState.lightingPrimaryControl) {
+			hit.moduleSliderControlKey = passthroughUiState.lightingPrimaryControl.key;
+		}
+		if (state.activeSceneLightingSecondarySliderHand === hand && passthroughUiState && passthroughUiState.lightingSecondaryControl) {
+			hit.moduleSliderControlKey = passthroughUiState.lightingSecondaryControl.key;
+		}
+		if (state.activeSceneLightingTertiarySliderHand === hand && passthroughUiState && passthroughUiState.lightingTertiaryControl) {
+			hit.moduleSliderControlKey = passthroughUiState.lightingTertiaryControl.key;
 		}
 		if (hit.moduleSliderControlKey) {
 			hit.moduleCycleControlKey = "";
@@ -681,6 +756,9 @@ const createMenuController = function(options) {
 			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
 			state.passthroughPrimaryHoverBool = state.activePassthroughPrimarySliderHand === "desktop";
 			state.passthroughSecondaryHoverBool = state.activePassthroughSecondarySliderHand === "desktop";
+			state.sceneLightingPrimaryHoverBool = state.activeSceneLightingPrimarySliderHand === "desktop";
+			state.sceneLightingSecondaryHoverBool = state.activeSceneLightingSecondarySliderHand === "desktop";
+			state.sceneLightingTertiaryHoverBool = state.activeSceneLightingTertiarySliderHand === "desktop";
 			state.hoveredPassthroughBlendModeAction = "";
 			state.hoveredSceneLightingModeAction = "";
 			state.hoveredPassthroughUniformBlendModeKey = "";
@@ -695,6 +773,9 @@ const createMenuController = function(options) {
 		state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.activeFloorAlphaSliderHand === "desktop";
 		state.passthroughPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.primaryControl && passthroughUiState.primaryControl.key) || state.activePassthroughPrimarySliderHand === "desktop";
 		state.passthroughSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.secondaryControl && passthroughUiState.secondaryControl.key) || state.activePassthroughSecondarySliderHand === "desktop";
+		state.sceneLightingPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingPrimaryControl && passthroughUiState.lightingPrimaryControl.key) || state.activeSceneLightingPrimarySliderHand === "desktop";
+		state.sceneLightingSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingSecondaryControl && passthroughUiState.lightingSecondaryControl.key) || state.activeSceneLightingSecondarySliderHand === "desktop";
+		state.sceneLightingTertiaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingTertiaryControl && passthroughUiState.lightingTertiaryControl.key) || state.activeSceneLightingTertiarySliderHand === "desktop";
 		state.hoveredPassthroughBlendModeAction = hit.moduleCycleControlKey === "passthroughBlendMode" ? hit.moduleCycleAction : "";
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : "";
@@ -713,6 +794,15 @@ const createMenuController = function(options) {
 		}
 		if (state.activePassthroughSecondarySliderHand === "desktop" && passthroughUiState.secondaryControl && passthroughController && passthroughController.setControlValue) {
 			passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, state.desktopPointerU));
+		}
+		if (state.activeSceneLightingPrimarySliderHand === "desktop" && passthroughUiState.lightingPrimaryControl && passthroughController && passthroughController.setControlValue) {
+			passthroughController.setControlValue(passthroughUiState.lightingPrimaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingPrimaryControl, state.desktopPointerU));
+		}
+		if (state.activeSceneLightingSecondarySliderHand === "desktop" && passthroughUiState.lightingSecondaryControl && passthroughController && passthroughController.setControlValue) {
+			passthroughController.setControlValue(passthroughUiState.lightingSecondaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingSecondaryControl, state.desktopPointerU));
+		}
+		if (state.activeSceneLightingTertiarySliderHand === "desktop" && passthroughUiState.lightingTertiaryControl && passthroughController && passthroughController.setControlValue) {
+			passthroughController.setControlValue(passthroughUiState.lightingTertiaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingTertiaryControl, state.desktopPointerU));
 		}
 	};
 	const intersectMenu = function(ray) {
@@ -739,7 +829,7 @@ const createMenuController = function(options) {
 		const u = 0.5 + localX / planeDimensions.width;
 		const v = 0.5 - localY / planeDimensions.height;
 		if (Math.abs(localX) > planeDimensions.width * 0.5 || Math.abs(localY) > planeDimensions.height * 0.5) {
-			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && state.activePassthroughPrimarySliderHand !== ray.hand && state.activePassthroughSecondarySliderHand !== ray.hand) {
+			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && state.activePassthroughPrimarySliderHand !== ray.hand && state.activePassthroughSecondarySliderHand !== ray.hand && state.activeSceneLightingPrimarySliderHand !== ray.hand && state.activeSceneLightingSecondarySliderHand !== ray.hand && state.activeSceneLightingTertiarySliderHand !== ray.hand) {
 				return null;
 			}
 			return {
@@ -751,7 +841,7 @@ const createMenuController = function(options) {
 				moduleCycleAction: "",
 				moduleChoiceControlKey: "",
 				moduleChoiceItemKey: "",
-				moduleSliderControlKey: state.activeSliderHand === ray.hand ? "eyeDistance" : (state.activeFloorAlphaSliderHand === ray.hand ? "floorAlpha" : (state.activePassthroughPrimarySliderHand === ray.hand && passthroughUiState.primaryControl ? passthroughUiState.primaryControl.key : (state.activePassthroughSecondarySliderHand === ray.hand && passthroughUiState.secondaryControl ? passthroughUiState.secondaryControl.key : "")))
+				moduleSliderControlKey: getCapturedModuleSliderKey(ray.hand, passthroughUiState)
 			};
 		}
 		return applyActiveSliderCapture(Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v, moduleSections)), ray.hand, passthroughUiState);
@@ -793,6 +883,9 @@ const createMenuController = function(options) {
 				const passthroughUiState = getPassthroughUiState();
 				state.passthroughPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.primaryControl && passthroughUiState.primaryControl.key) || state.passthroughPrimaryHoverBool;
 				state.passthroughSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.secondaryControl && passthroughUiState.secondaryControl.key) || state.passthroughSecondaryHoverBool;
+				state.sceneLightingPrimaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingPrimaryControl && passthroughUiState.lightingPrimaryControl.key) || state.sceneLightingPrimaryHoverBool;
+				state.sceneLightingSecondaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingSecondaryControl && passthroughUiState.lightingSecondaryControl.key) || state.sceneLightingSecondaryHoverBool;
+				state.sceneLightingTertiaryHoverBool = hit.moduleSliderControlKey === (passthroughUiState.lightingTertiaryControl && passthroughUiState.lightingTertiaryControl.key) || state.sceneLightingTertiaryHoverBool;
 				state.hoveredPassthroughBlendModeAction = hit.moduleCycleControlKey === "passthroughBlendMode" ? hit.moduleCycleAction : state.hoveredPassthroughBlendModeAction;
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
 				state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : state.hoveredPassthroughUniformBlendModeKey;
@@ -817,7 +910,7 @@ const createMenuController = function(options) {
 			return {
 				jumpMode: state.jumpMode,
 				menuOpenBool: state.menuOpenBool,
-				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || state.activePassthroughPrimarySliderHand === "right" || state.activePassthroughSecondarySliderHand === "right"),
+				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || state.activePassthroughPrimarySliderHand === "right" || state.activePassthroughSecondarySliderHand === "right" || state.activeSceneLightingPrimarySliderHand === "right" || state.activeSceneLightingSecondarySliderHand === "right" || state.activeSceneLightingTertiarySliderHand === "right"),
 				floorAlpha: state.floorAlpha,
 				eyeDistanceMeters: state.eyeDistanceMeters,
 				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
@@ -982,6 +1075,24 @@ const createMenuController = function(options) {
 				state.activePassthroughPrimarySliderHand = "";
 				passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, state.desktopPointerU));
 			}
+			if (hit.moduleSliderControlKey && passthroughUiState.lightingPrimaryControl && hit.moduleSliderControlKey === passthroughUiState.lightingPrimaryControl.key && passthroughController && passthroughController.setControlValue) {
+				state.activeSceneLightingPrimarySliderHand = "desktop";
+				state.activeSceneLightingSecondarySliderHand = "";
+				state.activeSceneLightingTertiarySliderHand = "";
+				passthroughController.setControlValue(passthroughUiState.lightingPrimaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingPrimaryControl, state.desktopPointerU));
+			}
+			if (hit.moduleSliderControlKey && passthroughUiState.lightingSecondaryControl && hit.moduleSliderControlKey === passthroughUiState.lightingSecondaryControl.key && passthroughController && passthroughController.setControlValue) {
+				state.activeSceneLightingSecondarySliderHand = "desktop";
+				state.activeSceneLightingPrimarySliderHand = "";
+				state.activeSceneLightingTertiarySliderHand = "";
+				passthroughController.setControlValue(passthroughUiState.lightingSecondaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingSecondaryControl, state.desktopPointerU));
+			}
+			if (hit.moduleSliderControlKey && passthroughUiState.lightingTertiaryControl && hit.moduleSliderControlKey === passthroughUiState.lightingTertiaryControl.key && passthroughController && passthroughController.setControlValue) {
+				state.activeSceneLightingTertiarySliderHand = "desktop";
+				state.activeSceneLightingPrimarySliderHand = "";
+				state.activeSceneLightingSecondarySliderHand = "";
+				passthroughController.setControlValue(passthroughUiState.lightingTertiaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingTertiaryControl, state.desktopPointerU));
+			}
 			return true;
 		},
 		handleDesktopPointerUp: function() {
@@ -1010,6 +1121,9 @@ const createMenuController = function(options) {
 			state.activeFloorAlphaSliderHand = "";
 			state.activePassthroughPrimarySliderHand = "";
 			state.activePassthroughSecondarySliderHand = "";
+			state.activeSceneLightingPrimarySliderHand = "";
+			state.activeSceneLightingSecondarySliderHand = "";
+			state.activeSceneLightingTertiarySliderHand = "";
 			clearHoverState();
 			controllerRays.length = 0;
 			triggerPressedByHand.clear();
@@ -1021,6 +1135,9 @@ const createMenuController = function(options) {
 			state.activeFloorAlphaSliderHand = "";
 			state.activePassthroughPrimarySliderHand = "";
 			state.activePassthroughSecondarySliderHand = "";
+			state.activeSceneLightingPrimarySliderHand = "";
+			state.activeSceneLightingSecondarySliderHand = "";
+			state.activeSceneLightingTertiarySliderHand = "";
 			clearHoverState();
 			controllerRays.length = 0;
 			triggerPressedByHand.clear();
@@ -1042,6 +1159,9 @@ const createMenuController = function(options) {
 				state.activeFloorAlphaSliderHand = "";
 				state.activePassthroughPrimarySliderHand = "";
 				state.activePassthroughSecondarySliderHand = "";
+				state.activeSceneLightingPrimarySliderHand = "";
+				state.activeSceneLightingSecondarySliderHand = "";
+				state.activeSceneLightingTertiarySliderHand = "";
 				clearHoverState();
 				if (state.menuOpenBool) {
 					this.updateMenuPose(args.pose);
@@ -1111,6 +1231,36 @@ const createMenuController = function(options) {
 						state.activePassthroughPrimarySliderHand = "";
 					}
 					passthroughController.setControlValue(passthroughUiState.secondaryControl.key, getControlValueFromSliderU(passthroughUiState.secondaryControl, ray.hit.u));
+				}
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === (passthroughUiState.lightingPrimaryControl && passthroughUiState.lightingPrimaryControl.key) && passthroughUiState.lightingPrimaryControl && passthroughController && passthroughController.setControlValue && (!wasTriggerPressedBool || state.activeSceneLightingPrimarySliderHand === hand)) {
+					state.activeSceneLightingPrimarySliderHand = hand;
+					if (state.activeSceneLightingSecondarySliderHand === hand) {
+						state.activeSceneLightingSecondarySliderHand = "";
+					}
+					if (state.activeSceneLightingTertiarySliderHand === hand) {
+						state.activeSceneLightingTertiarySliderHand = "";
+					}
+					passthroughController.setControlValue(passthroughUiState.lightingPrimaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingPrimaryControl, ray.hit.u));
+				}
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === (passthroughUiState.lightingSecondaryControl && passthroughUiState.lightingSecondaryControl.key) && passthroughUiState.lightingSecondaryControl && passthroughController && passthroughController.setControlValue && (!wasTriggerPressedBool || state.activeSceneLightingSecondarySliderHand === hand)) {
+					state.activeSceneLightingSecondarySliderHand = hand;
+					if (state.activeSceneLightingPrimarySliderHand === hand) {
+						state.activeSceneLightingPrimarySliderHand = "";
+					}
+					if (state.activeSceneLightingTertiarySliderHand === hand) {
+						state.activeSceneLightingTertiarySliderHand = "";
+					}
+					passthroughController.setControlValue(passthroughUiState.lightingSecondaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingSecondaryControl, ray.hit.u));
+				}
+				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === (passthroughUiState.lightingTertiaryControl && passthroughUiState.lightingTertiaryControl.key) && passthroughUiState.lightingTertiaryControl && passthroughController && passthroughController.setControlValue && (!wasTriggerPressedBool || state.activeSceneLightingTertiarySliderHand === hand)) {
+					state.activeSceneLightingTertiarySliderHand = hand;
+					if (state.activeSceneLightingPrimarySliderHand === hand) {
+						state.activeSceneLightingPrimarySliderHand = "";
+					}
+					if (state.activeSceneLightingSecondarySliderHand === hand) {
+						state.activeSceneLightingSecondarySliderHand = "";
+					}
+					passthroughController.setControlValue(passthroughUiState.lightingTertiaryControl.key, getControlValueFromSliderU(passthroughUiState.lightingTertiaryControl, ray.hit.u));
 				}
 				if (!triggerPressedBool && wasTriggerPressedBool) {
 					releaseSliderHand(hand);

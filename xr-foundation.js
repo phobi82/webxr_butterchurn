@@ -10,7 +10,24 @@ const emptyAudioMetrics = Object.freeze({
 	peak: 0,
 	bass: 0,
 	transient: 0,
-	beatPulse: 0
+	beatPulse: 0,
+	kickGate: 0,
+	bassHit: 0,
+	transientGate: 0,
+	strobeGate: 0,
+	colorMomentum: 0,
+	motionEnergy: 0,
+	roomFill: 0,
+	leftLevel: 0,
+	rightLevel: 0,
+	leftBass: 0,
+	rightBass: 0,
+	midLevel: 0,
+	sideLevel: 0,
+	stereoBalance: 0,
+	stereoWidth: 0,
+	leftImpact: 0,
+	rightImpact: 0
 });
 
 const normalizeVec3 = function(x, y, z) {
@@ -396,6 +413,7 @@ const createEmptyLightingState = function() {
 		lightDirections: new Float32Array(MAX_DIRECTIONAL_LIGHTS * 3),
 		lightColors: new Float32Array(MAX_DIRECTIONAL_LIGHTS * 3),
 		lightStrengths: new Float32Array(MAX_DIRECTIONAL_LIGHTS),
+		fixtureGroups: [],
 		name: "",
 		description: ""
 	};
@@ -409,6 +427,7 @@ const clearLightingState = function(state) {
 	state.lightDirections.fill(0);
 	state.lightColors.fill(0);
 	state.lightStrengths.fill(0);
+	state.fixtureGroups.length = 0;
 };
 
 const setDirectionalLight = function(state, index, direction, color, strength) {
@@ -423,6 +442,74 @@ const setDirectionalLight = function(state, index, direction, color, strength) {
 	state.lightColors[baseOffset + 1] = color[1];
 	state.lightColors[baseOffset + 2] = color[2];
 	state.lightStrengths[index] = Math.max(0, strength);
+};
+
+const pushFixtureGroup = function(state, args) {
+	args = args || {};
+	if (!state || !state.fixtureGroups) {
+		return null;
+	}
+	const color = args.color || [1, 1, 1];
+	const group = {
+		type: args.type || "wash",
+		anchorType: args.anchorType || "ceiling",
+		color: [clampNumber(color[0], 0, 1), clampNumber(color[1], 0, 1), clampNumber(color[2], 0, 1)],
+		intensity: Math.max(0, args.intensity == null ? 0 : args.intensity),
+		radius: clampNumber(args.radius == null ? 0.5 : args.radius, 0.05, 1.4),
+		softness: clampNumber(args.softness == null ? 0.18 : args.softness, 0.02, 0.45),
+		azimuth: args.azimuth || 0,
+		sweep: clampNumber(args.sweep == null ? 0.2 : args.sweep, 0, 1.5),
+		vertical: clampNumber(args.vertical == null ? 0.55 : args.vertical, 0, 1),
+		pulseAmount: clampNumber(args.pulseAmount == null ? 0 : args.pulseAmount, 0, 1),
+		strobeAmount: clampNumber(args.strobeAmount == null ? 0 : args.strobeAmount, 0, 1),
+		stereoBias: clampNumber(args.stereoBias == null ? 0 : args.stereoBias, -1, 1)
+	};
+	state.fixtureGroups.push(group);
+	return group;
+};
+
+const getFixtureDirection = function(group) {
+	const azimuth = group && group.azimuth != null ? group.azimuth : 0;
+	const horizontalScale = group && group.anchorType === "wall" ? 1.05 : (group && group.anchorType === "floor" ? 0.42 : 0.72);
+	const height = group && group.anchorType === "wall" ? lerpNumber(0.62, 1.02, group.vertical == null ? 0.55 : group.vertical) : (group && group.anchorType === "floor" ? 0.42 : 1.08);
+	return normalizeVec3(Math.cos(azimuth) * horizontalScale, height, Math.sin(azimuth) * horizontalScale);
+};
+
+const applyFixtureGroupsToLightingState = function(state, ambientBaseStrength) {
+	if (!state) {
+		return;
+	}
+	const rankedGroups = (state.fixtureGroups || []).slice().sort(function(a, b) {
+		return (b.intensity || 0) - (a.intensity || 0);
+	});
+	for (let i = 0; i < MAX_DIRECTIONAL_LIGHTS; i += 1) {
+		const group = rankedGroups[i];
+		if (!group) {
+			continue;
+		}
+		setDirectionalLight(state, i, getFixtureDirection(group), group.color, group.intensity);
+	}
+	let ambientWeight = 0;
+	let ambientR = 0;
+	let ambientG = 0;
+	let ambientB = 0;
+	for (let i = 0; i < rankedGroups.length; i += 1) {
+		const group = rankedGroups[i];
+		const weight = Math.max(0, group.intensity) * (group.type === "wash" ? 1 : 0.55);
+		if (weight <= 0.0001) {
+			continue;
+		}
+		ambientWeight += weight;
+		ambientR += group.color[0] * weight;
+		ambientG += group.color[1] * weight;
+		ambientB += group.color[2] * weight;
+	}
+	if (ambientWeight > 0.0001) {
+		state.ambientColor[0] = clampNumber(ambientR / ambientWeight, 0, 1);
+		state.ambientColor[1] = clampNumber(ambientG / ambientWeight, 0, 1);
+		state.ambientColor[2] = clampNumber(ambientB / ambientWeight, 0, 1);
+	}
+	state.ambientStrength = clampNumber((ambientBaseStrength == null ? 0.18 : ambientBaseStrength) + ambientWeight * 0.05, 0.08, 0.7);
 };
 
 const createTopLightDirection = function(azimuth, height, ellipseX, ellipseZ) {

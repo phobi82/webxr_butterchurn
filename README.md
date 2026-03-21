@@ -11,10 +11,10 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - collision world with floor, platforms, walls, and a remote goat GLB prop
 - in-headset menu plus mirrored desktop preview for debugging the same menu
 - audio-reactive floor colors and shared scene lighting
-- lighting presets: `Aurora Drift`, `Disco Storm`
+- lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - passthrough blend modes: `Uniform`, `Flashlight`
 - uniform passthrough submodes: `Manual`, `Music`
-- passthrough lighting modes: `None`, `Uniform`, `Spots`
+- passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, YouTube playlist, Suno Live Radio, or synthetic `Debug Audio`
 
@@ -22,8 +22,8 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 
 - `index.html`: browser entry point, desktop shell, buttons, status labels, and main canvas
 - `xr-foundation.js`: shared browser, XR, math, and rendering helpers
-- `xr-audio-controller.js`: audio capture, analyser pipeline, stereo metrics, and debug synth
-- `xr-light-presets.js`: lighting preset catalog and preset state builders
+- `xr-audio-controller.js`: audio capture, analyser pipeline, stereo metrics, club-lighting derived metrics, and debug synth
+- `xr-light-presets.js`: lighting preset catalog, fixture-rig builders, and scene-light derivation
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
 - `xr-passthrough-modes.js`: pure passthrough mode catalog and blend formulas
@@ -118,12 +118,13 @@ The current menu exposes:
   - `Uniform` + `Music`: bipolar `Intensity` with end labels `Vis -> Passthrough` and `Passthrough -> Vis`
   - `Flashlight`: `Radius` and `Softness`
 - scene lighting group:
-  - `Lighting Mode` cycler: `None`, `Uniform`, `Spots` with `Spots` as the default
+  - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club` with `Spots` as the default
   - `Light Preset` cycler
+  - `Club`: `Club Intensity`, `Room Fill`, `Strobe Amount`
 - eye distance slider
 - visualizer mode selector
 - Butterchurn preset selector
-- live audio meters for `Level`, `Peak`, `Bass`, `Transient`, and `Beat`
+- live audio meters for `Level`, `Bass`, `Kick`, `Bass Hit`, `Transient`, `Beat`, `Strobe`, `Fill`, `Left Hit`, and `Right Hit`
 
 ## Visualizer Modes
 
@@ -143,6 +144,8 @@ The current menu exposes:
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
 - Lighting can now be disabled, applied as one music-reactive uniform tint, or rendered as soft colored spots derived from the active lighting preset.
 - The `Spots` overlay now approximates fixed room lighting in `local-floor` space with anchors on the ceiling, floor, and side walls, so real headset movement changes the passthrough spots as if the lights were in the room, while stick locomotion no longer drags those spots through passthrough.
+- `Club` extends the passthrough lighting path with fixture-rig-driven washes, wall beams, and controlled strobe accents derived from the active light preset and new audio-reactive metrics such as `kickGate`, `bassHit`, `transientGate`, `strobeGate`, `roomFill`, and stereo impact values.
+- `Club` now renders those passthrough fixtures as oriented elliptical masks instead of only round blobs, so washes read broader and beams read more directional in the room.
 - Desktop preview, opaque VR, and unsupported AR still use the same blend modes against a black fallback instead of live passthrough.
 - Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
 - The XR menu hit path no longer crashes when pointing at the menu after the generic section refactor; the earlier `undefined.length` hit-test regression is fixed.

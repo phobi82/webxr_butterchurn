@@ -472,6 +472,9 @@ const appConfig = {
 		initialLightingModeKey: "spots",
 		initialManualMix: 0,
 		initialAudioReactiveIntensity: 0.7,
+		initialClubIntensity: 0.82,
+		initialClubRoomFill: 0.74,
+		initialClubStrobeAmount: 0.35,
 		initialFlashlightRadius: 0.18,
 		initialFlashlightSoftness: 0.1
 	},
