@@ -90,9 +90,11 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 
 - Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect family at a time instead of testing full presets.
 - The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, so Butterchurn is suppressed and the effect overlay stays isolated against the fallback/room test setup.
+- Its desktop preview starts outside an open-front room shell with a clearer inner floor, thicker side/back surfaces, and a front frame, so ceiling, wall, and floor effects read more like a lighting diorama before entering VR.
 - `Prev Effect` and `Next Effect` cycle through isolated effect families: `Soft Wash`, `Shutters`, `Edge Runner`, `Silhouette Cut`, `Room Window Beat`, `Aurora Curtain`, and `Floor Halo`.
 - The page keeps the normal XR enter path, so the same isolated effects can be inspected in headset instead of only on desktop.
 - Its in-headset menu is also reduced to the active effect, the key lighting slider, and focused audio meters instead of mirroring the full production menu.
+- While inside VR, the TestLab menu also includes an `Exit VR` button so the session can be ended without leaving the in-headset UI first.
 
 ## Desktop Preview Controls
 
@@ -116,6 +118,7 @@ The mirrored desktop menu is hidden on startup and uses the same canvas/menu sys
 - right trigger while airborne: directional air boost
 - `Y` on the left controller: open or close the in-headset menu
 - trigger on menu controls: press buttons and drag sliders
+- in-headset menu: `Exit VR` button to end the current immersive session
 
 XR stick movement and airborne boost now drive the same horizontal movement velocity, so steering in the air no longer stacks a separate direct stick translation on top of boost momentum, while partial stick tilt still scales movement speed analogically after the deadzone.
 
@@ -138,6 +141,7 @@ The current menu exposes:
 - eye distance slider
 - visualizer mode selector
 - Butterchurn preset selector
+- `Session` section with an `Exit VR` button while an immersive session is active
 - live audio meters for `Level`, `Bass`, `Kick`, `Bass Hit`, `Transient`, `Beat Pulse`, `Strobe`, `Fill`, `Left Hit`, and `Right Hit`
 
 ## Visualizer Modes

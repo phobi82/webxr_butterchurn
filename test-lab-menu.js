@@ -48,6 +48,10 @@ const createTestLabMenuSections = function(args) {
 			title: "Isolation",
 			statusText: "Uniform / Manual / Mix 100% is the default lab baseline",
 			controls: []
+		}),
+		createSessionMenuSectionState({
+			xrSessionActiveBool: !!args.xrSessionActiveBool,
+			hoveredExitVrBool: !!args.hoveredExitVrBool
 		})
-	];
+	].filter(Boolean);
 };

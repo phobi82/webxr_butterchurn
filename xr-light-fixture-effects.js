@@ -43,7 +43,19 @@ const getFixtureEffectTypeId = function(effectMode) {
 	return 0;
 };
 
-const getFixtureRevealStrength = function(type) {
+const getFixtureRevealStrength = function(type, effectMode) {
+	if (effectMode === FIXTURE_EFFECT_MODE_NONE) {
+		return 0.46;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_SHUTTERS) {
+		return 0.56;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN) {
+		return 0.62;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_FLOOR_HALO) {
+		return 0.78;
+	}
 	if (type === "wash") {
 		return 0.72;
 	}
@@ -92,7 +104,7 @@ const getFixtureEffectState = function(args) {
 		phase: (group.azimuth || 0) * 0.28 + variantCenter * 0.92 + stereoBiasOffset * 0.6,
 		density: effectDensity,
 		amount: effectAmount,
-		revealStrength: getFixtureRevealStrength(group.type)
+		revealStrength: getFixtureRevealStrength(group.type, effectMode)
 	};
 };
 
@@ -111,12 +123,19 @@ const fixtureEffectFragmentSource = [
 	"float density=max(effectParams.z,0.0001);",
 	"float amount=clamp(effectParams.w,0.0,1.0);",
 	"if(effectType<0.5){",
-	"return vec2(1.0,1.0);",
+	"float radial=length(localNorm*vec2(0.92,1.08));",
+	"float broad=1.0-smoothstep(0.08,1.0,radial);",
+	"float plumeA=0.5+0.5*sin((localNorm.x*0.8+localNorm.y*0.24+phase)*6.28318);",
+	"float plumeB=0.5+0.5*sin((localNorm.y*0.62-localNorm.x*0.16-phase*0.52)*6.28318);",
+	"float cloud=smoothstep(0.2,0.88,plumeA*0.58+plumeB*0.42);",
+	"return vec2(0.82+cloud*0.18,broad*(0.34+cloud*(0.24+amount*0.08)));",
 	"}",
 	"if(effectType<1.5){",
-	"float shutter=0.5+0.5*sin((localNorm.x*density+phase)*6.28318);",
-	"shutter=smoothstep(0.18,0.82,shutter);",
-	"return vec2(0.65+shutter*0.35,0.34+shutter*(0.58+amount*0.18));",
+	"float stripeA=0.5+0.5*sin((localNorm.x*(1.4+density*0.8)+localNorm.y*0.42+phase)*6.28318);",
+	"float stripeB=0.5+0.5*sin((localNorm.x*(2.1+density*0.36)-localNorm.y*0.18+phase*1.12)*6.28318);",
+	"float shutter=smoothstep(0.36,0.9,stripeA*0.64+stripeB*0.36);",
+	"float envelope=1.0-smoothstep(0.16,1.02,length(localNorm*vec2(0.9,1.12)));",
+	"return vec2(0.76+shutter*0.24,envelope*(0.24+shutter*(0.42+amount*0.12)));",
 	"}",
 	"if(effectType<2.5){",
 	"float runnerCenter=sin(phase)*0.72;",

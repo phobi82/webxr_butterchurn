@@ -14,11 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Opened `createSceneLighting(...)` to custom preset-definition lists, so the new test lab can reuse the shared lighting pipeline with its own isolated effect catalog instead of patching the main preset list.
 - Split the previous mixed entry/runtime layer into an explicit shell contract in `xr-shell.js`, a shared runtime core in `xr-runtime.js`, and a thinner shared app composition module, so alternate pages such as `TestLab.html` can reuse the same engine stack without relying on an implicit `window.appShell`.
+- Changed the TestLab desktop preview to start outside a more architectural open-front room shell, adding clearer floor mass, thicker room surfaces, and a front frame so isolated ceiling, wall, and floor effects read less like clipped planes.
+- Added an `Exit VR` button to the in-headset menu, including the reduced TestLab menu, so immersive sessions can be ended from inside the menu without remapping controller buttons.
 - Moved shared Club fixture-effect semantics into a dedicated `xr-light-fixture-effects.js` module, so presets now choose named effect families and the passthrough renderer consumes one centralized effect contract for shutters, edge runners, silhouette cuts, and room-window beats.
 - Renamed the desktop `YouTube Playlist` shortcut to `YT Synth` and added a second desktop tab-audio shortcut `YT House/Disco` that opens the configured house/disco playlist on its selected first track.
 - Added new passthrough-native `auroraCurtain` and `floorHalo` fixture effect families, wiring them into `Aurora Drift` and the room-fill presets so the ceiling can read as moving light bands and the floor can read as deliberate underglow instead of only broad soft washes.
 - Tightened `Aurora Drift` further by narrowing its ceiling masks and sharpening the internal aurora striping, so the passthrough result should read more like bands than like large overhead blobs.
 - Retuned the remaining Club presets so `Disco Storm`, `Neon Wash`, `Stereo Chase`, and `Pulse Strobe` now have more clearly separated passthrough roles through denser mixed hits, stronger room-fill wash, mirrored side chases, and a darker sharper strobe layout.
+- Retuned the shared `Soft Wash` and `Shutters` effect families toward softer overlapping plumes and less panel-like striping, so the first isolated effect passes in the TestLab read less like glowing windows.
 - Replaced the old preset-first work tracker with a new effect-first `TODO.md` structure, so the next work now flows from the separate isolated test lab to surface mapping, preset composition, Butterchurn seam work, and headset validation.
 
 ## [0.7.0] - 2026-03-21

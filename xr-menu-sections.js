@@ -42,6 +42,33 @@ const createChoiceRowMenuControlState = function(args) {
 	};
 };
 
+const createSessionMenuSectionState = function(args) {
+	args = args || {};
+	if (!args.xrSessionActiveBool) {
+		return null;
+	}
+	return createMenuSectionState({
+		key: "session",
+		title: "Session",
+		statusText: "Leave the current immersive session.",
+		controls: [
+			createChoiceRowMenuControlState({
+				key: "sessionAction",
+				label: "",
+				items: [
+					{
+						key: "exitVr",
+						label: "Exit VR",
+						metaText: "End session",
+						selectedBool: true,
+						hoveredBool: !!args.hoveredExitVrBool
+					}
+				]
+			})
+		]
+	});
+};
+
 const createSliderMenuControlState = function(args) {
 	args = args || {};
 	return {
@@ -343,6 +370,10 @@ const createLowerMenuSections = function(args) {
 			valueText: args.currentPresetName,
 			metaText: args.presetMetaText,
 			hoveredAction: args.hoveredPresetAction
+		}),
+		createSessionMenuSectionState({
+			xrSessionActiveBool: !!args.xrSessionActiveBool,
+			hoveredExitVrBool: !!args.hoveredExitVrBool
 		})
-	];
+	].filter(Boolean);
 };

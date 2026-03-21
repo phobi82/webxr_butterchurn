@@ -2,10 +2,16 @@
 
 const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
-	const hue = wrapUnit(0.54 + timeSeconds * 0.03 + metrics.colorMomentum * 0.03);
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.06, hslToRgb(hue, 0.86, 0.6), 0.54 + metrics.roomFill * 0.26, 1.12, {
-		softness: 0.34,
-		sweep: 0.08,
+	const hueA = wrapUnit(0.54 + timeSeconds * 0.02 + metrics.colorMomentum * 0.03);
+	const hueB = wrapUnit(hueA + 0.06);
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.04 - 0.22, hslToRgb(hueA, 0.82, 0.58), 0.34 + metrics.roomFill * 0.18, 1.2, {
+		softness: 0.4,
+		sweep: 0.12,
+		effectMode: FIXTURE_EFFECT_MODE_NONE
+	});
+	addFixture(state, "wash", "ceiling", -(timeSeconds * 0.035) + 0.34, hslToRgb(hueB, 0.76, 0.62), 0.3 + metrics.roomFill * 0.16, 1.08, {
+		softness: 0.42,
+		sweep: 0.1,
 		effectMode: FIXTURE_EFFECT_MODE_NONE
 	});
 	applyFixtureGroupsToLightingState(state, 0.28);
@@ -13,10 +19,16 @@ const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics) {
 
 const buildTestLabShutters = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
-	const hue = wrapUnit(0.96 + timeSeconds * 0.04 + metrics.colorMomentum * 0.03);
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.08, hslToRgb(hue, 0.92, 0.62), 0.56 + metrics.roomFill * 0.22, 1.02, {
-		softness: 0.22,
-		sweep: 0.14,
+	const hueA = wrapUnit(0.96 + timeSeconds * 0.035 + metrics.colorMomentum * 0.03);
+	const hueB = wrapUnit(hueA + 0.09);
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.06 - 0.18, hslToRgb(hueA, 0.92, 0.6), 0.34 + metrics.roomFill * 0.16, 0.96, {
+		softness: 0.26,
+		sweep: 0.18,
+		effectMode: FIXTURE_EFFECT_MODE_SHUTTERS
+	});
+	addFixture(state, "wash", "ceiling", -(timeSeconds * 0.05) + 0.42, hslToRgb(hueB, 0.84, 0.62), 0.28 + metrics.roomFill * 0.14, 0.84, {
+		softness: 0.28,
+		sweep: 0.16,
 		effectMode: FIXTURE_EFFECT_MODE_SHUTTERS
 	});
 	applyFixtureGroupsToLightingState(state, 0.22);

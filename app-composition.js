@@ -48,6 +48,7 @@ const appConfig = {
 		menuSliderMinU: 0.18,
 		menuSliderMaxU: 0.82,
 		menuSliderHalfHeight: 0.055,
+		maxMenuTextureHeight: 2304,
 		presetPrevMinU: 0.08,
 		presetPrevMaxU: 0.22,
 		presetNextMinU: 0.78,

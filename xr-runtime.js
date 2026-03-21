@@ -154,13 +154,27 @@ const createRuntime = function(options) {
 	const cycleLightingPreset = function(direction) {
 		cycleSelection(sceneLighting, getLightingSelectionState, "presetNames", "currentPresetIndex", function(i) { this.selectPreset(i); }, direction);
 	};
-	const xrMenuActionCallbacks = {onShaderModeAction: cycleShaderMode, onLightPresetAction: cycleLightingPreset, onPresetAction: cyclePreset};
+	const xrMenuActionCallbacks = {
+		onShaderModeAction: cycleShaderMode,
+		onLightPresetAction: cycleLightingPreset,
+		onPresetAction: cyclePreset,
+		onExitVrAction: function() {
+			if (state.xrSession) {
+				state.xrSession.end();
+			}
+		}
+	};
 	const desktopMenuActionCallbacks = {
 		onShaderModeAction: cycleShaderMode,
 		onLightPresetAction: cycleLightingPreset,
 		onPresetAction: function(direction) {
 			audioController.activate();
 			cyclePreset(direction);
+		},
+		onExitVrAction: function() {
+			if (state.xrSession) {
+				state.xrSession.end();
+			}
 		}
 	};
 	const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -219,7 +233,8 @@ const createRuntime = function(options) {
 			currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
 			currentLightPresetDescription: lightingSelectionState ? lightingSelectionState.currentPresetDescription : "Slow colorful overhead drift",
 			presetNames: visualizerSelectionState ? visualizerSelectionState.presetNames : ["Preset 1"],
-			currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0
+			currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0,
+			xrSessionActiveBool: !!state.xrSession
 		};
 	};
 	const getDesktopMenuInteractionState = function() {

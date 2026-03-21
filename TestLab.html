@@ -173,8 +173,8 @@
 			const testLabApp = createApp({
 				shell: appShell,
 				locomotion: {
-					desktopStartZ: 0,
-					desktopStartPitch: 0
+					desktopStartZ: 5.8,
+					desktopStartPitch: 0.18
 				},
 				menu: {
 					initialDesktopPreviewVisibleBool: false,
@@ -194,14 +194,19 @@
 					presetDefinitions: testLabLightingPresetDefinitions
 				},
 				scene: {
-					floorHalfSize: 4.8,
+					floorHalfSize: 20,
 					sceneGlbAssets: [],
 					levelBoxes: [
-						{x: 0, y: 1.35, z: -4.2, width: 8.4, height: 2.7, depth: 0.2, color: [0.12, 0.16, 0.24, 0.34]},
-						{x: 0, y: 1.35, z: 4.2, width: 8.4, height: 2.7, depth: 0.2, color: [0.12, 0.16, 0.24, 0.2]},
-						{x: -4.2, y: 1.35, z: 0, width: 0.2, height: 2.7, depth: 8.4, color: [0.14, 0.18, 0.26, 0.28]},
-						{x: 4.2, y: 1.35, z: 0, width: 0.2, height: 2.7, depth: 8.4, color: [0.14, 0.18, 0.26, 0.28]},
-						{x: 0, y: 2.72, z: 0, width: 8.4, height: 0.18, depth: 8.4, color: [0.16, 0.2, 0.28, 0.24]}
+						{x: 0, y: 0.02, z: 0, width: 40, height: 0.04, depth: 40, color: [0.08, 0.12, 0.18, 0.08]},
+						{x: 0, y: 0.05, z: 0, width: 8.8, height: 0.1, depth: 8.8, color: [0.12, 0.17, 0.24, 0.16]},
+						{x: 0, y: 0.18, z: -3.15, width: 7.2, height: 0.18, depth: 1.5, color: [0.14, 0.2, 0.3, 0.18]},
+						{x: 0, y: 1.4, z: -4.35, width: 8.8, height: 2.8, depth: 0.3, color: [0.18, 0.24, 0.36, 0.7]},
+						{x: -4.35, y: 1.4, z: -0.15, width: 0.3, height: 2.8, depth: 8.1, color: [0.16, 0.22, 0.34, 0.62]},
+						{x: 4.35, y: 1.4, z: -0.15, width: 0.3, height: 2.8, depth: 8.1, color: [0.16, 0.22, 0.34, 0.62]},
+						{x: -4.35, y: 1.4, z: 3.55, width: 0.3, height: 2.8, depth: 1.4, color: [0.15, 0.2, 0.3, 0.46]},
+						{x: 4.35, y: 1.4, z: 3.55, width: 0.3, height: 2.8, depth: 1.4, color: [0.15, 0.2, 0.3, 0.46]},
+						{x: 0, y: 2.86, z: -0.15, width: 8.8, height: 0.28, depth: 8.1, color: [0.22, 0.28, 0.4, 0.54]},
+						{x: 0, y: 2.86, z: 3.55, width: 8.8, height: 0.28, depth: 1.4, color: [0.18, 0.24, 0.34, 0.38]}
 					]
 				}
 			});

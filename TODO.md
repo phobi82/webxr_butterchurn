@@ -24,7 +24,7 @@ Create a reliable way to inspect one lighting effect at a time in a VR-like room
 - [x] Add a separate `TestLab.html` page for isolated single-effect inspection instead of embedding the lab into the main application UI.
 - [x] Add direct previous/next effect controls on the test page.
 - [x] Feed live audio metrics into the test page through the normal runtime, while preserving a debug-audio path for deterministic testing.
-- [ ] Improve the room preview so ceiling, walls, and floor feel more spatially natural and less like clipped planes.
+- [x] Improve the room preview so ceiling, walls, and floor feel more spatially natural and less like clipped planes.
 - [ ] Improve the VR readability of the isolated effect page so the same effect isolation path works cleanly in-headset, not only on desktop.
 - [ ] Support explicit context variants when useful, such as `ceiling`, `wall`, and `floor` for the same effect family.
 - [ ] Make the active test conditions more explicit when the test page is using live audio versus debug audio.
@@ -272,7 +272,46 @@ Improve the visualizer background so it works better behind or alongside the lig
 - [ ] No new mirrored-artifact problems worse than the current seam.
 - [ ] Visual motion remains continuous.
 
-## 6. Headset Validation
+## 6. Menu Architecture And Reliability
+
+Goal:
+Stabilize the shared menu architecture before attempting another dynamic sizing refactor.
+
+### Open tasks
+
+- [ ] Document the currently stable baseline for the shared menu path, including which parts still rely on a fixed safety cap and why.
+- [ ] Reproduce the recent menu regression in a controlled way:
+  - blank desktop menu preview
+  - stretched main-app menu
+  - XR hit-test misalignment
+  - one-eye XR failure when opening the menu
+- [ ] Identify which menu responsibilities must always share one model:
+  - logical section list
+  - logical layout height
+  - rendered texture height
+  - desktop preview size
+  - XR plane size
+  - desktop pointer hit regions
+  - XR ray hit regions
+- [ ] Add a mandatory verification checklist for future menu sizing work:
+  - main app desktop preview
+  - main app XR menu
+  - TestLab desktop preview
+  - TestLab XR menu
+  - button and slider hit accuracy
+- [ ] If dynamic sizing is retried, reintroduce it only in small slices instead of one large refactor.
+- [ ] If dynamic sizing is retried, derive one central menu layout model and ensure every menu path reads only that model.
+- [ ] Add a safe fallback rule:
+  - if the menu exceeds a chosen limit, degrade predictably instead of rendering blank, stretching, or breaking one XR eye
+- [ ] Add a regression-prevention note for menu changes once the architecture is stable again.
+
+### Definition of done
+
+- [ ] Render, preview, plane size, and hit testing cannot diverge from each other for the same menu state.
+- [ ] Main app and TestLab both remain stable when sections are added or removed.
+- [ ] Menu architecture changes can be validated quickly without breaking the live XR menu path.
+
+## 7. Headset Validation
 
 Goal:
 Use headset checks as the final gate after desktop and isolated tests.
@@ -311,6 +350,7 @@ Work in this order:
 3. Surface Mapping
 4. Preset Composition
 5. Butterchurn Background / Sky Presentation
-6. Headset Validation
+6. Menu Architecture And Reliability
+7. Headset Validation
 
 Do not skip ahead to preset tuning before the effect families are individually credible.

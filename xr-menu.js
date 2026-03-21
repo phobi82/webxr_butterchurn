@@ -22,7 +22,7 @@ const createMenuView = function(options) {
 	const documentRef = options.documentRef || document;
 	const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
 	const menuLayoutWidth = options.canvasWidth || 1280;
-	const maxMenuTextureHeight = options.maxMenuTextureHeight || 1364;
+	const maxMenuTextureHeight = options.maxMenuTextureHeight || 2304;
 	const menuCanvas = documentRef.createElement("canvas");
 	menuCanvas.width = menuLayoutWidth;
 	menuCanvas.height = options.canvasHeight || 960;
@@ -164,14 +164,14 @@ const createMenuView = function(options) {
 			previewCanvas.height = targetHeight;
 		}
 		previewCanvas.style.width = previewWidthPixels + "px";
-		previewCanvas.style.height = Math.round(previewWidthPixels * layout.canvasHeight / menuLayoutWidth) + "px";
+		previewCanvas.style.height = Math.round(previewWidthPixels * targetHeight / menuLayoutWidth) + "px";
 	};
 	const getMenuPlaneDimensions = function(menuSections) {
 		const layout = getLayoutMetrics(menuSections);
 		const worldMenuWidth = options.menuWorldWidth || options.menuWidth || 0.74;
 		return {
 			width: worldMenuWidth,
-			height: worldMenuWidth * (layout.canvasHeight / menuLayoutWidth)
+			height: worldMenuWidth * (Math.min(layout.canvasHeight, maxMenuTextureHeight) / menuLayoutWidth)
 		};
 	};
 	const drawCenteredFittedText = function(text, centerX, topY, maxWidth, fontSize, minFontSize, color, weight) {
@@ -518,9 +518,11 @@ const createMenuController = function(options) {
 		hoveredSceneLightingModeAction: "",
 		hoveredPassthroughUniformBlendModeKey: "",
 		hoveredJumpMode: "",
+		hoveredExitVrBool: false,
 		hoveredShaderModeAction: "",
 		hoveredLightPresetAction: "",
 		hoveredPresetAction: "",
+		xrSessionActiveBool: false,
 		desktopPreviewVisibleBool: options.initialDesktopPreviewVisibleBool !== false,
 		desktopPointerActiveBool: false,
 		desktopPointerU: 0,
@@ -580,9 +582,11 @@ const createMenuController = function(options) {
 		const currentShaderModeIndex = clampNumber(externalState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
 		const presetNames = externalState.presetNames && externalState.presetNames.length ? externalState.presetNames : ["No preset"];
 		const currentPresetIndex = clampNumber(externalState.currentPresetIndex || 0, 0, presetNames.length - 1);
+		const xrSessionActiveBool = externalState.xrSessionActiveBool == null ? state.xrSessionActiveBool : !!externalState.xrSessionActiveBool;
 		return buildModuleSections({
 			selectedJumpMode: state.jumpMode,
 			hoveredJumpMode: state.hoveredJumpMode,
+			hoveredExitVrBool: state.hoveredExitVrBool,
 			floorAlpha: state.floorAlpha,
 			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
 			floorAlphaHoverBool: state.floorAlphaHoverBool,
@@ -627,7 +631,8 @@ const createMenuController = function(options) {
 			sceneLightingTertiaryActiveBool: !!state.activeSceneLightingTertiarySliderHand,
 			currentPresetName: presetNames[currentPresetIndex],
 			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
-			hoveredPresetAction: state.hoveredPresetAction
+			hoveredPresetAction: state.hoveredPresetAction,
+			xrSessionActiveBool: xrSessionActiveBool
 		});
 	};
 	const createSliderMapping = function(minValue, maxValue) {
@@ -663,6 +668,7 @@ const createMenuController = function(options) {
 		state.hoveredSceneLightingModeAction = "";
 		state.hoveredPassthroughUniformBlendModeKey = "";
 		state.hoveredJumpMode = "";
+		state.hoveredExitVrBool = false;
 		state.hoveredShaderModeAction = "";
 		state.hoveredLightPresetAction = "";
 		state.hoveredPresetAction = "";
@@ -754,7 +760,7 @@ const createMenuController = function(options) {
 	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
 		const passthroughUiState = getPassthroughUiState();
-		const moduleSections = getModuleSections();
+		const moduleSections = getModuleSections({xrSessionActiveBool: xrSessionActiveBool});
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
 			state.eyeDistanceHoverBool = state.activeSliderHand === "desktop";
 			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
@@ -767,6 +773,7 @@ const createMenuController = function(options) {
 			state.hoveredSceneLightingModeAction = "";
 			state.hoveredPassthroughUniformBlendModeKey = "";
 			state.hoveredJumpMode = "";
+			state.hoveredExitVrBool = false;
 			state.hoveredShaderModeAction = "";
 			state.hoveredLightPresetAction = "";
 			state.hoveredPresetAction = "";
@@ -784,6 +791,7 @@ const createMenuController = function(options) {
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : "";
 		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
+		state.hoveredExitVrBool = hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr";
 		state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : "";
 		state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : "";
 		state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : "";
@@ -894,6 +902,7 @@ const createMenuController = function(options) {
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
 				state.hoveredPassthroughUniformBlendModeKey = hit.moduleChoiceControlKey === "passthroughUniformBlendMode" ? hit.moduleChoiceItemKey : state.hoveredPassthroughUniformBlendModeKey;
 				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
+				state.hoveredExitVrBool = (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr") || state.hoveredExitVrBool;
 				state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : state.hoveredShaderModeAction;
 				state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : state.hoveredLightPresetAction;
 				state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : state.hoveredPresetAction;
@@ -934,6 +943,7 @@ const createMenuController = function(options) {
 				audioMetrics: externalState.audioMetrics,
 				jumpMode: state.jumpMode,
 				hoveredJumpMode: state.hoveredJumpMode,
+				hoveredExitVrBool: state.hoveredExitVrBool,
 				hoveredShaderModeAction: state.hoveredShaderModeAction,
 				hoveredPresetAction: state.hoveredPresetAction,
 				floorAlpha: state.floorAlpha,
@@ -982,6 +992,7 @@ const createMenuController = function(options) {
 		},
 		updateDesktopPreview: function(args) {
 			args = args || {};
+			state.xrSessionActiveBool = !!args.xrSessionActiveBool;
 			applyDesktopHoverState(args.pointerLockedBool, args.xrSessionActiveBool);
 			menuView.updateDesktopPreview({visibleBool: state.desktopPreviewVisibleBool, interactiveBool: !!args.interactiveBool, renderState: this.getRenderState(args.renderState)});
 		},
@@ -993,7 +1004,7 @@ const createMenuController = function(options) {
 			state.desktopPointerU = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
 			state.desktopPointerV = clampNumber((event.clientY - rect.top) / rect.height, 0, 1);
 			state.desktopPointerActiveBool = true;
-			return menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, getModuleSections());
+			return menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, getModuleSections({xrSessionActiveBool: state.xrSessionActiveBool}));
 		},
 		registerDesktopPreviewEvents: function(args) {
 			args = args || {};
@@ -1042,6 +1053,9 @@ const createMenuController = function(options) {
 			const passthroughUiState = getPassthroughUiState();
 			if (hit.moduleChoiceControlKey === "jumpMode" && hit.moduleChoiceItemKey) {
 				state.jumpMode = hit.moduleChoiceItemKey;
+			}
+			if (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr" && callbacks.onExitVrAction) {
+				callbacks.onExitVrAction();
 			}
 			if (hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
 				callbacks.onShaderModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
@@ -1119,6 +1133,7 @@ const createMenuController = function(options) {
 			previewCanvas.style.display = "block";
 		},
 		resetSessionState: function() {
+			state.xrSessionActiveBool = false;
 			state.menuOpenBool = false;
 			state.menuTogglePressedBool = false;
 			state.activeSliderHand = "";
@@ -1133,6 +1148,7 @@ const createMenuController = function(options) {
 			triggerPressedByHand.clear();
 		},
 		endSession: function() {
+			state.xrSessionActiveBool = false;
 			state.menuOpenBool = false;
 			state.menuTogglePressedBool = false;
 			state.activeSliderHand = "";
@@ -1148,6 +1164,7 @@ const createMenuController = function(options) {
 		},
 		updateXrInput: function(args) {
 			args = args || {};
+			state.xrSessionActiveBool = !!args.xrSession;
 			const callbacks = args.callbacks || {};
 			const sources = args.xrSession ? args.xrSession.inputSources || [] : [];
 			let togglePressedBool = false;
@@ -1195,6 +1212,9 @@ const createMenuController = function(options) {
 				const passthroughUiState = getPassthroughUiState();
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "jumpMode" && ray.hit.moduleChoiceItemKey) {
 					state.jumpMode = ray.hit.moduleChoiceItemKey;
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "sessionAction" && ray.hit.moduleChoiceItemKey === "exitVr" && callbacks.onExitVrAction) {
+					callbacks.onExitVrAction();
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
 					callbacks.onShaderModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
