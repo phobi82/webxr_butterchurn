@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Moved shared Club fixture-effect semantics into a dedicated `xr-light-fixture-effects.js` module, so presets now choose named effect families and the passthrough renderer consumes one centralized effect contract for shutters, edge runners, silhouette cuts, and room-window beats.
 - Renamed the desktop `YouTube Playlist` shortcut to `YT Synth` and added a second desktop tab-audio shortcut `YT House/Disco` that opens the configured house/disco playlist on its selected first track.
+- Added new passthrough-native `auroraCurtain` and `floorHalo` fixture effect families, wiring them into `Aurora Drift` and the room-fill presets so the ceiling can read as moving light bands and the floor can read as deliberate underglow instead of only broad soft washes.
+- Tightened `Aurora Drift` further by narrowing its ceiling masks and sharpening the internal aurora striping, so the passthrough result should read more like bands than like large overhead blobs.
+- Retuned the remaining Club presets so `Disco Storm`, `Neon Wash`, `Stereo Chase`, and `Pulse Strobe` now have more clearly separated passthrough roles through denser mixed hits, stronger room-fill wash, mirrored side chases, and a darker sharper strobe layout.
 
 ## [0.7.0] - 2026-03-21
 

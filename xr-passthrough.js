@@ -329,6 +329,10 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			variantCenter: variantCenter,
 			stereoBiasOffset: stereoBiasOffset
 		});
+		if (effectState.mode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN && surfaceKey === "ceiling") {
+			radiusX = clampNumber(radiusX * 1.18, 0.12, 0.5);
+			radiusY = clampNumber(radiusY * 0.52, 0.04, 0.18);
+		}
 		target.push({
 			x: projectedUv.x,
 			y: projectedUv.y,

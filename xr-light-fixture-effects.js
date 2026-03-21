@@ -5,6 +5,8 @@ const FIXTURE_EFFECT_MODE_SHUTTERS = "shutters";
 const FIXTURE_EFFECT_MODE_EDGE_RUNNER = "edgeRunner";
 const FIXTURE_EFFECT_MODE_SILHOUETTE = "silhouette";
 const FIXTURE_EFFECT_MODE_WINDOW_BEAT = "windowBeat";
+const FIXTURE_EFFECT_MODE_AURORA_CURTAIN = "auroraCurtain";
+const FIXTURE_EFFECT_MODE_FLOOR_HALO = "floorHalo";
 
 const getDefaultFixtureEffectMode = function(type) {
 	if (type === "wash") {
@@ -31,6 +33,12 @@ const getFixtureEffectTypeId = function(effectMode) {
 	}
 	if (effectMode === FIXTURE_EFFECT_MODE_WINDOW_BEAT) {
 		return 4;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN) {
+		return 5;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_FLOOR_HALO) {
+		return 6;
 	}
 	return 0;
 };
@@ -71,6 +79,12 @@ const getFixtureEffectState = function(args) {
 	} else if (effectType === 4) {
 		effectDensity = 1.2;
 		effectAmount = clampNumber((audioMetrics.beatPulse || 0) * 0.7 + (audioMetrics.strobeGate || 0) * 0.5, 0, 1);
+	} else if (effectType === 5) {
+		effectDensity = 1.36 + (audioMetrics.colorMomentum || 0) * 1.24 + fillMix * 0.42;
+		effectAmount = clampNumber(0.42 + fillMix * 0.4 + (audioMetrics.colorMomentum || 0) * 0.3 + (audioMetrics.roomFill || 0) * 0.14, 0, 1);
+	} else if (effectType === 6) {
+		effectDensity = 0.72 + (audioMetrics.bass || 0) * 0.7 + (audioMetrics.bassHit || 0) * 0.4;
+		effectAmount = clampNumber((audioMetrics.bassHit || 0) * 0.62 + (audioMetrics.kickGate || 0) * 0.26 + (audioMetrics.roomFill || 0) * 0.18, 0, 1);
 	}
 	return {
 		mode: effectMode,
@@ -121,6 +135,24 @@ const fixtureEffectFragmentSource = [
 	"float beatWindow=1.0-smoothstep(0.2,0.72,window);",
 	"float pulse=0.5+0.5*sin((phase+amount*0.4)*6.28318);",
 	"pulse=smoothstep(0.12,0.9,pulse);",
+	"if(effectType<4.5){",
 	"return vec2(0.26+beatWindow*0.24,beatWindow*(0.46+pulse*(0.44+amount*0.1)));",
+	"}",
+	"if(effectType<5.5){",
+	"float bandA=0.5+0.5*sin((localNorm.x*(2.1+density*1.2)+localNorm.y*0.38+phase)*6.28318);",
+	"float bandB=0.5+0.5*sin((localNorm.x*(3.2+density*0.7)-localNorm.y*0.24+phase*1.18)*6.28318);",
+	"float sway=0.5+0.5*sin((localNorm.y*0.92+phase*0.7)*6.28318);",
+	"bandA=smoothstep(0.58,0.92,bandA);",
+	"bandB=smoothstep(0.64,0.96,bandB);",
+	"sway=smoothstep(0.12,0.94,sway);",
+	"float curtain=max(bandA,bandB*(0.72+amount*0.18));",
+	"float aurora=curtain*(0.58+sway*0.42);",
+	"return vec2(0.26+aurora*0.74,0.12+aurora*(0.72+amount*0.14));",
+	"}",
+	"float radial=length(localNorm*vec2(0.88,1.12));",
+	"float haloPulse=0.5+0.5*sin((phase+amount*0.24)*6.28318);",
+	"float core=1.0-smoothstep(0.06,0.54,radial);",
+	"float ring=1.0-smoothstep(0.08,0.34,abs(radial-(0.3+haloPulse*0.22)));",
+	"return vec2(0.54+core*0.18+ring*0.28,max(core*(0.64+amount*0.18),ring*(0.38+amount*0.16)));",
 	"}"
 ].join("");

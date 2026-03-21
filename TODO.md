@@ -91,14 +91,16 @@ Use this section to track the current small implementation blocks inside the lar
 
 - [x] Step 4.1 Pull the Club presets further apart with more distinct fixture mixes and motion density
 - [x] Step 4.2 Rework `Aurora Drift` toward aurora-like overhead light bands instead of generic soft wash
-- [ ] Step 4.3 Continue separating the remaining presets until each one is immediately recognizable in-headset
+- [x] Step 4.3 Continue separating the remaining presets until each one has a clearer passthrough-specific identity in code and local preview
+- [ ] Step 4.4 Validate that those stronger preset identities still read clearly in-headset
 
 ### Slice 5: Passthrough-Native Effects
 
 - [x] Step 5.1 Give wash, beam, and strobe fixtures different passthrough-reveal strength so light hits can act as different kinds of windows into the real room
 - [x] Step 5.2 Implement moving reveal shutters, edge runners, silhouette cuts, and room-window beats as selectable fixture effect families
 - [x] Step 5.3 Move fixture-effect semantics into a shared lighting module so presets choose effect families and passthrough only resolves and renders them
-- [ ] Step 5.4 Retune the new effect families in-headset so each one stays readable without collapsing into generic blobs
+- [x] Step 5.4 Add preset-specific aurora-curtain and floor-halo effect families so `Aurora Drift` and room-fill presets read less like generic soft blobs
+- [ ] Step 5.5 Retune the new effect families in-headset so each one stays readable without collapsing into generic blobs
 
 ## Working Protocol For Future AI Sessions
 
@@ -184,11 +186,11 @@ Definition of done:
 Goal: make presets feel clearly different in the headset, not only numerically different in code.
 
 - [x] Add preset families beyond the older directional-light presets
-- [ ] Re-tune `Aurora Drift` as the softer, flowing baseline
-- [ ] Re-tune `Disco Storm` as a more energetic mixed-beam preset
-- [ ] Re-tune `Neon Wash` as a strong color-fill preset
-- [ ] Re-tune `Stereo Chase` as a clearly left/right-driven preset
-- [ ] Re-tune `Pulse Strobe` as the aggressive transient preset with strong safety limits
+- [x] Re-tune `Aurora Drift` as the softer, flowing baseline
+- [x] Re-tune `Disco Storm` as a more energetic mixed-beam preset
+- [x] Re-tune `Neon Wash` as a strong color-fill preset
+- [x] Re-tune `Stereo Chase` as a clearly left/right-driven preset
+- [x] Re-tune `Pulse Strobe` as the aggressive transient preset with strong safety limits
 - [ ] Verify each preset remains recognizable after shared comfort clamps
 - [ ] Document the intended identity of each preset in code comments or README where useful
 
@@ -202,6 +204,7 @@ Goal: improve the visual shape language of Club lighting.
 
 - [x] Replace circle-only Club masks with oriented ellipses
 - [x] Add shared fixture effect families for shuttered washes, edge-running beams, silhouette cuts, and room-window beat accents
+- [x] Add preset-specific aurora-curtain and floor-halo effects to strengthen overhead banding and floor underglow
 - [ ] Improve edge shaping so washes, beams, and strobe accents have more distinct falloff
 - [ ] Add better softness controls per fixture type
 - [ ] Add stronger elongated beam masks for wall and side fixtures

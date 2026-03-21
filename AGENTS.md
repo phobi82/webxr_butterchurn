@@ -116,6 +116,7 @@ Recommended structure order:
 - If required to inspect external web content, prefer Chrome DevTools MCP.
 - When Chrome DevTools MCP opens a blank `about:blank` page alongside the local app page during verification, close the blank page immediately so only the relevant project pages remain open.
 - To inspect the in-VR menu without changing repository code, prefer a temporary Chrome DevTools script injection that opens the existing `menuCanvas` as a large DOM overlay or refreshes an `img` from `menuCanvas.toDataURL(...)`; use this only for manual verification and reload afterward instead of committing preview-only helpers.
+- When the user wants to judge one specific feature in isolation, prefer a temporary Chrome DevTools script injection that isolates the relevant runtime path in the running page and also sets the relevant runtime conditions as completely as possible; make the active test conditions explicit in the temporary UI or status text so the user can tell what is currently being evaluated, and keep this test harness temporary and restorable by reload instead of committing it.
 - For logic changes, add temporary console diagnostics during development and remove before commit; document manual test steps in the PR.
 
 ## Changelog
