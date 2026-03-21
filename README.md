@@ -16,13 +16,14 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - uniform passthrough submodes: `Manual`, `Music`
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
-- audio input from shared display/tab audio, microphone, YouTube playlist, Suno Live Radio, or synthetic `Debug Audio`
+- audio input from shared display/tab audio, microphone, `YT Synth`, `YT House/Disco`, Suno Live Radio, or synthetic `Debug Audio`
 
 ## Project Structure
 
 - `index.html`: browser entry point, desktop shell, buttons, status labels, and main canvas
 - `xr-foundation.js`: shared browser, XR, math, and rendering helpers
 - `xr-audio-controller.js`: audio capture, analyser pipeline, stereo metrics, club-lighting derived metrics, and debug synth
+- `xr-light-fixture-effects.js`: shared fixture-effect families and passthrough effect semantics
 - `xr-light-presets.js`: lighting preset catalog, fixture-rig builders, and scene-light derivation
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
@@ -40,7 +41,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - a VR headset supported by that browser for actual headset sessions
 - a passthrough-capable headset/browser combination if the AR passthrough blend modes should reveal the real environment instead of the black fallback
 - microphone or screen/tab-capture permission if live audio input should drive the scene
-- popup permission if `YouTube Playlist` or `Suno Live Radio` should open their source tabs automatically
+- popup permission if `YT Synth`, `YT House/Disco`, or `Suno Live Radio` should open their source tabs automatically
 
 ## Website
 
@@ -76,7 +77,8 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 - `Share Audio`: capture audio from a shared display, window, or tab
 - `Use Microphone`: capture microphone input
 - `Debug Audio`: synthetic source for visualizer and lighting debugging
-- `YouTube Playlist`: opens the configured playlist tab and expects tab-audio sharing
+- `YT Synth`: opens the configured synth-oriented YouTube playlist tab and expects tab-audio sharing
+- `YT House/Disco`: opens the configured house/disco YouTube playlist tab at its first selected track and expects tab-audio sharing
 - `Suno Live Radio`: opens Suno Live Radio and expects tab-audio sharing
 - `Stop Audio`: disconnects the active source
 
@@ -142,6 +144,12 @@ The current menu exposes:
 - `Uniform` splits into `Manual` and `Music`; the bipolar `Intensity` slider now spans a stronger full-range audio blend, clearly separates positive from negative direction, and labels the two directions as `Vis -> Passthrough` and `Passthrough -> Vis`.
 - The audio-reactive `Uniform -> Music` blend now follows `beatPulse` specifically, while the other passthrough lighting behavior still uses broader audio-derived lighting metrics.
 - `Left Hit` and `Right Hit` now drive stronger stereo-biased Club beam accents, with more obvious left/right intensity separation and a small additional lateral placement shift on stereo-heavy material.
+- Stereo-biased Club wall fixtures now follow explicit left/right ceiling-height wall tracks instead of the generic room perimeter, so side accents read more like dedicated wall runners.
+- Those side-wall runners now bias away from the room center into clearer front/back lanes, and the wall beam masks are stretched further so the side accents read more like directed beams than short blobs.
+- Ceiling washes are now broader and softer, while floor spill uses larger, softer, more numerous low-position masks so overhead fill and underglow read as distinct surface behaviors.
+- `Aurora Drift` now leans into aurora-style overhead light bands instead of a generic soft wash, giving that preset a more specific atmospheric identity.
+- Passthrough-specific reveal behavior is now differentiated by fixture type: washes open the room softly, beams reveal more aggressively, and strobes cut sharper windows into the real environment instead of behaving only like additive color.
+- Fixture effect families are now defined in one shared lighting module, so presets choose shuttered washes, edge-running beams, silhouette cuts, or room-window beats without duplicating the effect rules inside the passthrough renderer.
 - The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
 - Default startup now uses `Passthrough = Uniform -> Music` with `Intensity = -100%`, and `Scene Lighting = Club` with the `Pulse Strobe` preset selected.

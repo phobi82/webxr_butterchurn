@@ -320,6 +320,9 @@ const createRuntime = function(options) {
 		bindAsyncButton(shell.youtubeAudioButton, function() {
 			return audioController.requestTabAudio(tabSources.youtube);
 		}, "youtube audio failed");
+		bindAsyncButton(shell.youtubeHouseDiscoButton, function() {
+			return audioController.requestTabAudio(tabSources.youtubeHouseDisco);
+		}, "youtube house disco audio failed");
 		bindAsyncButton(shell.sunoLiveRadioButton, function() {
 			return audioController.requestTabAudio(tabSources.suno);
 		}, "suno live radio audio failed");
@@ -412,7 +415,9 @@ const createRuntime = function(options) {
 const appConfig = {
 	audio: {
 		youtubePlaylistUrl: "https://www.youtube.com/playlist?list=PLIEp7kQLbRSheVOUHZLuqj3fHO415l3Y-&autoplay=1",
+		youtubeHouseDiscoUrl: "https://www.youtube.com/watch?v=m5nnbvJWXHI&list=PLIEp7kQLbRSicV0ozGNgDaEX54AEUNYRz&autoplay=1",
 		youtubeWindowName: "webxrYoutubePlaylist",
+		youtubeHouseDiscoWindowName: "webxrYoutubeHouseDisco",
 		sunoLiveRadioUrl: "https://suno.com/labs/live-radio",
 		sunoWindowName: "webxrSunoLiveRadio"
 	},
@@ -610,7 +615,8 @@ const createApp = function(projectConfig) {
 		sceneGlbAssets: config.scene.sceneGlbAssets,
 		inputConfig: config.runtime,
 		tabSources: {
-			youtube: {key: "youtube", url: config.audio.youtubePlaylistUrl, windowName: config.audio.youtubeWindowName, sourceName: "YouTube playlist", blockedMessage: "youtube tab blocked", selectStatus: "select the YouTube tab and enable tab audio", activeStatus: "youtube tab audio active"},
+			youtube: {key: "youtube", url: config.audio.youtubePlaylistUrl, windowName: config.audio.youtubeWindowName, sourceName: "YT Synth", blockedMessage: "yt synth tab blocked", selectStatus: "select the YT Synth tab and enable tab audio", activeStatus: "yt synth tab audio active"},
+			youtubeHouseDisco: {key: "youtubeHouseDisco", url: config.audio.youtubeHouseDiscoUrl, windowName: config.audio.youtubeHouseDiscoWindowName, sourceName: "YT House/Disco", blockedMessage: "yt house disco tab blocked", selectStatus: "select the YT House/Disco tab and enable tab audio", activeStatus: "yt house disco tab audio active"},
 			suno: {key: "suno", url: config.audio.sunoLiveRadioUrl, windowName: config.audio.sunoWindowName, sourceName: "Suno Live Radio", blockedMessage: "suno live radio tab blocked", selectStatus: "select the Suno Live Radio tab and enable tab audio", activeStatus: "suno live radio tab audio active"}
 		}
 	});

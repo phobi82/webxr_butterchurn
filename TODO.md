@@ -75,6 +75,31 @@ Use this section to track the current small implementation blocks inside the lar
 - [ ] Step 1.4 Visually validate the new floor behavior and retune default values if needed
 - [ ] Step 1.5 Tune the default room anchor layout once the new surface budgets are observed in-headset
 
+### Slice 2: Surface-Specific Wall Motion
+
+- [x] Step 2.1 Move stereo-biased Club wall fixtures onto explicit left/right ceiling-height wall tracks instead of the generic room perimeter
+- [x] Step 2.2 Add front/back-biased side-wall lanes and longer wall-beam masks so wall motion reads less mechanically
+- [ ] Step 2.3 Retune those wall tracks after headset observation so side-wall motion feels intentional instead of mechanical
+
+### Slice 3: Ceiling And Floor Character
+
+- [x] Step 3.1 Broaden and soften ceiling wash masks so overhead light reads more like room fill
+- [x] Step 3.2 Strengthen floor spill with larger, softer, more numerous low-position projections
+- [ ] Step 3.3 Retune ceiling and floor balance after headset observation so neither surface dominates unnaturally
+
+### Slice 4: Preset Characterization
+
+- [x] Step 4.1 Pull the Club presets further apart with more distinct fixture mixes and motion density
+- [x] Step 4.2 Rework `Aurora Drift` toward aurora-like overhead light bands instead of generic soft wash
+- [ ] Step 4.3 Continue separating the remaining presets until each one is immediately recognizable in-headset
+
+### Slice 5: Passthrough-Native Effects
+
+- [x] Step 5.1 Give wash, beam, and strobe fixtures different passthrough-reveal strength so light hits can act as different kinds of windows into the real room
+- [x] Step 5.2 Implement moving reveal shutters, edge runners, silhouette cuts, and room-window beats as selectable fixture effect families
+- [x] Step 5.3 Move fixture-effect semantics into a shared lighting module so presets choose effect families and passthrough only resolves and renders them
+- [ ] Step 5.4 Retune the new effect families in-headset so each one stays readable without collapsing into generic blobs
+
 ## Working Protocol For Future AI Sessions
 
 1. Read this file first.
@@ -176,6 +201,7 @@ Definition of done:
 Goal: improve the visual shape language of Club lighting.
 
 - [x] Replace circle-only Club masks with oriented ellipses
+- [x] Add shared fixture effect families for shuttered washes, edge-running beams, silhouette cuts, and room-window beat accents
 - [ ] Improve edge shaping so washes, beams, and strobe accents have more distinct falloff
 - [ ] Add better softness controls per fixture type
 - [ ] Add stronger elongated beam masks for wall and side fixtures
@@ -335,28 +361,13 @@ Definition of done:
 
 - At least one advanced effect adds obvious value without making passthrough look fake or noisy.
 
-## Phase 17: User-Facing Control Expansion
-
-Goal: expose more power without turning the VR menu into a technical control panel.
-
-- [ ] Decide whether to add a second Club control page for advanced tuning
-- [ ] Consider a `Motion Amount` control
-- [ ] Consider a `Color Drift` or `Palette Speed` control
-- [ ] Consider a `Beam Focus` control for wall-beam sharpness and length
-- [ ] Consider a `Floor Boost` control if automatic tuning cannot guarantee floor visibility
-- [ ] Consider a `Comfort Mode` toggle that reduces strobe, color tempo, and peak intensity together
-- [ ] Keep default menu flow simple and hide advanced controls unless clearly needed
-
-Definition of done:
-
-- Additional controls add practical tuning value without overwhelming normal use.
-
 ## Phase 18: Preset Management And Authoring
 
 Goal: make the lighting system easier to extend once the core behavior is correct.
 
 - [ ] Define a cleaner preset schema for fixture groups, palettes, motion, and comfort limits
 - [ ] Add comments or lightweight docs describing how to create a new Club preset
+- [x] Move shared fixture-effect semantics into one dedicated module instead of keeping them split between presets and passthrough
 - [ ] Reduce repeated preset boilerplate where it is safe to do so
 - [ ] Add validation or safe defaults for incomplete preset definitions
 - [ ] Consider whether per-preset macro defaults should override global defaults
@@ -413,6 +424,7 @@ Definition of done:
 ## Notes For The Next Agent
 
 - The current highest-priority complaint is that the floor is still not visible enough.
+- The fixture-effect architecture was cleaned up into one shared module; do not spread effect semantics back across multiple files.
 - Do not spend the next session on more architecture unless it directly helps visible room lighting.
 - Prefer improvements that are easy to judge in-headset over deeper abstraction work.
 - If a task only changes internal structure but does not improve visible output, defer it.

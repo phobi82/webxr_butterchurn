@@ -462,7 +462,9 @@ const pushFixtureGroup = function(state, args) {
 		vertical: clampNumber(args.vertical == null ? 0.55 : args.vertical, 0, 1),
 		pulseAmount: clampNumber(args.pulseAmount == null ? 0 : args.pulseAmount, 0, 1),
 		strobeAmount: clampNumber(args.strobeAmount == null ? 0 : args.strobeAmount, 0, 1),
-		stereoBias: clampNumber(args.stereoBias == null ? 0 : args.stereoBias, -1, 1)
+		stereoBias: clampNumber(args.stereoBias == null ? 0 : args.stereoBias, -1, 1),
+		// Presets choose one shared effect family and passthrough resolves the rest.
+		effectMode: args.effectMode || ""
 	};
 	state.fixtureGroups.push(group);
 	return group;

@@ -14,7 +14,8 @@ const addFixture = function(state, type, anchorType, azimuth, color, intensity, 
 		vertical: options.vertical,
 		pulseAmount: options.pulseAmount,
 		strobeAmount: options.strobeAmount,
-		stereoBias: options.stereoBias
+		stereoBias: options.stereoBias,
+		effectMode: options.effectMode
 	});
 };
 
@@ -41,36 +42,42 @@ const getHybridClubMetrics = function(audioMetrics) {
 
 const auroraDrift = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
-	const baseHue = wrapUnit(0.58 + timeSeconds * 0.008 + metrics.colorMomentum * 0.03);
-	const fillHue = wrapUnit(baseHue + 0.18 + metrics.bassHit * 0.03);
-	const accentHue = wrapUnit(baseHue + 0.54 + metrics.transient * 0.04);
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.16, hslToRgb(baseHue, 0.82, 0.58), 0.34 + metrics.roomFill * 0.42 + metrics.kickGate * 0.14, 0.84, {softness: 0.24, sweep: 0.22});
-	addFixture(state, "wash", "floor", timeSeconds * -0.11 + 2.4, hslToRgb(fillHue, 0.76, 0.56), 0.22 + metrics.bassHit * 0.38 + metrics.roomFill * 0.12, 0.92, {softness: 0.28, sweep: 0.16});
-	addFixture(state, "beam", "wall", timeSeconds * 0.23 + 1.6, hslToRgb(wrapUnit(baseHue + 0.08), 0.92, 0.6), 0.18 + metrics.leftImpact * 0.68 + metrics.stereoWidth * 0.14, 0.42, {softness: 0.12, sweep: 0.52, vertical: 0.58, stereoBias: -1});
-	addFixture(state, "beam", "wall", -(timeSeconds * 0.21) + 5.1, hslToRgb(wrapUnit(baseHue + 0.34), 0.92, 0.62), 0.18 + metrics.rightImpact * 0.68 + metrics.stereoWidth * 0.14, 0.42, {softness: 0.12, sweep: 0.52, vertical: 0.58, stereoBias: 1});
-	addFixture(state, "strobe", "ceiling", timeSeconds * 0.28 + 0.9, hslToRgb(accentHue, 0.98, 0.7), 0.08 + metrics.transientGate * 0.26 + metrics.strobeGate * 0.18, 0.32, {softness: 0.08, sweep: 0.3, strobeAmount: metrics.strobeGate});
-	applyFixtureGroupsToLightingState(state, 0.22);
+	const bandHueA = wrapUnit(0.34 + timeSeconds * 0.004 + metrics.colorMomentum * 0.012);
+	const bandHueB = wrapUnit(bandHueA + 0.08);
+	const bandHueC = wrapUnit(bandHueA + 0.2);
+	const glowHue = wrapUnit(bandHueA + 0.48);
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.06 + 0.18, hslToRgb(bandHueA, 0.88, 0.56), 0.38 + metrics.roomFill * 0.28, 1.18, {softness: 0.42, sweep: 0.08, effectMode: FIXTURE_EFFECT_MODE_SHUTTERS});
+	addFixture(state, "wash", "ceiling", -(timeSeconds * 0.05) + 0.72, hslToRgb(bandHueB, 0.82, 0.6), 0.34 + metrics.roomFill * 0.24, 1.12, {softness: 0.44, sweep: 0.08, effectMode: FIXTURE_EFFECT_MODE_SHUTTERS});
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.04 + 1.34, hslToRgb(bandHueC, 0.76, 0.62), 0.28 + metrics.roomFill * 0.22, 1.04, {softness: 0.46, sweep: 0.08, effectMode: FIXTURE_EFFECT_MODE_SHUTTERS});
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.03) + 4.1, hslToRgb(glowHue, 0.54, 0.54), 0.1 + metrics.bassHit * 0.12 + metrics.roomFill * 0.06, 0.76, {softness: 0.44, sweep: 0.06, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "beam", "wall", timeSeconds * 0.08 + 1.9, hslToRgb(wrapUnit(bandHueA + 0.04), 0.72, 0.62), 0.06 + metrics.leftImpact * 0.24 + metrics.stereoWidth * 0.06, 0.34, {softness: 0.2, sweep: 0.24, vertical: 0.6, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "beam", "wall", -(timeSeconds * 0.08) + 4.7, hslToRgb(wrapUnit(bandHueB + 0.1), 0.72, 0.64), 0.06 + metrics.rightImpact * 0.24 + metrics.stereoWidth * 0.06, 0.34, {softness: 0.2, sweep: 0.24, vertical: 0.6, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	applyFixtureGroupsToLightingState(state, 0.34);
 };
 
 const discoStorm = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
-	const sweepHue = wrapUnit(0.96 + timeSeconds * (0.19 + metrics.colorMomentum * 0.06));
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.82 + metrics.bass * 0.9, hslToRgb(wrapUnit(sweepHue + 0.02), 0.98, 0.6), 0.24 + metrics.roomFill * 0.22 + metrics.bassHit * 0.2, 0.7, {softness: 0.18, sweep: 0.38});
-	addFixture(state, "wash", "floor", -(timeSeconds * 0.74) + 1.2, hslToRgb(wrapUnit(sweepHue + 0.46), 0.96, 0.58), 0.16 + metrics.kickGate * 0.34 + metrics.roomFill * 0.18, 0.82, {softness: 0.24, sweep: 0.28});
-	addFixture(state, "beam", "wall", -(timeSeconds * 0.91) + 1.9, hslToRgb(wrapUnit(sweepHue + 0.28), 0.98, 0.58), 0.2 + metrics.leftImpact * 0.62 + metrics.motionEnergy * 0.14, 0.34, {softness: 0.08, sweep: 0.9, vertical: 0.64, stereoBias: -1});
-	addFixture(state, "beam", "wall", timeSeconds * 1.14 + 4.0, hslToRgb(wrapUnit(sweepHue + 0.8), 0.98, 0.6), 0.2 + metrics.rightImpact * 0.62 + metrics.motionEnergy * 0.14, 0.34, {softness: 0.08, sweep: 0.9, vertical: 0.64, stereoBias: 1});
-	addFixture(state, "strobe", "ceiling", timeSeconds * 1.36 + 2.7, hslToRgb(wrapUnit(sweepHue + 0.62), 1, 0.72), 0.12 + metrics.transientGate * 0.38 + metrics.strobeGate * 0.26, 0.26, {softness: 0.05, sweep: 0.54, strobeAmount: metrics.strobeGate});
-	applyFixtureGroupsToLightingState(state, 0.18);
+	const sweepHue = wrapUnit(0.96 + timeSeconds * (0.24 + metrics.colorMomentum * 0.08));
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.92 + metrics.bass * 1.1, hslToRgb(wrapUnit(sweepHue + 0.02), 0.98, 0.6), 0.18 + metrics.roomFill * 0.18 + metrics.bassHit * 0.18, 0.62, {softness: 0.18, sweep: 0.48, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.82) + 1.2, hslToRgb(wrapUnit(sweepHue + 0.46), 0.98, 0.58), 0.14 + metrics.kickGate * 0.26 + metrics.roomFill * 0.12, 0.72, {softness: 0.22, sweep: 0.34, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "beam", "wall", -(timeSeconds * 1.12) + 1.4, hslToRgb(wrapUnit(sweepHue + 0.22), 1, 0.58), 0.26 + metrics.leftImpact * 0.7 + metrics.motionEnergy * 0.2, 0.32, {softness: 0.06, sweep: 1.2, vertical: 0.64, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", timeSeconds * 1.24 + 4.2, hslToRgb(wrapUnit(sweepHue + 0.72), 1, 0.6), 0.26 + metrics.rightImpact * 0.7 + metrics.motionEnergy * 0.2, 0.32, {softness: 0.06, sweep: 1.2, vertical: 0.64, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", timeSeconds * 0.84 + 0.6, hslToRgb(wrapUnit(sweepHue + 0.1), 0.96, 0.62), 0.18 + metrics.motionEnergy * 0.24 + metrics.transientGate * 0.18, 0.28, {softness: 0.05, sweep: 1.06, vertical: 0.76, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", -(timeSeconds * 0.88) + 5.4, hslToRgb(wrapUnit(sweepHue + 0.58), 0.96, 0.62), 0.18 + metrics.motionEnergy * 0.24 + metrics.transientGate * 0.18, 0.28, {softness: 0.05, sweep: 1.06, vertical: 0.76, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "strobe", "ceiling", timeSeconds * 1.54 + 2.7, hslToRgb(wrapUnit(sweepHue + 0.62), 1, 0.74), 0.16 + metrics.transientGate * 0.42 + metrics.strobeGate * 0.34, 0.24, {softness: 0.04, sweep: 0.66, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_WINDOW_BEAT});
+	addFixture(state, "strobe", "wall", timeSeconds * 1.18 + 1.9, hslToRgb(wrapUnit(sweepHue + 0.88), 1, 0.72), 0.08 + metrics.transientGate * 0.28 + metrics.strobeGate * 0.24, 0.22, {softness: 0.04, sweep: 0.74, vertical: 0.72, stereoBias: metrics.stereoBalance >= 0 ? -1 : 1, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_SILHOUETTE});
+	applyFixtureGroupsToLightingState(state, 0.14);
 };
 
 const neonWash = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
-	const baseHue = wrapUnit(0.08 + timeSeconds * (0.022 + metrics.colorMomentum * 0.04));
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.09, hslToRgb(baseHue, 0.9, 0.58), 0.36 + metrics.roomFill * 0.44, 1.02, {softness: 0.3, sweep: 0.18});
-	addFixture(state, "wash", "ceiling", -(timeSeconds * 0.07) + 2.8, hslToRgb(wrapUnit(baseHue + 0.22), 0.88, 0.6), 0.28 + metrics.roomFill * 0.36, 0.92, {softness: 0.28, sweep: 0.18});
-	addFixture(state, "wash", "floor", timeSeconds * 0.05 + 1.4, hslToRgb(wrapUnit(baseHue + 0.52), 0.78, 0.56), 0.2 + metrics.bassHit * 0.34 + metrics.kickGate * 0.16, 1.06, {softness: 0.34, sweep: 0.12});
-	addFixture(state, "beam", "wall", timeSeconds * 0.12 + 4.3, hslToRgb(wrapUnit(baseHue + 0.78), 0.92, 0.64), 0.12 + metrics.motionEnergy * 0.22 + metrics.stereoWidth * 0.16, 0.46, {softness: 0.16, sweep: 0.26, vertical: 0.52});
-	applyFixtureGroupsToLightingState(state, 0.26);
+	const baseHue = wrapUnit(0.08 + timeSeconds * (0.016 + metrics.colorMomentum * 0.03));
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.05, hslToRgb(baseHue, 0.96, 0.6), 0.46 + metrics.roomFill * 0.48, 1.24, {softness: 0.4, sweep: 0.12, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "ceiling", -(timeSeconds * 0.04) + 2.2, hslToRgb(wrapUnit(baseHue + 0.18), 0.92, 0.62), 0.42 + metrics.roomFill * 0.4, 1.18, {softness: 0.42, sweep: 0.12, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "floor", timeSeconds * 0.03 + 1.4, hslToRgb(wrapUnit(baseHue + 0.5), 0.86, 0.58), 0.28 + metrics.bassHit * 0.28 + metrics.kickGate * 0.1, 1.18, {softness: 0.42, sweep: 0.08, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.02) + 4.2, hslToRgb(wrapUnit(baseHue + 0.68), 0.74, 0.56), 0.22 + metrics.roomFill * 0.18 + metrics.bassHit * 0.18, 1.04, {softness: 0.44, sweep: 0.08, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "beam", "wall", timeSeconds * 0.06 + 4.3, hslToRgb(wrapUnit(baseHue + 0.8), 0.88, 0.64), 0.06 + metrics.motionEnergy * 0.14 + metrics.stereoWidth * 0.1, 0.42, {softness: 0.2, sweep: 0.18, vertical: 0.52, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	applyFixtureGroupsToLightingState(state, 0.34);
 };
 
 const stereoChase = function(state, timeSeconds, audioMetrics) {
@@ -78,49 +85,54 @@ const stereoChase = function(state, timeSeconds, audioMetrics) {
 	const centerBias = metrics.stereoBalance * 0.42;
 	const leftHue = wrapUnit(0.56 + timeSeconds * 0.07 + metrics.colorMomentum * 0.04);
 	const rightHue = wrapUnit(leftHue + 0.34);
-	addFixture(state, "beam", "wall", timeSeconds * 0.42 + 2.3 + centerBias, hslToRgb(leftHue, 0.94, 0.62), 0.18 + metrics.leftImpact * 0.82 + metrics.stereoWidth * 0.2, 0.36, {softness: 0.08, sweep: 1.08, vertical: 0.62, stereoBias: -1});
-	addFixture(state, "beam", "wall", -(timeSeconds * 0.39) + 5.0 + centerBias, hslToRgb(rightHue, 0.94, 0.62), 0.18 + metrics.rightImpact * 0.82 + metrics.stereoWidth * 0.2, 0.36, {softness: 0.08, sweep: 1.08, vertical: 0.62, stereoBias: 1});
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.18 + 0.7, hslToRgb(wrapUnit(leftHue + 0.12), 0.8, 0.56), 0.2 + metrics.roomFill * 0.24, 0.74, {softness: 0.2, sweep: 0.24});
-	addFixture(state, "wash", "floor", -(timeSeconds * 0.16) + 3.2, hslToRgb(wrapUnit(rightHue + 0.08), 0.78, 0.54), 0.16 + metrics.bassHit * 0.22 + metrics.roomFill * 0.16, 0.8, {softness: 0.24, sweep: 0.2});
-	addFixture(state, "strobe", "wall", timeSeconds * 0.52 + 1.5, hslToRgb(wrapUnit(leftHue + 0.5), 1, 0.72), 0.06 + metrics.transientGate * 0.26 + metrics.stereoWidth * 0.12, 0.24, {softness: 0.06, sweep: 0.42, vertical: 0.7, strobeAmount: metrics.strobeGate});
-	applyFixtureGroupsToLightingState(state, 0.2);
+	addFixture(state, "beam", "wall", timeSeconds * 0.56 + 2.1 + centerBias, hslToRgb(leftHue, 0.98, 0.62), 0.24 + metrics.leftImpact * 0.94 + metrics.stereoWidth * 0.24, 0.34, {softness: 0.06, sweep: 1.24, vertical: 0.62, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", -(timeSeconds * 0.53) + 5.2 + centerBias, hslToRgb(rightHue, 0.98, 0.62), 0.24 + metrics.rightImpact * 0.94 + metrics.stereoWidth * 0.24, 0.34, {softness: 0.06, sweep: 1.24, vertical: 0.62, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", -(timeSeconds * 0.34) + 1.4 + centerBias * 0.5, hslToRgb(wrapUnit(leftHue + 0.08), 0.9, 0.66), 0.12 + metrics.leftImpact * 0.5, 0.28, {softness: 0.08, sweep: 0.78, vertical: 0.76, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", timeSeconds * 0.32 + 4.6 + centerBias * 0.5, hslToRgb(wrapUnit(rightHue + 0.08), 0.9, 0.66), 0.12 + metrics.rightImpact * 0.5, 0.28, {softness: 0.08, sweep: 0.78, vertical: 0.76, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.12 + 0.7, hslToRgb(wrapUnit(leftHue + 0.14), 0.72, 0.56), 0.12 + metrics.roomFill * 0.18, 0.68, {softness: 0.22, sweep: 0.18, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.1) + 3.2, hslToRgb(wrapUnit(rightHue + 0.08), 0.72, 0.54), 0.1 + metrics.bassHit * 0.18 + metrics.roomFill * 0.12, 0.72, {softness: 0.22, sweep: 0.16, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "strobe", "wall", timeSeconds * 0.68 + 1.5, hslToRgb(wrapUnit(leftHue + 0.5), 1, 0.74), 0.08 + metrics.transientGate * 0.28 + metrics.stereoWidth * 0.14, 0.22, {softness: 0.05, sweep: 0.54, vertical: 0.72, stereoBias: metrics.stereoBalance >= 0 ? -1 : 1, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_WINDOW_BEAT});
+	applyFixtureGroupsToLightingState(state, 0.16);
 };
 
 const pulseStrobe = function(state, timeSeconds, audioMetrics) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const pulseHue = wrapUnit(0.02 + timeSeconds * (0.14 + metrics.colorMomentum * 0.08));
-	addFixture(state, "wash", "ceiling", timeSeconds * 0.28, hslToRgb(pulseHue, 0.96, 0.6), 0.24 + metrics.roomFill * 0.28 + metrics.kickGate * 0.12, 0.76, {softness: 0.18, sweep: 0.36});
-	addFixture(state, "wash", "floor", -(timeSeconds * 0.24) + 2.2, hslToRgb(wrapUnit(pulseHue + 0.28), 0.88, 0.56), 0.18 + metrics.bassHit * 0.3 + metrics.kickGate * 0.16, 0.86, {softness: 0.22, sweep: 0.32});
-	addFixture(state, "beam", "wall", timeSeconds * 0.67 + 1.4, hslToRgb(wrapUnit(pulseHue + 0.54), 0.98, 0.64), 0.18 + metrics.leftImpact * 0.52 + metrics.transientGate * 0.18, 0.28, {softness: 0.06, sweep: 1.14, vertical: 0.68, stereoBias: -1});
-	addFixture(state, "beam", "wall", -(timeSeconds * 0.62) + 4.8, hslToRgb(wrapUnit(pulseHue + 0.78), 0.98, 0.64), 0.18 + metrics.rightImpact * 0.52 + metrics.transientGate * 0.18, 0.28, {softness: 0.06, sweep: 1.14, vertical: 0.68, stereoBias: 1});
-	addFixture(state, "strobe", "ceiling", timeSeconds * 0.94 + 0.5, hslToRgb(wrapUnit(pulseHue + 0.42), 1, 0.76), 0.16 + metrics.transientGate * 0.34 + metrics.strobeGate * 0.4, 0.22, {softness: 0.04, sweep: 0.62, strobeAmount: metrics.strobeGate});
-	applyFixtureGroupsToLightingState(state, 0.17);
+	const strobeHue = wrapUnit(pulseHue + 0.42);
+	addFixture(state, "wash", "ceiling", timeSeconds * 0.18, hslToRgb(pulseHue, 0.92, 0.58), 0.14 + metrics.roomFill * 0.18 + metrics.kickGate * 0.1, 0.62, {softness: 0.16, sweep: 0.28, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.16) + 2.2, hslToRgb(wrapUnit(pulseHue + 0.24), 0.84, 0.54), 0.12 + metrics.bassHit * 0.18 + metrics.kickGate * 0.12, 0.72, {softness: 0.18, sweep: 0.24, effectMode: FIXTURE_EFFECT_MODE_NONE});
+	addFixture(state, "beam", "wall", timeSeconds * 0.78 + 1.4, hslToRgb(wrapUnit(pulseHue + 0.54), 1, 0.64), 0.2 + metrics.leftImpact * 0.58 + metrics.transientGate * 0.24, 0.24, {softness: 0.05, sweep: 1.28, vertical: 0.68, stereoBias: -1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "beam", "wall", -(timeSeconds * 0.74) + 4.8, hslToRgb(wrapUnit(pulseHue + 0.78), 1, 0.64), 0.2 + metrics.rightImpact * 0.58 + metrics.transientGate * 0.24, 0.24, {softness: 0.05, sweep: 1.28, vertical: 0.68, stereoBias: 1, effectMode: FIXTURE_EFFECT_MODE_EDGE_RUNNER});
+	addFixture(state, "strobe", "ceiling", timeSeconds * 1.12 + 0.5, hslToRgb(strobeHue, 1, 0.78), 0.22 + metrics.transientGate * 0.42 + metrics.strobeGate * 0.46, 0.2, {softness: 0.03, sweep: 0.74, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_WINDOW_BEAT});
+	addFixture(state, "strobe", "ceiling", -(timeSeconds * 1.04) + 2.1, hslToRgb(wrapUnit(strobeHue + 0.18), 1, 0.76), 0.16 + metrics.transientGate * 0.34 + metrics.strobeGate * 0.36, 0.18, {softness: 0.03, sweep: 0.68, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_WINDOW_BEAT});
+	addFixture(state, "strobe", "wall", timeSeconds * 0.92 + 3.0, hslToRgb(wrapUnit(strobeHue + 0.3), 1, 0.74), 0.1 + metrics.transientGate * 0.26 + metrics.strobeGate * 0.3, 0.18, {softness: 0.03, sweep: 0.84, vertical: 0.74, stereoBias: metrics.stereoBalance >= 0 ? 1 : -1, strobeAmount: metrics.strobeGate, effectMode: FIXTURE_EFFECT_MODE_SILHOUETTE});
+	applyFixtureGroupsToLightingState(state, 0.12);
 };
 
 const lightingPresetDefinitions = [
 	{
 		name: formatFunctionLabel(auroraDrift.name),
-		description: "Slow hybrid wash with stereo wall accents",
+		description: "Slow aurora-like ceiling light bands with cool floor glow",
 		buildState: auroraDrift
 	},
 	{
 		name: formatFunctionLabel(discoStorm.name),
-		description: "Fast colorful disco with hard transient accents",
+		description: "Busy disco rig with mixed beams and hard strobe hits",
 		buildState: discoStorm
 	},
 	{
 		name: formatFunctionLabel(neonWash.name),
-		description: "Broad room-filling neon wash",
+		description: "Huge saturated room wash with minimal beam detail",
 		buildState: neonWash
 	},
 	{
 		name: formatFunctionLabel(stereoChase.name),
-		description: "Stereo-driven wall chase and side beams",
+		description: "Aggressive left-right wall chase with mirrored side beams",
 		buildState: stereoChase
 	},
 	{
 		name: formatFunctionLabel(pulseStrobe.name),
-		description: "Beat-heavy club pulses with controlled strobe peaks",
+		description: "Peak-heavy strobe rig with narrow beams and sharp hits",
 		buildState: pulseStrobe
 	}
 ];

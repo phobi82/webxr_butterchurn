@@ -169,15 +169,17 @@ const getClubSurfaceBudget = function(surfaceKey, audioMetrics, clubState) {
 	const clubIntensity = clampNumber((audioMetrics.level || 0) * 0.4 + (audioMetrics.beatPulse || 0) * 0.3 + 0.3, 0.3, 1);
 	if (surfaceKey === "floor") {
 		return {
-			strengthScale: 1.04 + fillMix * 0.18 + (audioMetrics.bass || 0) * 0.12 + (audioMetrics.bassHit || 0) * 0.22 + (audioMetrics.kickGate || 0) * 0.14,
-			minimumStrength: 0.12 + clubIntensity * 0.1 + fillMix * 0.08 + (audioMetrics.roomFill || 0) * 0.06,
-			radiusScale: 1.18 + fillMix * 0.08 + (audioMetrics.bass || 0) * 0.1,
-			softnessBias: 0.03,
-			radialScale: 0.72,
-			depthScale: 0.62,
-			variantCountBoost: 1,
-			washRadiusXScale: 1.12,
-			washRadiusYScale: 1.34,
+			strengthScale: 1.12 + fillMix * 0.22 + (audioMetrics.bass || 0) * 0.14 + (audioMetrics.bassHit || 0) * 0.26 + (audioMetrics.kickGate || 0) * 0.16,
+			minimumStrength: 0.14 + clubIntensity * 0.12 + fillMix * 0.1 + (audioMetrics.roomFill || 0) * 0.08,
+			radiusScale: 1.32 + fillMix * 0.12 + (audioMetrics.bass || 0) * 0.14,
+			softnessBias: 0.05,
+			radialScale: 0.66,
+			depthScale: 0.48,
+			washVariantCountBoost: 2,
+			beamVariantCountBoost: 1,
+			strobeVariantCountBoost: 1,
+			washRadiusXScale: 1.24,
+			washRadiusYScale: 1.62,
 			beamRadiusXScale: 1,
 			beamRadiusYScale: 1,
 			strobeRadiusXScale: 1.04,
@@ -192,25 +194,29 @@ const getClubSurfaceBudget = function(surfaceKey, audioMetrics, clubState) {
 			softnessBias: -0.01,
 			radialScale: 1,
 			depthScale: 1,
-			variantCountBoost: 0,
+			washVariantCountBoost: 0,
+			beamVariantCountBoost: 0,
+			strobeVariantCountBoost: 0,
 			washRadiusXScale: 0.92,
 			washRadiusYScale: 0.84,
-			beamRadiusXScale: 1.32,
-			beamRadiusYScale: 0.72,
+			beamRadiusXScale: 1.58,
+			beamRadiusYScale: 0.56,
 			strobeRadiusXScale: 0.94,
 			strobeRadiusYScale: 0.88
 		};
 	}
 	return {
-		strengthScale: 0.88 + fillMix * 0.16 + (audioMetrics.roomFill || 0) * 0.1,
-		minimumStrength: 0.04 + fillMix * 0.03,
-		radiusScale: 1.02 + fillMix * 0.06,
-		softnessBias: 0.02,
-		radialScale: 0.94,
-		depthScale: 0.92,
-		variantCountBoost: 0,
-		washRadiusXScale: 1.18,
-		washRadiusYScale: 1.08,
+		strengthScale: 0.92 + fillMix * 0.18 + (audioMetrics.roomFill || 0) * 0.12,
+		minimumStrength: 0.05 + fillMix * 0.04,
+		radiusScale: 1.12 + fillMix * 0.08,
+		softnessBias: 0.05,
+		radialScale: 0.98,
+		depthScale: 0.96,
+		washVariantCountBoost: 1,
+		beamVariantCountBoost: 0,
+		strobeVariantCountBoost: 0,
+		washRadiusXScale: 1.36,
+		washRadiusYScale: 1.22,
 		beamRadiusXScale: 0.96,
 		beamRadiusYScale: 1.04,
 		strobeRadiusXScale: 1,
@@ -238,6 +244,16 @@ const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix, surf
 			z: Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale * surfaceBudget.depthScale
 		};
 	}
+	if (Math.abs(group.stereoBias || 0) > 0.1) {
+		const trackDepth = Math.sin(azimuth) * PASSTHROUGH_ROOM_HALF_DEPTH * radialScale * surfaceBudget.depthScale;
+		const depthSign = trackDepth < 0 ? -1 : 1;
+		const depthLane = 0.26 + Math.abs(trackDepth / Math.max(PASSTHROUGH_ROOM_HALF_DEPTH, 0.0001)) * 0.74;
+		return {
+			x: PASSTHROUGH_ROOM_HALF_WIDTH * (group.stereoBias < 0 ? -1 : 1),
+			y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
+			z: clampNumber(depthSign * PASSTHROUGH_ROOM_HALF_DEPTH * depthLane, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
+		};
+	}
 	const wallScaleX = PASSTHROUGH_ROOM_HALF_WIDTH / Math.max(Math.abs(Math.cos(azimuth)), 0.0001);
 	const wallScaleZ = PASSTHROUGH_ROOM_HALF_DEPTH / Math.max(Math.abs(Math.sin(azimuth)), 0.0001);
 	const wallScale = Math.min(wallScaleX, wallScaleZ) * radialScale;
@@ -263,10 +279,14 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 	}
 	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * 0.55, 0, 0.55);
 	const typeIntensityScale = group.type === "wash" ? (0.78 + fillMix * 0.24) : (group.type === "beam" ? (0.92 - fillMix * 0.08) : 0.92);
-	const variantCount = Math.min(PASSTHROUGH_MAX_SPOTS, (group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1)) + surfaceBudget.variantCountBoost);
+	const variantCount = Math.min(
+		PASSTHROUGH_MAX_SPOTS,
+		(group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1)) +
+		(group.type === "wash" ? (surfaceBudget.washVariantCountBoost || 0) : (group.type === "beam" ? (surfaceBudget.beamVariantCountBoost || 0) : (surfaceBudget.strobeVariantCountBoost || 0)))
+	);
 	for (let i = 0; i < variantCount && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
 		const variantCenter = variantCount === 1 ? 0 : (i / (variantCount - 1)) - 0.5;
-		const variantOffset = variantCenter * sweep * (group.type === "beam" ? 0.52 : (surfaceKey === "floor" ? 0.3 : 0.24));
+		const variantOffset = variantCenter * sweep * (group.type === "beam" ? (surfaceKey === "wall" ? 0.64 : 0.52) : (surfaceKey === "floor" ? 0.3 : 0.24));
 		const point = getRoomPointForFixtureGroup(group, variantOffset, fillMix, surfaceBudget, stereoBiasOffset);
 		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
 		if (!projectedUv) {
@@ -302,6 +322,13 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 		}
 		radiusX = clampNumber(radiusX * surfaceBudget.radiusScale * (surfaceKey === "floor" && group.type === "wash" ? 1.08 : 1), 0.08, 0.5);
 		radiusY = clampNumber(radiusY * surfaceBudget.radiusScale * (surfaceKey === "floor" ? 1.12 : 1), 0.04, 0.48);
+		const effectState = getFixtureEffectState({
+			group: group,
+			audioMetrics: args.audioMetrics,
+			fillMix: fillMix,
+			variantCenter: variantCenter,
+			stereoBiasOffset: stereoBiasOffset
+		});
 		target.push({
 			x: projectedUv.x,
 			y: projectedUv.y,
@@ -312,6 +339,11 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			radiusY: radiusY,
 			rotation: rotation,
 			softness: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
+			revealStrength: effectState.revealStrength,
+			effectType: effectState.type,
+			effectPhase: effectState.phase,
+			effectDensity: effectState.density,
+			effectAmount: effectState.amount,
 			strength: clampNumber(
 				surfaceBudget.minimumStrength +
 				baseStrength * surfaceBudget.strengthScale * typeIntensityScale * strobeBoost * (group.type === "beam" ? 0.72 : 1) * (1 - Math.abs(variantCenter) * 0.16),
@@ -456,6 +488,11 @@ const createPassthroughController = function(options) {
 					radiusY: anchoredPoint.radius,
 					rotation: 0,
 					softness: 0.12,
+					revealStrength: 0.94,
+					effectType: 0,
+					effectPhase: 0,
+					effectDensity: 0,
+					effectAmount: 0,
 					strength: anchoredPoint.strength
 				});
 			}
@@ -620,12 +657,16 @@ const createPassthroughOverlayRenderer = function() {
 	let spotCentersLoc = null;
 	let spotColorsLoc = null;
 	let spotParamsLoc = null;
+	let spotRevealStrengthsLoc = null;
+	let spotEffectParamsLoc = null;
 	let buffer = null;
 	const maskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const spotCenters = new Float32Array(PASSTHROUGH_MAX_SPOTS * 2);
 	const spotColors = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
 	const spotParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
+	const spotRevealStrengths = new Float32Array(PASSTHROUGH_MAX_SPOTS);
+	const spotEffectParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
 	const uniformTintColor = new Float32Array(3);
 
 	const fragmentSource = [
@@ -641,6 +682,8 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform vec4 spotColors[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec2 spotCenters[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotRevealStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotEffectParams[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){",
 		"float radius=max(params.x,0.0001);",
@@ -661,6 +704,7 @@ const createPassthroughOverlayRenderer = function() {
 		"float edge=max(softness/max(radiusX,radiusY),0.0001);",
 		"return 1.0-smoothstep(max(0.0,1.0-edge),1.0,normalizedDistance);",
 		"}",
+		fixtureEffectFragmentSource,
 		"void main(){",
 		"float reveal=visibleShare;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
@@ -673,9 +717,10 @@ const createPassthroughOverlayRenderer = function() {
 		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
 		"if(float(i)>=spotCount){break;}",
 		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
-		"float spotStrength=spotColors[i].a*spotMask*reveal;",
+		"vec2 effectMask=spotEffect(vScreenUv,spotCenters[i],spotParams[i],spotEffectParams[i]);",
+		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*reveal;",
 		"color+=spotColors[i].rgb*spotStrength;",
-		"lightReveal=max(lightReveal,clamp(spotStrength*1.65,0.0,1.0));",
+		"lightReveal=max(lightReveal,clamp(spotColors[i].a*spotMask*effectMask.y*spotRevealStrengths[i]*1.65*reveal,0.0,1.0));",
 		"}",
 		"gl_FragColor=vec4(color,darkAlpha*reveal*(1.0-lightReveal));",
 		"}"
@@ -697,6 +742,8 @@ const createPassthroughOverlayRenderer = function() {
 			spotCentersLoc = gl.getUniformLocation(program, "spotCenters");
 			spotColorsLoc = gl.getUniformLocation(program, "spotColors");
 			spotParamsLoc = gl.getUniformLocation(program, "spotParams");
+			spotRevealStrengthsLoc = gl.getUniformLocation(program, "spotRevealStrengths");
+			spotEffectParamsLoc = gl.getUniformLocation(program, "spotEffectParams");
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
 		draw: function(renderState) {
@@ -716,6 +763,12 @@ const createPassthroughOverlayRenderer = function() {
 			}
 			for (let i = 0; i < spotParams.length; i += 1) {
 				spotParams[i] = 0;
+			}
+			for (let i = 0; i < spotRevealStrengths.length; i += 1) {
+				spotRevealStrengths[i] = 0;
+			}
+			for (let i = 0; i < spotEffectParams.length; i += 1) {
+				spotEffectParams[i] = 0;
 			}
 			for (let i = 0; i < spotColors.length; i += 1) {
 				spotColors[i] = 0;
@@ -737,6 +790,11 @@ const createPassthroughOverlayRenderer = function() {
 				spotColors[i * 4 + 1] = renderState.spots[i].g;
 				spotColors[i * 4 + 2] = renderState.spots[i].b;
 				spotColors[i * 4 + 3] = renderState.spots[i].strength;
+				spotRevealStrengths[i] = renderState.spots[i].revealStrength == null ? 1 : renderState.spots[i].revealStrength;
+				spotEffectParams[i * 4] = renderState.spots[i].effectType || 0;
+				spotEffectParams[i * 4 + 1] = renderState.spots[i].effectPhase || 0;
+				spotEffectParams[i * 4 + 2] = renderState.spots[i].effectDensity || 0;
+				spotEffectParams[i * 4 + 3] = renderState.spots[i].effectAmount || 0;
 			}
 			uniformTintColor[0] = renderState.uniformTintColor[0];
 			uniformTintColor[1] = renderState.uniformTintColor[1];
@@ -760,6 +818,8 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform2fv(spotCentersLoc, spotCenters);
 			gl.uniform4fv(spotColorsLoc, spotColors);
 			gl.uniform4fv(spotParamsLoc, spotParams);
+			gl.uniform1fv(spotRevealStrengthsLoc, spotRevealStrengths);
+			gl.uniform4fv(spotEffectParamsLoc, spotEffectParams);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);

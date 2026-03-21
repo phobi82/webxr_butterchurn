@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Moved shared Club fixture-effect semantics into a dedicated `xr-light-fixture-effects.js` module, so presets now choose named effect families and the passthrough renderer consumes one centralized effect contract for shutters, edge runners, silhouette cuts, and room-window beats.
+- Renamed the desktop `YouTube Playlist` shortcut to `YT Synth` and added a second desktop tab-audio shortcut `YT House/Disco` that opens the configured house/disco playlist on its selected first track.
+
 ## [0.7.0] - 2026-03-21
 
 ### Added
@@ -25,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the audio-reactive `Uniform -> Music` passthrough blend to follow `beatPulse` specifically instead of the broader weighted audio drive, and renamed the VR menu readout from `Beat` to `Beat Pulse` for clarity.
 - Strengthened `Left Hit` and `Right Hit` so stereo-heavy material now produces more obvious side-biased Club beam intensity and a small extra left/right spatial offset in passthrough.
 - Changed the startup defaults to `Passthrough = Uniform -> Music` with `Intensity = -100%`, and `Scene Lighting = Club` with `Pulse Strobe` as the initial light preset.
+- Moved stereo-biased Club wall fixtures onto explicit left/right ceiling-height wall tracks, so side accents no longer wander around the generic room perimeter.
+- Pushed the Club side-wall tracks toward clearer front/back lanes and stretched the wall beam masks further, so side accents read less mechanically and more like directed wall beams.
+- Broadened ceiling wash masks and strengthened floor spill with larger, softer, more numerous low-position projections, so overhead fill and underglow separate more clearly.
+- Reworked `Aurora Drift` toward aurora-like overhead light bands, so that preset now reads less like a generic soft wash and more like a specific atmospheric lighting variant.
+- Differentiated passthrough reveal strength by fixture type, so washes, beams, and strobes now open the real room through the darkening with visibly different behavior instead of only adding colored light.
 
 ### Fixed
 - Re-anchored passthrough `Spots` lighting to the real `local-floor` room space with approximate ceiling, floor, and side-wall anchors, so real headset movement changes the colored passthrough spots like room lights while stick locomotion no longer shifts them through passthrough.
