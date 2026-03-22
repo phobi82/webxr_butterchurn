@@ -328,9 +328,9 @@ const createRuntime = function(options) {
 		const delta = state.lastRenderTime === 0 ? 0 : (time - state.lastRenderTime) / 1000;
 		state.lastRenderTime = time;
 		state.sceneTimeSeconds = time * 0.001;
+		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: pose, callbacks: xrMenuActionCallbacks});
 		applyLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
-		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: renderPose, callbacks: xrMenuActionCallbacks});
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
 		}

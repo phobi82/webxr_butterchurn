@@ -84,6 +84,26 @@ const createSliderMenuControlState = function(args) {
 	};
 };
 
+const appendSliderMenuControls = function(targetControls, sliderControls) {
+	sliderControls = sliderControls || [];
+	for (let i = 0; i < sliderControls.length; i += 1) {
+		const sliderControl = sliderControls[i];
+		if (!sliderControl || !sliderControl.control) {
+			continue;
+		}
+		targetControls.push(createSliderMenuControlState({
+			key: sliderControl.control.key,
+			label: sliderControl.control.label,
+			valueText: formatMenuPercentText(sliderControl.control.value),
+			sliderU: sliderControl.sliderU || 0,
+			minLabel: sliderControl.control.minLabel,
+			maxLabel: sliderControl.control.maxLabel,
+			hoveredBool: !!sliderControl.hoveredBool,
+			activeBool: !!sliderControl.activeBool
+		}));
+	}
+};
+
 const createJumpModeMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
@@ -214,30 +234,7 @@ const createPassthroughMenuSectionState = function(args) {
 			})
 		}));
 	}
-	if (uiState.primaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: uiState.primaryControl.key,
-			label: uiState.primaryControl.label,
-			valueText: formatMenuPercentText(uiState.primaryControl.value),
-			sliderU: args.primarySliderU || 0,
-			minLabel: uiState.primaryControl.minLabel,
-			maxLabel: uiState.primaryControl.maxLabel,
-			hoveredBool: !!args.primaryHoverBool,
-			activeBool: !!args.primaryActiveBool
-		}));
-	}
-	if (uiState.secondaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: uiState.secondaryControl.key,
-			label: uiState.secondaryControl.label,
-			valueText: formatMenuPercentText(uiState.secondaryControl.value),
-			sliderU: args.secondarySliderU || 0,
-			minLabel: uiState.secondaryControl.minLabel,
-			maxLabel: uiState.secondaryControl.maxLabel,
-			hoveredBool: !!args.secondaryHoverBool,
-			activeBool: !!args.secondaryActiveBool
-		}));
-	}
+	appendSliderMenuControls(controls, args.sliderControls);
 	return createMenuSectionState({
 		key: "passthrough",
 		title: "Passthrough",
@@ -265,42 +262,7 @@ const createSceneLightingMenuSectionState = function(args) {
 			hoveredAction: args.hoveredLightPresetAction || ""
 		})
 	];
-	if (args.primaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: args.primaryControl.key,
-			label: args.primaryControl.label,
-			valueText: formatMenuPercentText(args.primaryControl.value),
-			sliderU: args.primarySliderU || 0,
-			minLabel: args.primaryControl.minLabel,
-			maxLabel: args.primaryControl.maxLabel,
-			hoveredBool: !!args.primaryHoverBool,
-			activeBool: !!args.primaryActiveBool
-		}));
-	}
-	if (args.secondaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: args.secondaryControl.key,
-			label: args.secondaryControl.label,
-			valueText: formatMenuPercentText(args.secondaryControl.value),
-			sliderU: args.secondarySliderU || 0,
-			minLabel: args.secondaryControl.minLabel,
-			maxLabel: args.secondaryControl.maxLabel,
-			hoveredBool: !!args.secondaryHoverBool,
-			activeBool: !!args.secondaryActiveBool
-		}));
-	}
-	if (args.tertiaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: args.tertiaryControl.key,
-			label: args.tertiaryControl.label,
-			valueText: formatMenuPercentText(args.tertiaryControl.value),
-			sliderU: args.tertiarySliderU || 0,
-			minLabel: args.tertiaryControl.minLabel,
-			maxLabel: args.tertiaryControl.maxLabel,
-			hoveredBool: !!args.tertiaryHoverBool,
-			activeBool: !!args.tertiaryActiveBool
-		}));
-	}
+	appendSliderMenuControls(controls, args.sliderControls);
 	return createMenuSectionState({
 		key: "sceneLighting",
 		title: "Scene Lighting",
@@ -326,12 +288,7 @@ const createLowerMenuSections = function(args) {
 			uiState: args.passthroughUiState,
 			hoveredBlendModeAction: args.hoveredPassthroughBlendModeAction,
 			hoveredUniformBlendModeKey: args.hoveredPassthroughUniformBlendModeKey,
-			primarySliderU: args.passthroughPrimarySliderU,
-			secondarySliderU: args.passthroughSecondarySliderU,
-			primaryHoverBool: args.passthroughPrimaryHoverBool,
-			secondaryHoverBool: args.passthroughSecondaryHoverBool,
-			primaryActiveBool: args.passthroughPrimaryActiveBool,
-			secondaryActiveBool: args.passthroughSecondaryActiveBool
+			sliderControls: args.passthroughControls
 		}),
 		createEyeDistanceMenuSectionState({
 			value: args.eyeDistanceMeters,
@@ -353,18 +310,7 @@ const createLowerMenuSections = function(args) {
 			currentLightPresetName: args.currentLightPresetName,
 			currentLightPresetDescription: args.currentLightPresetDescription,
 			hoveredLightPresetAction: args.hoveredLightPresetAction,
-			primaryControl: args.sceneLightingPrimaryControl,
-			secondaryControl: args.sceneLightingSecondaryControl,
-			tertiaryControl: args.sceneLightingTertiaryControl,
-			primarySliderU: args.sceneLightingPrimarySliderU,
-			secondarySliderU: args.sceneLightingSecondarySliderU,
-			tertiarySliderU: args.sceneLightingTertiarySliderU,
-			primaryHoverBool: args.sceneLightingPrimaryHoverBool,
-			secondaryHoverBool: args.sceneLightingSecondaryHoverBool,
-			tertiaryHoverBool: args.sceneLightingTertiaryHoverBool,
-			primaryActiveBool: args.sceneLightingPrimaryActiveBool,
-			secondaryActiveBool: args.sceneLightingSecondaryActiveBool,
-			tertiaryActiveBool: args.sceneLightingTertiaryActiveBool
+			sliderControls: args.sceneLightingControls
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,

@@ -52,93 +52,100 @@ const getPassthroughVisibleShare = function(state, audioDrive) {
 const getPassthroughControlDefinitions = function(state) {
 	if (state.blendModeKey === "flashlight") {
 		return {
-			primaryControl: {
-				key: "flashlightRadius",
-				label: "Radius",
-				value: state.flashlightRadius,
-				min: 0.05,
-				max: 0.45,
-				minLabel: "Tight",
-				maxLabel: "Wide"
-			},
-			secondaryControl: {
-				key: "flashlightSoftness",
-				label: "Softness",
-				value: state.flashlightSoftness,
-				min: 0.01,
-				max: 0.35,
-				minLabel: "Hard",
-				maxLabel: "Soft"
-			},
+			controls: [
+				{
+					key: "flashlightRadius",
+					label: "Radius",
+					value: state.flashlightRadius,
+					min: 0.05,
+					max: 0.45,
+					minLabel: "Tight",
+					maxLabel: "Wide"
+				},
+				{
+					key: "flashlightSoftness",
+					label: "Softness",
+					value: state.flashlightSoftness,
+					min: 0.01,
+					max: 0.35,
+					minLabel: "Hard",
+					maxLabel: "Soft"
+				}
+			],
 			uniformBlendModeVisibleBool: false
 		};
 	}
 	if (state.uniformBlendModeKey === "audioReactive") {
 		return {
-			primaryControl: {
-				key: "audioReactiveIntensity",
-				label: "Intensity",
-				value: state.audioReactiveIntensity,
-				min: -1,
-				max: 1,
-				minLabel: "Vis -> Passthrough",
-				maxLabel: "Passthrough -> Vis"
-			},
-			secondaryControl: null,
+			controls: [
+				{
+					key: "audioReactiveIntensity",
+					label: "Intensity",
+					value: state.audioReactiveIntensity,
+					min: -1,
+					max: 1,
+					minLabel: "Vis -> Passthrough",
+					maxLabel: "Passthrough -> Vis"
+				}
+			],
 			uniformBlendModeVisibleBool: true
 		};
 	}
 	return {
-		primaryControl: {
-			key: "manualMix",
-			label: "Mix",
-			value: state.manualMix,
-			min: 0,
-			max: 1,
-			minLabel: "Butterchurn",
-			maxLabel: "Passthrough"
-		},
-		secondaryControl: null,
-			uniformBlendModeVisibleBool: true
+		controls: [
+			{
+				key: "manualMix",
+				label: "Mix",
+				value: state.manualMix,
+				min: 0,
+				max: 1,
+				minLabel: "Butterchurn",
+				maxLabel: "Passthrough"
+			}
+		],
+		uniformBlendModeVisibleBool: true
 	};
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {
 	if (state.lightingModeKey === "none") {
 		return {
-			primaryControl: null,
-			secondaryControl: null,
-			tertiaryControl: null
+			controls: [],
+			effectSemanticControls: []
 		};
 	}
 	const effectSemanticControlsVisibleBool = state.lightingModeKey === "club" || state.lightingModeKey === "spots";
 	return {
-		primaryControl: {
-			key: "lightingDarkness",
-			label: "Darkness",
-			value: state.lightingDarkness == null ? 0.05 : state.lightingDarkness,
-			min: 0,
-			max: 1,
-			minLabel: "Lights Only",
-			maxLabel: "Additive"
-		},
-		secondaryControl: effectSemanticControlsVisibleBool ? {
-			key: "effectTintShare",
-			label: "Tint",
-			value: state.effectTintShare == null ? 1 : state.effectTintShare,
-			min: 0,
-			max: 1,
-			minLabel: "Off",
-			maxLabel: "Full"
-		} : null,
-		tertiaryControl: effectSemanticControlsVisibleBool ? {
-			key: "effectRevealShare",
-			label: "Reveal",
-			value: state.effectRevealShare == null ? 1 : state.effectRevealShare,
-			min: 0,
-			max: 1,
-			minLabel: "Off",
-			maxLabel: "Full"
-		} : null
+		controls: [
+			{
+				key: "lightingDarkness",
+				label: "Darkness",
+				value: state.lightingDarkness == null ? 0.05 : state.lightingDarkness,
+				min: 0,
+				max: 1,
+				minLabel: "Lights Only",
+				maxLabel: "Additive"
+			}
+		],
+		effectSemanticControls: effectSemanticControlsVisibleBool ? [
+			{
+				key: "effectTintShare",
+				label: "Tint",
+				value: state.effectTintShare == null ? 1 : state.effectTintShare,
+				min: 0,
+				max: 1,
+				minLabel: "Off",
+				maxLabel: "Full"
+			},
+			{
+				key: "effectRevealShare",
+				label: "Reveal",
+				value: state.effectRevealShare == null ? 1 : state.effectRevealShare,
+				min: 0,
+				max: 1,
+				minLabel: "Off",
+				maxLabel: "Full"
+			}
+		] : []
 	};
 };

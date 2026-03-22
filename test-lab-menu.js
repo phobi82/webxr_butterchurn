@@ -50,40 +50,21 @@ const createTestLabMenuSections = function(args) {
 		valueText: args.effectSemanticModeLabel || "Current",
 		hoveredAction: args.hoveredEffectSemanticModeAction || ""
 	}));
-	if (args.sceneLightingPrimaryControl) {
+	const effectReviewSliderControls = (args.sceneLightingControls || []).concat(args.effectSemanticControls || []);
+	for (let i = 0; i < effectReviewSliderControls.length; i += 1) {
+		const sliderControl = effectReviewSliderControls[i];
+		if (!sliderControl || !sliderControl.control) {
+			continue;
+		}
 		controls.push(createSliderMenuControlState({
-			key: args.sceneLightingPrimaryControl.key,
-			label: args.sceneLightingPrimaryControl.label,
-			valueText: formatMenuPercentText(args.sceneLightingPrimaryControl.value),
-			sliderU: args.sceneLightingPrimarySliderU || 0,
-			minLabel: args.sceneLightingPrimaryControl.minLabel,
-			maxLabel: args.sceneLightingPrimaryControl.maxLabel,
-			hoveredBool: !!args.sceneLightingPrimaryHoverBool,
-			activeBool: !!args.sceneLightingPrimaryActiveBool
-		}));
-	}
-	if (args.sceneLightingSecondaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: args.sceneLightingSecondaryControl.key,
-			label: args.sceneLightingSecondaryControl.label,
-			valueText: formatMenuPercentText(args.sceneLightingSecondaryControl.value),
-			sliderU: args.sceneLightingSecondarySliderU || 0,
-			minLabel: args.sceneLightingSecondaryControl.minLabel,
-			maxLabel: args.sceneLightingSecondaryControl.maxLabel,
-			hoveredBool: !!args.sceneLightingSecondaryHoverBool,
-			activeBool: !!args.sceneLightingSecondaryActiveBool
-		}));
-	}
-	if (args.sceneLightingTertiaryControl) {
-		controls.push(createSliderMenuControlState({
-			key: args.sceneLightingTertiaryControl.key,
-			label: args.sceneLightingTertiaryControl.label,
-			valueText: formatMenuPercentText(args.sceneLightingTertiaryControl.value),
-			sliderU: args.sceneLightingTertiarySliderU || 0,
-			minLabel: args.sceneLightingTertiaryControl.minLabel,
-			maxLabel: args.sceneLightingTertiaryControl.maxLabel,
-			hoveredBool: !!args.sceneLightingTertiaryHoverBool,
-			activeBool: !!args.sceneLightingTertiaryActiveBool
+			key: sliderControl.control.key,
+			label: sliderControl.control.label,
+			valueText: formatMenuPercentText(sliderControl.control.value),
+			sliderU: sliderControl.sliderU || 0,
+			minLabel: sliderControl.control.minLabel,
+			maxLabel: sliderControl.control.maxLabel,
+			hoveredBool: !!sliderControl.hoveredBool,
+			activeBool: !!sliderControl.activeBool
 		}));
 	}
 	return [

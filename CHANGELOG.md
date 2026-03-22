@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed the XR menu slider interaction regression from the generic slider refactor by separating raw hover hits from captured slider drags again, so in-headset slider hover and trigger-drag both keep working without falling back to slider-specific state paths.
+- Made the shared menu slider hitbox vertically symmetric around the visible track again, so VR and desktop slider hover no longer feel biased downward.
+- Increased the shared top spacing before slider rows slightly, so stacked menu controls no longer feel cramped above the slider track.
+
+## [0.7.1] - 2026-03-22
+
 ### Added
 - Added a separate `TestLab.html` page with isolated single-effect presets plus direct previous/next effect controls, so individual lighting behaviors can be inspected through the normal XR/passthrough pipeline on desktop and in VR without embedding the test UI into the main application.
 - Added a dedicated reduced TestLab menu configuration, so the effect-lab page no longer shows the full production VR menu and can focus on effect selection, the key lighting slider, and relevant audio meters.
