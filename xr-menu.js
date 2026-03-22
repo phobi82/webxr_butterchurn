@@ -531,7 +531,12 @@ const createMenuController = function(options) {
 		cachedSceneLightingState: {
 			lightPresetNames: ["Aurora Drift"],
 			currentLightPresetIndex: 0,
-			currentLightPresetDescription: "Slow colorful overhead drift"
+			currentLightPresetName: "Aurora Drift",
+			currentLightPresetDescription: "Slow colorful overhead drift",
+			currentLightPresetFamilyName: "Aurora Drift",
+			currentLightPresetVariantKey: "",
+			currentLightPresetVariantLabel: "",
+			currentLightPresetSurfaceKey: ""
 		}
 	};
 	const menuPlane = {
@@ -566,7 +571,12 @@ const createMenuController = function(options) {
 			state.cachedSceneLightingState = {
 				lightPresetNames: externalState.lightPresetNames,
 				currentLightPresetIndex: externalState.currentLightPresetIndex || 0,
-				currentLightPresetDescription: externalState.currentLightPresetDescription || ""
+				currentLightPresetName: externalState.currentLightPresetName || "",
+				currentLightPresetDescription: externalState.currentLightPresetDescription || "",
+				currentLightPresetFamilyName: externalState.currentLightPresetFamilyName || externalState.currentLightPresetName || "",
+				currentLightPresetVariantKey: externalState.currentLightPresetVariantKey || "",
+				currentLightPresetVariantLabel: externalState.currentLightPresetVariantLabel || "",
+				currentLightPresetSurfaceKey: externalState.currentLightPresetSurfaceKey || ""
 			};
 		}
 	};
@@ -614,8 +624,12 @@ const createMenuController = function(options) {
 			hoveredSceneLightingModeAction: state.hoveredSceneLightingModeAction,
 			lightPresetNames: lightPresetNames,
 			currentLightPresetIndex: lightPresetIndex,
-			currentLightPresetName: lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetName: lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
 			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
+			currentLightPresetFamilyName: lightingState.currentLightPresetFamilyName || lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetVariantKey: lightingState.currentLightPresetVariantKey || "",
+			currentLightPresetVariantLabel: lightingState.currentLightPresetVariantLabel || "",
+			currentLightPresetSurfaceKey: lightingState.currentLightPresetSurfaceKey || "",
 			hoveredLightPresetAction: state.hoveredLightPresetAction,
 			sceneLightingPrimaryControl: passthroughUiState.lightingPrimaryControl,
 			sceneLightingSecondaryControl: passthroughUiState.lightingSecondaryControl,
@@ -632,6 +646,8 @@ const createMenuController = function(options) {
 			currentPresetName: presetNames[currentPresetIndex],
 			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
 			hoveredPresetAction: state.hoveredPresetAction,
+			audioSourceKind: externalState.audioSourceKind || "none",
+			audioSourceName: externalState.audioSourceName || "",
 			xrSessionActiveBool: xrSessionActiveBool
 		});
 	};

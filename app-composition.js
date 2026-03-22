@@ -154,6 +154,7 @@ const createApp = function(projectConfig) {
 		},
 		levelBoxes: config.scene.levelBoxes,
 		floorHalfSize: config.scene.floorHalfSize,
+		floorReceivesSceneLightingBool: projectConfig.floorReceivesSceneLightingBool,
 		menuWidth: config.scene.menuWidth,
 		maxSceneLights: MAX_DIRECTIONAL_LIGHTS,
 		getLightingUniformLocations: getLightingUniformLocations,
@@ -163,6 +164,7 @@ const createApp = function(projectConfig) {
 		windowRef: window,
 		documentRef: document,
 		shell: shell,
+		getReactiveFloorColors: projectConfig.getReactiveFloorColors,
 		menuDefaults: {
 			jumpMode: config.menu.initialJumpMode,
 			floorAlpha: config.menu.initialFloorAlpha,

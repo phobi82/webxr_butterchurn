@@ -1,5 +1,36 @@
 // TestLab uses a reduced menu so effect review stays focused.
 
+const getTestLabAudioModeLabel = function(args) {
+	args = args || {};
+	if (args.audioSourceKind === "debug") {
+		return "Debug";
+	}
+	if (args.audioSourceKind === "stream") {
+		return args.audioSourceName ? "Live: " + args.audioSourceName : "Live";
+	}
+	return "None";
+};
+
+const getTestLabSelectionMeta = function(args) {
+	args = args || {};
+	if (typeof getTestLabPresetMetaByIndex !== "function") {
+		return {
+			metadata: null,
+			familyDefinition: null,
+			familyCount: 1,
+			variantCount: 1
+		};
+	}
+	const metadata = getTestLabPresetMetaByIndex(args.currentLightPresetIndex || 0);
+	const familyDefinition = metadata && typeof getTestLabFamilyByIndex === "function" ? getTestLabFamilyByIndex(metadata.familyIndex || 0) : null;
+	return {
+		metadata: metadata,
+		familyDefinition: familyDefinition,
+		familyCount: typeof testLabLightingFamilyDefinitions !== "undefined" && testLabLightingFamilyDefinitions.length ? testLabLightingFamilyDefinitions.length : 1,
+		variantCount: familyDefinition && familyDefinition.variants && familyDefinition.variants.length ? familyDefinition.variants.length : 1
+	};
+};
+
 const createTestLabAudioBarItems = function(audioMetrics) {
 	audioMetrics = audioMetrics || emptyAudioMetrics;
 	return [
@@ -15,11 +46,12 @@ const createTestLabAudioBarItems = function(audioMetrics) {
 
 const createTestLabMenuSections = function(args) {
 	args = args || {};
+	const selectionMeta = getTestLabSelectionMeta(args);
 	const controls = [
 		createCyclerMenuControlState({
 			key: "sceneLightPreset",
 			label: "Active Effect",
-			valueText: args.currentLightPresetName || "Soft Wash",
+			valueText: args.currentLightPresetFamilyName || args.currentLightPresetName || "Soft Wash",
 			metaText: args.currentLightPresetDescription || "",
 			hoveredAction: args.hoveredLightPresetAction || ""
 		})
@@ -40,13 +72,14 @@ const createTestLabMenuSections = function(args) {
 		createMenuSectionState({
 			key: "testLabEffect",
 			title: "Effect Review",
-			badgeText: (args.currentLightPresetIndex + 1) + " / " + ((args.lightPresetNames && args.lightPresetNames.length) || 1),
+			badgeText: ((selectionMeta.metadata && selectionMeta.metadata.familyIndex != null ? selectionMeta.metadata.familyIndex : 0) + 1) + " / " + selectionMeta.familyCount,
+			statusText: "Context: " + ((selectionMeta.metadata && selectionMeta.metadata.variantIndex != null ? selectionMeta.metadata.variantIndex : 0) + 1) + " / " + selectionMeta.variantCount + " " + (args.currentLightPresetVariantLabel || "Base") + " | Surface: " + (args.currentLightPresetSurfaceKey || "mixed"),
 			controls: controls
 		}),
 		createMenuSectionState({
 			key: "testLabIsolation",
 			title: "Isolation",
-			statusText: "Uniform / Manual / Mix 100% is the default lab baseline",
+			statusText: "Audio: " + getTestLabAudioModeLabel(args) + " | Baseline: Uniform / Manual / Mix 100%",
 			controls: []
 		}),
 		createSessionMenuSectionState({

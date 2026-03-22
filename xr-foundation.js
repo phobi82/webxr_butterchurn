@@ -564,10 +564,16 @@ const createSceneLighting = function(options) {
 			return state;
 		},
 		getSelectionState: function() {
+			const presetDefinition = presetDefinitions[currentPresetIndex] || {};
 			return {
 				presetNames: getPresetNames(),
 				currentPresetIndex: currentPresetIndex,
-				currentPresetDescription: presetDefinitions[currentPresetIndex] ? presetDefinitions[currentPresetIndex].description : ""
+				currentPresetName: presetDefinition.name || "",
+				currentPresetDescription: presetDefinition.description || "",
+				currentPresetFamilyName: presetDefinition.familyName || presetDefinition.name || "",
+				currentPresetVariantKey: presetDefinition.variantKey || "",
+				currentPresetVariantLabel: presetDefinition.variantLabel || "",
+				currentPresetSurfaceKey: presetDefinition.surfaceKey || ""
 			};
 		},
 		selectPreset: function(index) {

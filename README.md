@@ -90,10 +90,12 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 
 - Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect family at a time instead of testing full presets.
 - The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, so Butterchurn is suppressed and the effect overlay stays isolated against the fallback/room test setup.
+- Its floor and grid are also kept neutral and non-audio-reactive in the lab path, using a darker gray floor and a slightly brighter gray grid so effect tint and passthrough reveal can be judged without a second moving color source.
 - Its desktop preview starts outside an open-front room shell with a clearer inner floor, thicker side/back surfaces, and a front frame, so ceiling, wall, and floor effects read more like a lighting diorama before entering VR.
-- `Prev Effect` and `Next Effect` cycle through isolated effect families: `Soft Wash`, `Shutters`, `Edge Runner`, `Silhouette Cut`, `Room Window Beat`, `Aurora Curtain`, and `Floor Halo`.
+- `Prev Effect` and `Next Effect` now cycle effect families, while `Prev Context` and `Next Context` switch explicit surface/context variants such as `ceiling`, `wall`, `floor`, or directional floor layouts inside that family.
+- The page shows the active family, current context, active audio mode, and the shared isolation baseline explicitly, so live audio versus debug audio is visible before judging the effect.
 - The page keeps the normal XR enter path, so the same isolated effects can be inspected in headset instead of only on desktop.
-- Its in-headset menu is also reduced to the active effect, the key lighting slider, and focused audio meters instead of mirroring the full production menu.
+- Its in-headset menu is also reduced to the active effect, the key lighting slider, focused audio meters, and explicit context/audio status instead of mirroring the full production menu.
 - While inside VR, the TestLab menu also includes an `Exit VR` button so the session can be ended without leaving the in-headset UI first.
 
 ## Desktop Preview Controls

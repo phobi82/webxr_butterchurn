@@ -567,6 +567,12 @@ const createAudioSourceController = function(options) {
 			controller.audioBackend = audioBackend || null;
 			return syncBackendState();
 		},
+		getState: function() {
+			return {
+				sourceKind: controller.sourceKind,
+				sourceName: controller.sourceName
+			};
+		},
 		activate: function() {
 			return activateAudio();
 		},

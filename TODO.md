@@ -25,13 +25,19 @@ Create a reliable way to inspect one lighting effect at a time in a VR-like room
 - [x] Add direct previous/next effect controls on the test page.
 - [x] Feed live audio metrics into the test page through the normal runtime, while preserving a debug-audio path for deterministic testing.
 - [x] Improve the room preview so ceiling, walls, and floor feel more spatially natural and less like clipped planes.
-- [ ] Improve the VR readability of the isolated effect page so the same effect isolation path works cleanly in-headset, not only on desktop.
-- [ ] Support explicit context variants when useful, such as `ceiling`, `wall`, and `floor` for the same effect family.
-- [ ] Make the active test conditions more explicit when the test page is using live audio versus debug audio.
+- [x] Improve the VR readability of the isolated effect page so the same effect isolation path works cleanly in-headset, not only on desktop.
+- [x] Support explicit context variants when useful, such as `ceiling`, `wall`, and `floor` for the same effect family.
+- [x] Make the active test conditions more explicit when the test page is using live audio versus debug audio.
+
+### Next decision point
+
+- [ ] Evaluate whether passthrough reveal versus additive tint should follow one shared rule or remain effect-family-specific by design.
+- [ ] Compare the same lab variants under matched darkness and audio conditions before changing preset composition again.
+- [ ] Record which families should primarily open the room, which should primarily tint it, and which intentionally mix both.
 
 ### Definition of done
 
-- [ ] Each effect can be viewed alone.
+- [x] Each effect can be viewed alone.
 - [ ] The test view does not default to a fake glowing rectangle unless that is intentionally the effect being tested.
 - [ ] Desktop preview is useful for rough form evaluation.
 - [ ] Headset preview remains the final authority.

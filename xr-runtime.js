@@ -57,6 +57,7 @@ const createRuntime = function(options) {
 	const sceneLighting = options.sceneLighting;
 	const createGlbAssetStore = options.createGlbAssetStore;
 	const createVisualizerEngine = options.createVisualizerEngine;
+	const getFloorColors = options.getReactiveFloorColors || null;
 	const sceneGlbAssets = options.sceneGlbAssets || [];
 	const inputConfig = options.inputConfig || {};
 	const tabSources = options.tabSources || {};
@@ -98,6 +99,9 @@ const createRuntime = function(options) {
 	const getLightingSelectionState = function() {
 		return sceneLighting && sceneLighting.getSelectionState ? sceneLighting.getSelectionState() : null;
 	};
+	const getAudioSourceState = function() {
+		return audioController && audioController.getState ? audioController.getState() : {sourceKind: "none", sourceName: ""};
+	};
 	const updateSceneLighting = function(timeSeconds) {
 		if (sceneLighting) {
 			sceneLighting.update(timeSeconds, getAudioMetrics());
@@ -122,6 +126,13 @@ const createRuntime = function(options) {
 			floor: [floorRgb[0], floorRgb[1], floorRgb[2], menuState.floorAlpha],
 			grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(menuState.floorAlpha * 0.72, menuState.floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
 		};
+	};
+	const resolveFloorColors = function() {
+		return getFloorColors ? getFloorColors({
+			audioMetrics: getAudioMetrics(),
+			menuState: menuController.getState(),
+			sceneTimeSeconds: state.sceneTimeSeconds
+		}) : getAudioReactiveFloorColors();
 	};
 	const updateReferenceSpace = function(viewerTransform) {
 		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
@@ -224,14 +235,22 @@ const createRuntime = function(options) {
 	const getMenuContentState = function() {
 		const visualizerSelectionState = getVisualizerSelectionState();
 		const lightingSelectionState = getLightingSelectionState();
+		const audioSourceState = getAudioSourceState();
 		return {
 			sceneTimeSeconds: state.sceneTimeSeconds,
 			audioMetrics: getAudioMetrics(),
+			audioSourceKind: audioSourceState.sourceKind || "none",
+			audioSourceName: audioSourceState.sourceName || "",
 			shaderModeNames: visualizerSelectionState ? visualizerSelectionState.modeNames : ["Toroidal"],
 			currentShaderModeIndex: visualizerSelectionState ? visualizerSelectionState.currentModeIndex : 0,
 			lightPresetNames: lightingSelectionState ? lightingSelectionState.presetNames : ["Aurora Drift"],
 			currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
+			currentLightPresetName: lightingSelectionState ? lightingSelectionState.currentPresetName : "Aurora Drift",
 			currentLightPresetDescription: lightingSelectionState ? lightingSelectionState.currentPresetDescription : "Slow colorful overhead drift",
+			currentLightPresetFamilyName: lightingSelectionState ? lightingSelectionState.currentPresetFamilyName : "Aurora Drift",
+			currentLightPresetVariantKey: lightingSelectionState ? lightingSelectionState.currentPresetVariantKey : "",
+			currentLightPresetVariantLabel: lightingSelectionState ? lightingSelectionState.currentPresetVariantLabel : "",
+			currentLightPresetSurfaceKey: lightingSelectionState ? lightingSelectionState.currentPresetSurfaceKey : "",
 			presetNames: visualizerSelectionState ? visualizerSelectionState.presetNames : ["Preset 1"],
 			currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0,
 			xrSessionActiveBool: !!state.xrSession
@@ -281,7 +300,7 @@ const createRuntime = function(options) {
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, passthroughPose: state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, passthroughPose: state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -296,7 +315,7 @@ const createRuntime = function(options) {
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
 		}
-		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: getAudioReactiveFloorColors, passthroughFallbackBool: true});
+		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, passthroughFallbackBool: true});
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};

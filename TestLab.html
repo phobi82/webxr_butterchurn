@@ -41,7 +41,7 @@
 				backgroundColor: "rgba(0, 0, 32, 0.9)",
 				border: "1px solid #ffff00",
 				zIndex: "10",
-				maxWidth: "420px"
+				maxWidth: "460px"
 			});
 			document.body.appendChild(panel);
 
@@ -55,7 +55,7 @@
 			panel.appendChild(statusLabel);
 
 			const hintLabel = document.createElement("div");
-			hintLabel.textContent = "Use this page to inspect one lighting effect at a time in desktop preview or in VR.";
+			hintLabel.textContent = "Use this page to inspect one lighting effect family at a time, then compare explicit surface/context variants on desktop or in VR.";
 			hintLabel.style.fontSize = "12px";
 			hintLabel.style.color = "#00ff00";
 			panel.appendChild(hintLabel);
@@ -112,10 +112,30 @@
 			nextLightingButton.textContent = "Next Effect";
 			effectRow.appendChild(nextLightingButton);
 
+			const contextRow = document.createElement("div");
+			contextRow.style.display = "flex";
+			contextRow.style.flexWrap = "wrap";
+			contextRow.style.gap = "8px";
+			panel.appendChild(contextRow);
+
+			const previousContextButton = document.createElement("button");
+			previousContextButton.textContent = "Prev Context";
+			contextRow.appendChild(previousContextButton);
+
+			const nextContextButton = document.createElement("button");
+			nextContextButton.textContent = "Next Context";
+			contextRow.appendChild(nextContextButton);
+
 			const effectNameLabel = document.createElement("div");
-			effectNameLabel.textContent = "Effect: loading...";
+			effectNameLabel.textContent = "Effect family: loading...";
 			effectNameLabel.style.fontWeight = "bold";
 			panel.appendChild(effectNameLabel);
+
+			const contextLabel = document.createElement("div");
+			contextLabel.textContent = "Context: loading...";
+			contextLabel.style.fontWeight = "bold";
+			contextLabel.style.color = "#00ff00";
+			panel.appendChild(contextLabel);
 
 			const effectDescriptionLabel = document.createElement("div");
 			effectDescriptionLabel.textContent = "";
@@ -127,8 +147,14 @@
 			audioLabel.textContent = "Audio: none";
 			panel.appendChild(audioLabel);
 
+			const conditionLabel = document.createElement("div");
+			conditionLabel.textContent = "Conditions: loading...";
+			conditionLabel.style.fontSize = "12px";
+			conditionLabel.style.color = "#00ff00";
+			panel.appendChild(conditionLabel);
+
 			const labNotes = document.createElement("div");
-			labNotes.textContent = "The test lab starts with full passthrough/fallback share so Butterchurn is hidden and the effect overlay stays isolated.";
+			labNotes.textContent = "Baseline: Uniform / Manual / Mix 100% so Butterchurn stays hidden and the overlay can be judged in isolation first.";
 			labNotes.style.fontSize = "12px";
 			labNotes.style.color = "#00ff00";
 			panel.appendChild(labNotes);
@@ -136,6 +162,9 @@
 			const canvas = document.createElement("canvas");
 			applyStyles(canvas, {display: "block", width: "100vw", height: "100vh"});
 			document.body.appendChild(canvas);
+
+			let currentAudioState = {sourceKind: "none", sourceName: ""};
+			let syncEffectLabels = function() {};
 
 			const appShell = createDomAppShell({
 				documentRef: document,
@@ -163,15 +192,35 @@
 				},
 				setAudioState: function(audioState) {
 					audioState = audioState || {};
+					currentAudioState = {
+						sourceKind: audioState.sourceKind || "none",
+						sourceName: audioState.sourceName || ""
+					};
 					audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
 					stopAudioButton.disabled = !audioState.stopEnabledBool;
+					syncEffectLabels();
 				}
 			});
 		</script>
 		<script src="app-composition.js"></script>
 		<script>
+			const getStaticTestLabFloorColors = function(args) {
+				args = args || {};
+				const menuState = args.menuState || {};
+				return {
+					audioLevel: 0,
+					audioPeak: 0,
+					beatPulse: 0,
+					transient: 0,
+					floor: [0.24, 0.24, 0.24, menuState.floorAlpha == null ? 0.72 : menuState.floorAlpha],
+					grid: [0.42, 0.42, 0.42, clampNumber((menuState.floorAlpha == null ? 0.72 : menuState.floorAlpha) * 0.72, 0, 1)]
+				};
+			};
+
 			const testLabApp = createApp({
 				shell: appShell,
+				floorReceivesSceneLightingBool: false,
+				getReactiveFloorColors: getStaticTestLabFloorColors,
 				locomotion: {
 					desktopStartZ: 5.8,
 					desktopStartPitch: 0.18
@@ -211,27 +260,63 @@
 				}
 			});
 
-			const syncEffectLabels = function() {
+			const getAudioModeLabel = function() {
+				if (currentAudioState.sourceKind === "debug") {
+					return "Debug";
+				}
+				if (currentAudioState.sourceKind === "stream") {
+					return currentAudioState.sourceName ? "Live: " + currentAudioState.sourceName : "Live";
+				}
+				return "None";
+			};
+
+			syncEffectLabels = function() {
 				const selectionState = testLabApp.getLightingSelectionState() || {};
-				const names = selectionState.presetNames || [];
-				const index = selectionState.currentPresetIndex || 0;
-				const effectName = names.length ? names[index] : "Unknown";
-				effectNameLabel.textContent = "Effect " + (names.length ? (index + 1) : 0) + " / " + names.length + ": " + effectName;
+				const metadata = getTestLabPresetMetaByIndex(selectionState.currentPresetIndex || 0) || {};
+				const familyDefinition = getTestLabFamilyByIndex(metadata.familyIndex || 0) || {variants: []};
+				const familyCount = testLabLightingFamilyDefinitions.length || 1;
+				const variantCount = familyDefinition.variants && familyDefinition.variants.length ? familyDefinition.variants.length : 1;
+				effectNameLabel.textContent = "Effect Family " + ((metadata.familyIndex || 0) + 1) + " / " + familyCount + ": " + (metadata.familyName || selectionState.currentPresetName || "Unknown");
+				contextLabel.textContent = "Context " + ((metadata.variantIndex || 0) + 1) + " / " + variantCount + ": " + (metadata.variantLabel || "Base") + " (" + (metadata.surfaceKey || "mixed") + ")";
 				effectDescriptionLabel.textContent = selectionState.currentPresetDescription || "";
+				conditionLabel.textContent = "Conditions: Audio = " + getAudioModeLabel() + " | Baseline = Uniform / Manual / Mix 100% | Surface check = " + (metadata.surfaceKey || "mixed");
+			};
+
+			const cycleEffectFamily = function(direction) {
+				const selectionState = testLabApp.getLightingSelectionState() || {};
+				const metadata = getTestLabPresetMetaByIndex(selectionState.currentPresetIndex || 0) || {};
+				const familyCount = testLabLightingFamilyDefinitions.length || 1;
+				const nextFamilyIndex = ((metadata.familyIndex || 0) + direction + familyCount) % familyCount;
+				const nextFamily = getTestLabFamilyByIndex(nextFamilyIndex) || {variants: []};
+				const preservedVariantIndex = nextFamily.variants.length ? Math.min(metadata.variantIndex || 0, nextFamily.variants.length - 1) : 0;
+				testLabApp.selectLightingPreset(getTestLabPresetIndexForFamilyVariant(nextFamilyIndex, preservedVariantIndex)).then(syncEffectLabels);
+			};
+
+			const cycleContextVariant = function(direction) {
+				const selectionState = testLabApp.getLightingSelectionState() || {};
+				const metadata = getTestLabPresetMetaByIndex(selectionState.currentPresetIndex || 0) || {};
+				testLabApp.selectLightingPreset(getTestLabPresetIndexForFamilyVariant(metadata.familyIndex || 0, (metadata.variantIndex || 0) + direction)).then(syncEffectLabels);
 			};
 
 			previousLightingButton.addEventListener("click", function() {
-				testLabApp.cycleLightingPreset(-1);
-				syncEffectLabels();
+				cycleEffectFamily(-1);
 			});
 
 			nextLightingButton.addEventListener("click", function() {
-				testLabApp.cycleLightingPreset(1);
-				syncEffectLabels();
+				cycleEffectFamily(1);
+			});
+
+			previousContextButton.addEventListener("click", function() {
+				cycleContextVariant(-1);
+			});
+
+			nextContextButton.addEventListener("click", function() {
+				cycleContextVariant(1);
 			});
 
 			testLabApp.start().then(function() {
 				syncEffectLabels();
+				window.setInterval(syncEffectLabels, 250);
 			});
 		</script>
 	</body>

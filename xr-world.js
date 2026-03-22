@@ -847,6 +847,7 @@ const createSceneGeometry = function(gl) {
 // core/render/scene-renderer.js
 const createSceneRenderer = function(options) {
 	const canvas = options.canvas;
+	const floorReceivesSceneLightingBool = options.floorReceivesSceneLightingBool !== false;
 	let gl = null;
 	let colorProgram = null;
 	let litColorProgram = null;
@@ -1030,7 +1031,11 @@ const createSceneRenderer = function(options) {
 	const drawFloor = function(sceneLighting, reactiveColors) {
 		const worldAlpha = reactiveColors.floor[3];
 		gl.disable(gl.CULL_FACE);
-		drawLitColor(geometry.floorBuffer, geometry.floorNormalBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor, sceneLighting);
+		if (floorReceivesSceneLightingBool) {
+			drawLitColor(geometry.floorBuffer, geometry.floorNormalBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor, sceneLighting);
+		} else {
+			drawColor(geometry.floorBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor);
+		}
 		drawColor(geometry.gridBuffer, geometry.gridVertexCount, gl.LINES, identityMatrix(), reactiveColors.grid);
 		for (let i = 0; i < options.levelBoxes.length; i += 1) {
 			const box = options.levelBoxes[i];
