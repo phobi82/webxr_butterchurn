@@ -642,6 +642,44 @@ const createXrSessionBridge = function(options) {
 	const xrApi = options.xrApi || null;
 	const xrWebGLLayer = options.xrWebGLLayer || null;
 	const xrRigidTransform = options.xrRigidTransform || null;
+	const depthDataFormats = options.depthDataFormats || ["luminance-alpha", "float32"];
+	const getSafeSessionDepthState = function(session) {
+		let depthUsage = "";
+		let depthDataFormat = "";
+		try {
+			depthUsage = session.depthUsage || "";
+		} catch (error) {
+			depthUsage = "";
+		}
+		try {
+			depthDataFormat = session.depthDataFormat || "";
+		} catch (error) {
+			depthDataFormat = "";
+		}
+		return {
+			depthUsage: depthUsage,
+			depthDataFormat: depthDataFormat,
+			depthSensingActiveBool: depthUsage === "cpu-optimized" || depthUsage === "gpu-optimized"
+		};
+	};
+	const startSessionWithOptionalDepth = async function(sessionMode) {
+		const sessionOptions = {requiredFeatures: ["local-floor"]};
+		if (sessionMode !== "immersive-ar") {
+			return xrApi.requestSession(sessionMode, sessionOptions);
+		}
+		sessionOptions.optionalFeatures = ["depth-sensing"];
+		// Browsers and docs have diverged on the request key name, so provide both.
+		sessionOptions.depthSensing = {
+			usagePreference: ["cpu-optimized"],
+			dataFormatPreference: depthDataFormats,
+			formatPreference: depthDataFormats
+		};
+		try {
+			return await xrApi.requestSession(sessionMode, sessionOptions);
+		} catch (error) {
+			return xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]});
+		}
+	};
 	const getSupportState = async function() {
 		if (!xrApi) {
 			return {
@@ -677,7 +715,7 @@ const createXrSessionBridge = function(options) {
 				throw new Error("No immersive XR session mode available.");
 			}
 			const sessionMode = supportState.preferredSessionMode;
-			const session = await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]});
+			const session = await startSessionWithOptionalDepth(sessionMode);
 			if (onEnd) {
 				session.addEventListener("end", onEnd);
 			}
@@ -691,12 +729,16 @@ const createXrSessionBridge = function(options) {
 			});
 			const baseRefSpace = await session.requestReferenceSpace("local-floor");
 			const environmentBlendMode = session.environmentBlendMode || (sessionMode === "immersive-ar" ? "alpha-blend" : "opaque");
+			const sessionDepthState = getSafeSessionDepthState(session);
 			return {
 				session: session,
 				baseRefSpace: baseRefSpace,
 				sessionMode: sessionMode,
 				environmentBlendMode: environmentBlendMode,
-				passthroughAvailableBool: sessionMode === "immersive-ar" && environmentBlendMode !== "opaque"
+				passthroughAvailableBool: sessionMode === "immersive-ar" && environmentBlendMode !== "opaque",
+				depthSensingActiveBool: sessionMode === "immersive-ar" && sessionDepthState.depthSensingActiveBool,
+				depthUsage: sessionDepthState.depthUsage,
+				depthDataFormat: sessionDepthState.depthDataFormat
 			};
 		},
 		createOffsetReferenceSpace: function(baseRefSpace, movementState, viewerTransform) {

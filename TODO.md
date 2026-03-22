@@ -31,9 +31,9 @@ Create a reliable way to inspect one lighting effect at a time in a VR-like room
 
 ### Next decision point
 
-- [ ] Evaluate whether passthrough reveal versus additive tint should follow one shared rule or remain effect-specific by design.
+- [ ] Evaluate whether passthrough alpha-blend opening versus additive contribution should follow one shared rule or remain effect-specific by design.
 - [ ] Compare the same lab variants under matched darkness and audio conditions before changing preset composition again.
-- [ ] Record which effects should primarily open the room, which should primarily tint it, and which intentionally mix both.
+- [ ] Record which effects should primarily open the room through alpha blend, which should primarily add color, and which intentionally mix both.
 
 ### Definition of done
 
@@ -56,7 +56,7 @@ Open tasks:
 
 - [ ] Make the shape read as diffuse light instead of a lit panel or window.
 - [ ] Decide which surfaces it actually works on.
-- [ ] Tune reveal versus additive tint behavior.
+- [ ] Tune alpha-blend versus additive behavior.
 - [ ] Tune softness, spread, and falloff.
 - [ ] Decide whether this remains a core effect or only a support effect.
 
@@ -102,24 +102,24 @@ Acceptance:
 ### 2.4 Silhouette Cut
 
 Target:
-A harder cutout/reveal effect that intentionally opens the room through the darkness.
+A harder alpha-blend cutout effect that intentionally opens the room through the darkness.
 
 Open tasks:
 
 - [ ] Decide the best shape language for the cutout.
-- [ ] Tune reveal strength so the room opening is legible.
+- [ ] Tune alpha-blend strength so the room opening is legible.
 - [ ] Prevent it from becoming visually identical to `Room Window Beat`.
 - [ ] Test comfort when used in motion-heavy presets.
 
 Acceptance:
 
-- [ ] Strong reveal identity.
+- [ ] Strong alpha-blend identity.
 - [ ] Distinct from plain strobe or plain wash.
 
 ### 2.5 Room Window Beat
 
 Target:
-A beat-driven room opening effect that intentionally behaves like a rhythmic reveal window.
+A beat-driven room opening effect that intentionally behaves like a rhythmic alpha-blend window.
 
 Open tasks:
 
@@ -130,7 +130,7 @@ Open tasks:
 
 Acceptance:
 
-- [ ] Strong beat-linked reveal behavior.
+- [ ] Strong beat-linked alpha-blend behavior.
 - [ ] Not confused with generic strobe flashes.
 
 ### 2.6 Aurora Curtain
@@ -214,7 +214,7 @@ Build presets only after the individual effects and their surface roles are unde
 #### Disco Storm
 
 - [ ] Make it chaotic, mixed, and hit-heavy.
-- [ ] Use more aggressive beam/strobe/reveal combinations.
+- [ ] Use more aggressive beam/strobe/alpha-blend combinations.
 - [ ] Keep it clearly distinct from `Pulse Strobe`.
 
 #### Neon Wash

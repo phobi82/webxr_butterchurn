@@ -212,25 +212,6 @@ const buildTestLabFloorHalo = function(state, timeSeconds, audioMetrics, variant
 const buildTestLabFlashlight = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const beamColor = hslToRgb(wrapUnit(0.12 + timeSeconds * 0.01), 0.12, 0.86);
-	if (variantKey === "wall") {
-		addFixture(state, "beam", "wall", 3.14, beamColor, 0.34 + metrics.level * 0.16 + metrics.transient * 0.08, 0.42, {
-			softness: 0.08,
-			sweep: 0.22,
-			vertical: 0.64,
-			effectMode: FIXTURE_EFFECT_MODE_FLASHLIGHT
-		});
-		applyFixtureGroupsToLightingState(state, 0.08);
-		return;
-	}
-	if (variantKey === "floor") {
-		addFixture(state, "wash", "floor", 2.9, beamColor, 0.28 + metrics.level * 0.12 + metrics.bassHit * 0.12, 0.56, {
-			softness: 0.1,
-			sweep: 0.1,
-			effectMode: FIXTURE_EFFECT_MODE_FLASHLIGHT
-		});
-		applyFixtureGroupsToLightingState(state, 0.06);
-		return;
-	}
 	addFixture(state, "beam", "ceiling", 0.22, beamColor, 0.32 + metrics.level * 0.14 + metrics.roomFill * 0.1, 0.46, {
 		softness: 0.08,
 		sweep: 0.18,
@@ -251,7 +232,7 @@ const createTestLabVariantDefinition = function(args) {
 const testLabLightingEffectDefinitions = [
 	{
 		effectName: "Soft Wash",
-		effectDescription: "Broad diffuse room-light fill for neutral tint-versus-reveal evaluation.",
+		effectDescription: "Broad diffuse room-light fill for neutral additive-versus-alpha-blend evaluation.",
 		variants: [
 			createTestLabVariantDefinition({
 				variantKey: "ceiling",
@@ -311,7 +292,7 @@ const testLabLightingEffectDefinitions = [
 	},
 	{
 		effectName: "Silhouette Cut",
-		effectDescription: "Hard reveal cut that should open the room sharply instead of behaving like a wash.",
+		effectDescription: "Hard alpha-blend cut that should open the room sharply instead of behaving like a wash.",
 		variants: [
 			createTestLabVariantDefinition({
 				variantKey: "wall",
@@ -329,7 +310,7 @@ const testLabLightingEffectDefinitions = [
 	},
 	{
 		effectName: "Room Window Beat",
-		effectDescription: "Rhythmic window-like reveal keyed to beats rather than continuous motion or fill.",
+		effectDescription: "Rhythmic window-like alpha-blend opening keyed to beats rather than continuous motion or fill.",
 		variants: [
 			createTestLabVariantDefinition({
 				variantKey: "wall",
@@ -383,24 +364,12 @@ const testLabLightingEffectDefinitions = [
 	},
 	{
 		effectName: "Flashlight",
-		effectDescription: "Focused cone-like effect for judging isolated reveal-versus-tint behavior under a tight beam.",
+		effectDescription: "Controller-oriented flashlight review mode without fake floor or wall variants.",
 		variants: [
 			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabFlashlight
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabFlashlight
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "floor",
-				variantLabel: "Floor",
-				surfaceKey: "floor",
+				variantKey: "controller",
+				variantLabel: "Controller",
+				surfaceKey: "controller",
 				buildState: buildTestLabFlashlight
 			})
 		]

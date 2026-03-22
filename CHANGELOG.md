@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Renamed the shared passthrough effect semantics from `Tint` and `Reveal` to `Additive` and `Alpha Blend` across the controller, shader contract, TestLab UI, and documentation, so the project now matches standard WebXR blend terminology without changing the underlying behavior.
+- Removed the dedicated TestLab semantics cycler from the reduced review menu, so `Additive` and `Alpha Blend` sliders are now the only visible review controls for that comparison path.
+- Added an optional WebXR depth-sensing passthrough-light path that requests CPU depth data for immersive AR when available and uses it to rescale light masks against sensed real-world depth, while automatically falling back to the existing synthetic ceiling/wall/floor anchors when depth is unsupported or absent.
+
 ### Fixed
 - Fixed the XR menu slider interaction regression from the generic slider refactor by separating raw hover hits from captured slider drags again, so in-headset slider hover and trigger-drag both keep working without falling back to slider-specific state paths.
 - Made the shared menu slider hitbox vertically symmetric around the visible track again, so VR and desktop slider hover no longer feel biased downward.

@@ -7,15 +7,17 @@ const PASSTHROUGH_ROOM_HALF_WIDTH = 3.6;
 const PASSTHROUGH_ROOM_HALF_DEPTH = 4.4;
 const PASSTHROUGH_ROOM_FLOOR_Y = 0.08;
 const PASSTHROUGH_ROOM_WALL_Y = 1.35;
+const PASSTHROUGH_DEPTH_MIN_METERS = 0.15;
+const PASSTHROUGH_DEPTH_MAX_METERS = 12;
 
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT = "current";
-const PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY = "tintOnly";
-const PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY = "revealOnly";
+const PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY = "additiveOnly";
+const PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY = "alphaBlendOnly";
 
 const passthroughEffectSemanticModeDefinitions = [
 	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT, label: "Current"},
-	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY, label: "Tint Only"},
-	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY, label: "Reveal Only"}
+	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY, label: "Additive Only"},
+	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY, label: "Alpha Blend Only"}
 ];
 
 const getPassthroughEffectSemanticModeLabel = function(modeKey) {
@@ -82,6 +84,51 @@ const projectWorldPointToUv = function(viewMatrix, projMatrix, x, y, z) {
 	return {
 		x: clampNumber(ndcX * 0.5 + 0.5, 0, 1),
 		y: clampNumber(ndcY * 0.5 + 0.5, 0, 1)
+	};
+};
+
+const getWorldDirectionForUv = function(viewMatrix, projMatrix, uv) {
+	const ndcX = clampNumber((uv.x || 0) * 2 - 1, -1, 1);
+	const ndcY = clampNumber((uv.y || 0) * 2 - 1, -1, 1);
+	const projScaleX = Math.abs(projMatrix[0] || 0) > 0.0001 ? projMatrix[0] : 1;
+	const projScaleY = Math.abs(projMatrix[5] || 0) > 0.0001 ? projMatrix[5] : 1;
+	const viewX = (ndcX + (projMatrix[8] || 0)) / projScaleX;
+	const viewY = (ndcY + (projMatrix[9] || 0)) / projScaleY;
+	return normalizeVec3(
+		viewMatrix[0] * viewX + viewMatrix[1] * viewY - viewMatrix[2],
+		viewMatrix[4] * viewX + viewMatrix[5] * viewY - viewMatrix[6],
+		viewMatrix[8] * viewX + viewMatrix[9] * viewY - viewMatrix[10]
+	);
+};
+
+const getDepthAnchorState = function(args, projectedUv, fallbackPoint) {
+	if (!args || !args.depthInfo || typeof args.depthInfo.getDepthInMeters !== "function" || !args.viewMatrix || !args.projMatrix || !projectedUv) {
+		return null;
+	}
+	let depthMeters = 0;
+	try {
+		depthMeters = args.depthInfo.getDepthInMeters(projectedUv.x, 1 - projectedUv.y) || 0;
+	} catch (error) {
+		return null;
+	}
+	if (!Number.isFinite(depthMeters) || depthMeters < PASSTHROUGH_DEPTH_MIN_METERS || depthMeters > PASSTHROUGH_DEPTH_MAX_METERS) {
+		return null;
+	}
+	const cameraPosition = extractCameraPositionFromViewMatrix(args.viewMatrix);
+	const fallbackDistance = fallbackPoint ? Math.sqrt(
+		Math.pow(fallbackPoint.x - cameraPosition.x, 2) +
+		Math.pow(fallbackPoint.y - cameraPosition.y, 2) +
+		Math.pow(fallbackPoint.z - cameraPosition.z, 2)
+	) : depthMeters;
+	const worldDirection = getWorldDirectionForUv(args.viewMatrix, args.projMatrix, projectedUv);
+	return {
+		depthMeters: depthMeters,
+		radiusScale: clampNumber(fallbackDistance / Math.max(depthMeters, 0.0001), 0.65, 1.85),
+		point: {
+			x: cameraPosition.x + worldDirection.x * depthMeters,
+			y: cameraPosition.y + worldDirection.y * depthMeters,
+			z: cameraPosition.z + worldDirection.z * depthMeters
+		}
 	};
 };
 
@@ -283,6 +330,57 @@ const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix, surf
 	};
 };
 
+const appendControllerFlashlightMasks = function(target, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost) {
+	const controllerRays = args.controllerRays || [];
+	for (let i = 0; i < controllerRays.length && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
+		const ray = controllerRays[i];
+		if (!ray || !ray.origin || !ray.dir) {
+			continue;
+		}
+		const point = ray.hitPoint || {
+			x: ray.origin.x + ray.dir.x * 6,
+			y: ray.origin.y + ray.dir.y * 6,
+			z: ray.origin.z + ray.dir.z * 6
+		};
+		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
+		if (!projectedUv) {
+			continue;
+		}
+		const tangentProjectedUv = projectWorldPointToUv(
+			args.viewMatrix,
+			args.projMatrix,
+			point.x + ray.dir.x * 0.4,
+			point.y + ray.dir.y * 0.4,
+			point.z + ray.dir.z * 0.4
+		);
+		const effectState = getFixtureEffectState({
+			group: group,
+			audioMetrics: args.audioMetrics,
+			fillMix: fillMix,
+			variantCenter: 0,
+			stereoBiasOffset: 0
+		});
+		const baseRadius = clampNumber((group.radius || 0.4) * (group.type === "wash" ? 0.26 : 0.22), 0.12, 0.42);
+		target.push({
+			x: projectedUv.x,
+			y: projectedUv.y,
+			r: group.color[0],
+			g: group.color[1],
+			b: group.color[2],
+			radiusX: clampNumber(baseRadius * 1.18, 0.12, 0.48),
+			radiusY: clampNumber(baseRadius * 0.84, 0.1, 0.38),
+			rotation: tangentProjectedUv ? Math.atan2(tangentProjectedUv.y - projectedUv.y, tangentProjectedUv.x - projectedUv.x) : 0,
+			softness: clampNumber((group.softness == null ? 0.16 : group.softness), 0.04, 0.4),
+			alphaBlendStrength: effectState.alphaBlendStrength,
+			effectType: effectState.type,
+			effectPhase: effectState.phase,
+			effectDensity: effectState.density,
+			effectAmount: effectState.amount,
+			strength: clampNumber(baseStrength * typeIntensityScale * strobeBoost, 0, group.type === "strobe" ? 0.88 : 0.72)
+		});
+	}
+};
+
 const appendClubFixtureMasks = function(target, args, group, clubState) {
 	if (!target || !group || !args || !args.viewMatrix || !args.projMatrix) {
 		return;
@@ -298,6 +396,10 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 	}
 	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * 0.55, 0, 0.55);
 	const typeIntensityScale = group.type === "wash" ? (0.78 + fillMix * 0.24) : (group.type === "beam" ? (0.92 - fillMix * 0.08) : 0.92);
+	if ((group.effectMode || "") === FIXTURE_EFFECT_MODE_FLASHLIGHT && (args.controllerRays || []).length > 0) {
+		appendControllerFlashlightMasks(target, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost);
+		return;
+	}
 	const variantCount = Math.min(
 		PASSTHROUGH_MAX_SPOTS,
 		(group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1)) +
@@ -311,6 +413,7 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 		if (!projectedUv) {
 			continue;
 		}
+		const depthAnchorState = getDepthAnchorState(args, projectedUv, point);
 		let rotation = 0;
 		const tangentPoint = getRoomPointForFixtureGroup(group, variantOffset + 0.08, fillMix, surfaceBudget, stereoBiasOffset);
 		const projectedTangentUv = tangentPoint ? projectWorldPointToUv(args.viewMatrix, args.projMatrix, tangentPoint.x, tangentPoint.y, tangentPoint.z) : null;
@@ -341,6 +444,10 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 		}
 		radiusX = clampNumber(radiusX * surfaceBudget.radiusScale * (surfaceKey === "floor" && group.type === "wash" ? 1.08 : 1), 0.08, 0.5);
 		radiusY = clampNumber(radiusY * surfaceBudget.radiusScale * (surfaceKey === "floor" ? 1.12 : 1), 0.04, 0.48);
+		if (depthAnchorState) {
+			radiusX = clampNumber(radiusX * depthAnchorState.radiusScale, 0.06, 0.5);
+			radiusY = clampNumber(radiusY * depthAnchorState.radiusScale, 0.03, 0.48);
+		}
 		const effectState = getFixtureEffectState({
 			group: group,
 			audioMetrics: args.audioMetrics,
@@ -351,6 +458,9 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 		if (effectState.mode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN && surfaceKey === "ceiling") {
 			radiusX = clampNumber(radiusX * 1.18, 0.12, 0.5);
 			radiusY = clampNumber(radiusY * 0.52, 0.04, 0.18);
+		} else if (effectState.mode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
+			radiusX = clampNumber(radiusX * (group.type === "beam" ? 1.18 : 1.08), 0.12, 0.5);
+			radiusY = clampNumber(Math.max(radiusY * 1.9, radiusX * 0.72), 0.12, 0.44);
 		}
 		target.push({
 			x: projectedUv.x,
@@ -362,14 +472,14 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			radiusY: radiusY,
 			rotation: rotation,
 			softness: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
-			revealStrength: effectState.revealStrength,
+			alphaBlendStrength: effectState.alphaBlendStrength,
 			effectType: effectState.type,
 			effectPhase: effectState.phase,
 			effectDensity: effectState.density,
 			effectAmount: effectState.amount,
 			strength: clampNumber(
 				surfaceBudget.minimumStrength +
-				baseStrength * surfaceBudget.strengthScale * typeIntensityScale * strobeBoost * (group.type === "beam" ? 0.72 : 1) * (1 - Math.abs(variantCenter) * 0.16),
+				baseStrength * surfaceBudget.strengthScale * typeIntensityScale * strobeBoost * (effectState.mode === FIXTURE_EFFECT_MODE_FLASHLIGHT ? 1 : (group.type === "beam" ? 0.72 : 1)) * (1 - Math.abs(variantCenter) * 0.16),
 				0,
 				group.type === "strobe" ? 0.88 : 0.72
 			)
@@ -390,8 +500,8 @@ const createPassthroughController = function(options) {
 		lightingModeKey: options.initialLightingModeKey || "uniform",
 		lightingDarkness: options.initialLightingDarkness == null ? 0.05 : options.initialLightingDarkness,
 		effectSemanticModeKey: options.initialEffectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
-		effectTintShare: options.initialEffectTintShare == null ? 1 : options.initialEffectTintShare,
-		effectRevealShare: options.initialEffectRevealShare == null ? 1 : options.initialEffectRevealShare,
+		effectAdditiveShare: options.initialEffectAdditiveShare == null ? 1 : options.initialEffectAdditiveShare,
+		effectAlphaBlendShare: options.initialEffectAlphaBlendShare == null ? 1 : options.initialEffectAlphaBlendShare,
 		manualMix: options.initialManualMix == null ? 0 : options.initialManualMix,
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
@@ -504,17 +614,19 @@ const createPassthroughController = function(options) {
 				if (!projectedUv) {
 					continue;
 				}
+				const depthAnchorState = getDepthAnchorState(args, projectedUv, anchoredPoint.point);
+				const radiusScale = depthAnchorState ? depthAnchorState.radiusScale : 1;
 				spots.push({
 					x: projectedUv.x,
 					y: projectedUv.y,
 					r: light.r,
 					g: light.g,
 					b: light.b,
-					radiusX: anchoredPoint.radius,
-					radiusY: anchoredPoint.radius,
+					radiusX: clampNumber(anchoredPoint.radius * radiusScale, 0.06, 0.42),
+					radiusY: clampNumber(anchoredPoint.radius * radiusScale, 0.06, 0.42),
 					rotation: 0,
 					softness: 0.12,
-					revealStrength: 0.94,
+					alphaBlendStrength: 0.94,
 					effectType: 0,
 					effectPhase: 0,
 					effectDensity: 0,
@@ -637,11 +749,11 @@ const createPassthroughController = function(options) {
 			if (key === "lightingDarkness") {
 				state.lightingDarkness = clampNumber(value, 0, 1);
 			}
-			if (key === "effectTintShare") {
-				state.effectTintShare = clampNumber(value, 0, 1);
+			if (key === "effectAdditiveShare") {
+				state.effectAdditiveShare = clampNumber(value, 0, 1);
 			}
-			if (key === "effectRevealShare") {
-				state.effectRevealShare = clampNumber(value, 0, 1);
+			if (key === "effectAlphaBlendShare") {
+				state.effectAlphaBlendShare = clampNumber(value, 0, 1);
 			}
 		},
 		getBackgroundCompositeState: function(args) {
@@ -659,21 +771,21 @@ const createPassthroughController = function(options) {
 			const visibleShare = state.blendModeKey === "flashlight" ? 0 : getPassthroughVisibleShare(state, state.smoothedBlendDrive);
 			const lightingState = args.sceneLightingState || null;
 			const lightingColor = getAveragedLightingColor(lightingState);
-			const tintStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
+			const additiveStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
 			const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
-			const spotTintScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY ? 0 : clampNumber(state.effectTintShare, 0, 1);
-			const spotRevealScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY ? 0 : clampNumber(state.effectRevealShare, 0, 1);
+			const spotAdditiveScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 0 : clampNumber(state.effectAdditiveShare, 0, 1);
+			const spotAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : clampNumber(state.effectAlphaBlendShare, 0, 1);
 			return {
 				visibleShare: visibleShare,
 				maskCount: flashlightMasks.length,
 				masks: flashlightMasks,
 				darkAlpha: 1 - darkness,
-				uniformTintColor: lightingColor,
-				uniformTintStrength: tintStrength,
+				additiveColor: lightingColor,
+				additiveStrength: additiveStrength,
 				lightingModeKey: state.lightingModeKey,
 				effectSemanticModeKey: state.effectSemanticModeKey,
-				spotTintScale: spotTintScale,
-				spotRevealScale: spotRevealScale,
+				spotAdditiveScale: spotAdditiveScale,
+				spotAlphaBlendScale: spotAlphaBlendScale,
 				spots: state.lightingModeKey === "club" ? getClubLights(args) : getSpotLights(args)
 			};
 		}
@@ -702,25 +814,25 @@ const createPassthroughOverlayRenderer = function() {
 	let maskCountLoc = null;
 	let maskCentersLoc = null;
 	let maskParamsLoc = null;
-	let uniformTintColorLoc = null;
-	let uniformTintStrengthLoc = null;
+	let additiveColorLoc = null;
+	let additiveStrengthLoc = null;
 	let spotCountLoc = null;
 	let spotCentersLoc = null;
 	let spotColorsLoc = null;
 	let spotParamsLoc = null;
-	let spotRevealStrengthsLoc = null;
+	let spotAlphaBlendStrengthsLoc = null;
 	let spotEffectParamsLoc = null;
-	let spotTintScaleLoc = null;
-	let spotRevealScaleLoc = null;
+	let spotAdditiveScaleLoc = null;
+	let spotAlphaBlendScaleLoc = null;
 	let buffer = null;
 	const maskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const spotCenters = new Float32Array(PASSTHROUGH_MAX_SPOTS * 2);
 	const spotColors = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
 	const spotParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
-	const spotRevealStrengths = new Float32Array(PASSTHROUGH_MAX_SPOTS);
+	const spotAlphaBlendStrengths = new Float32Array(PASSTHROUGH_MAX_SPOTS);
 	const spotEffectParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
-	const uniformTintColor = new Float32Array(3);
+	const additiveColor = new Float32Array(3);
 
 	const fragmentSource = [
 		"precision mediump float;",
@@ -729,16 +841,16 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float maskCount;",
 		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
 		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
-		"uniform vec3 uniformTintColor;",
-		"uniform float uniformTintStrength;",
+		"uniform vec3 additiveColor;",
+		"uniform float additiveStrength;",
 		"uniform float spotCount;",
 		"uniform vec4 spotColors[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec2 spotCenters[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
-		"uniform float spotRevealStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotAlphaBlendStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec4 spotEffectParams[" + PASSTHROUGH_MAX_SPOTS + "];",
-		"uniform float spotTintScale;",
-		"uniform float spotRevealScale;",
+		"uniform float spotAdditiveScale;",
+		"uniform float spotAlphaBlendScale;",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){",
 		"float radius=max(params.x,0.0001);",
@@ -761,23 +873,23 @@ const createPassthroughOverlayRenderer = function() {
 		"}",
 		fixtureEffectFragmentSource,
 		"void main(){",
-		"float reveal=visibleShare;",
+		"float alphaBlendOpen=visibleShare;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
 		"if(float(i)>=maskCount){break;}",
 		"float localMask=circleMask(vScreenUv,maskCenters[i],maskParams[i]);",
-		"reveal=1.0-(1.0-reveal)*(1.0-localMask);",
+		"alphaBlendOpen=1.0-(1.0-alphaBlendOpen)*(1.0-localMask);",
 		"}",
-		"vec3 color=uniformTintColor*uniformTintStrength*reveal;",
-		"float lightReveal=0.0;",
+		"vec3 color=additiveColor*additiveStrength*alphaBlendOpen;",
+		"float localAlphaBlendOpen=0.0;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
 		"if(float(i)>=spotCount){break;}",
 		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
 		"vec2 effectMask=spotEffect(vScreenUv,spotCenters[i],spotParams[i],spotEffectParams[i]);",
-		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*reveal*spotTintScale;",
+		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*alphaBlendOpen*spotAdditiveScale;",
 		"color+=spotColors[i].rgb*spotStrength;",
-		"lightReveal=max(lightReveal,clamp(spotColors[i].a*spotMask*effectMask.y*spotRevealStrengths[i]*1.65*reveal*spotRevealScale,0.0,1.0));",
+		"localAlphaBlendOpen=max(localAlphaBlendOpen,clamp(spotColors[i].a*spotMask*effectMask.y*spotAlphaBlendStrengths[i]*1.65*alphaBlendOpen*spotAlphaBlendScale,0.0,1.0));",
 		"}",
-		"gl_FragColor=vec4(color,darkAlpha*reveal*(1.0-lightReveal));",
+		"gl_FragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
 		"}"
 	].join("");
 
@@ -791,24 +903,24 @@ const createPassthroughOverlayRenderer = function() {
 			maskCountLoc = gl.getUniformLocation(program, "maskCount");
 			maskCentersLoc = gl.getUniformLocation(program, "maskCenters");
 			maskParamsLoc = gl.getUniformLocation(program, "maskParams");
-			uniformTintColorLoc = gl.getUniformLocation(program, "uniformTintColor");
-			uniformTintStrengthLoc = gl.getUniformLocation(program, "uniformTintStrength");
+			additiveColorLoc = gl.getUniformLocation(program, "additiveColor");
+			additiveStrengthLoc = gl.getUniformLocation(program, "additiveStrength");
 			spotCountLoc = gl.getUniformLocation(program, "spotCount");
 			spotCentersLoc = gl.getUniformLocation(program, "spotCenters");
 			spotColorsLoc = gl.getUniformLocation(program, "spotColors");
 			spotParamsLoc = gl.getUniformLocation(program, "spotParams");
-			spotRevealStrengthsLoc = gl.getUniformLocation(program, "spotRevealStrengths");
+			spotAlphaBlendStrengthsLoc = gl.getUniformLocation(program, "spotAlphaBlendStrengths");
 			spotEffectParamsLoc = gl.getUniformLocation(program, "spotEffectParams");
-			spotTintScaleLoc = gl.getUniformLocation(program, "spotTintScale");
-			spotRevealScaleLoc = gl.getUniformLocation(program, "spotRevealScale");
+			spotAdditiveScaleLoc = gl.getUniformLocation(program, "spotAdditiveScale");
+			spotAlphaBlendScaleLoc = gl.getUniformLocation(program, "spotAlphaBlendScale");
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
 		draw: function(renderState) {
 			if (!renderState) {
 				return;
 			}
-			const effectiveReveal = renderState.visibleShare > 0.001 || renderState.maskCount > 0;
-			if (!effectiveReveal) {
+			const effectiveAlphaBlendOpen = renderState.visibleShare > 0.001 || renderState.maskCount > 0;
+			if (!effectiveAlphaBlendOpen) {
 				return;
 			}
 			for (let i = 0; i < maskCenters.length; i += 1) {
@@ -821,8 +933,8 @@ const createPassthroughOverlayRenderer = function() {
 			for (let i = 0; i < spotParams.length; i += 1) {
 				spotParams[i] = 0;
 			}
-			for (let i = 0; i < spotRevealStrengths.length; i += 1) {
-				spotRevealStrengths[i] = 0;
+			for (let i = 0; i < spotAlphaBlendStrengths.length; i += 1) {
+				spotAlphaBlendStrengths[i] = 0;
 			}
 			for (let i = 0; i < spotEffectParams.length; i += 1) {
 				spotEffectParams[i] = 0;
@@ -847,15 +959,15 @@ const createPassthroughOverlayRenderer = function() {
 				spotColors[i * 4 + 1] = renderState.spots[i].g;
 				spotColors[i * 4 + 2] = renderState.spots[i].b;
 				spotColors[i * 4 + 3] = renderState.spots[i].strength;
-				spotRevealStrengths[i] = renderState.spots[i].revealStrength == null ? 1 : renderState.spots[i].revealStrength;
+				spotAlphaBlendStrengths[i] = renderState.spots[i].alphaBlendStrength == null ? 1 : renderState.spots[i].alphaBlendStrength;
 				spotEffectParams[i * 4] = renderState.spots[i].effectType || 0;
 				spotEffectParams[i * 4 + 1] = renderState.spots[i].effectPhase || 0;
 				spotEffectParams[i * 4 + 2] = renderState.spots[i].effectDensity || 0;
 				spotEffectParams[i * 4 + 3] = renderState.spots[i].effectAmount || 0;
 			}
-			uniformTintColor[0] = renderState.uniformTintColor[0];
-			uniformTintColor[1] = renderState.uniformTintColor[1];
-			uniformTintColor[2] = renderState.uniformTintColor[2];
+			additiveColor[0] = renderState.additiveColor[0];
+			additiveColor[1] = renderState.additiveColor[1];
+			additiveColor[2] = renderState.additiveColor[2];
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			gl.disable(gl.DEPTH_TEST);
@@ -869,16 +981,16 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform1f(maskCountLoc, renderState.maskCount);
 			gl.uniform2fv(maskCentersLoc, maskCenters);
 			gl.uniform2fv(maskParamsLoc, maskParams);
-			gl.uniform3fv(uniformTintColorLoc, uniformTintColor);
-			gl.uniform1f(uniformTintStrengthLoc, renderState.uniformTintStrength);
+			gl.uniform3fv(additiveColorLoc, additiveColor);
+			gl.uniform1f(additiveStrengthLoc, renderState.additiveStrength);
 			gl.uniform1f(spotCountLoc, renderState.spots.length);
 			gl.uniform2fv(spotCentersLoc, spotCenters);
 			gl.uniform4fv(spotColorsLoc, spotColors);
 			gl.uniform4fv(spotParamsLoc, spotParams);
-			gl.uniform1fv(spotRevealStrengthsLoc, spotRevealStrengths);
+			gl.uniform1fv(spotAlphaBlendStrengthsLoc, spotAlphaBlendStrengths);
 			gl.uniform4fv(spotEffectParamsLoc, spotEffectParams);
-			gl.uniform1f(spotTintScaleLoc, renderState.spotTintScale == null ? 1 : renderState.spotTintScale);
-			gl.uniform1f(spotRevealScaleLoc, renderState.spotRevealScale == null ? 1 : renderState.spotRevealScale);
+			gl.uniform1f(spotAdditiveScaleLoc, renderState.spotAdditiveScale == null ? 1 : renderState.spotAdditiveScale);
+			gl.uniform1f(spotAlphaBlendScaleLoc, renderState.spotAlphaBlendScale == null ? 1 : renderState.spotAlphaBlendScale);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);

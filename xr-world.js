@@ -1088,7 +1088,8 @@ const createSceneRenderer = function(options) {
 				viewMatrix: passthroughViewMatrix,
 				projMatrix: passthroughProjMatrix,
 				controllerRays: controllerRays,
-				sceneLightingState: sceneLightingState
+				sceneLightingState: sceneLightingState,
+				depthInfo: args.passthroughDepthInfo || null
 			}) : null);
 		}
 		if (menuState.floorAlpha > 0.001) {
@@ -1222,6 +1223,7 @@ const createSceneRenderer = function(options) {
 				}
 				args.passthroughViewMatrix = currentPassthroughView;
 				args.passthroughProjMatrix = currentPassthroughProj;
+				args.passthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[i] ? args.passthroughDepthInfoByView[i] : null;
 				if (args.visualizerEngine) {
 					args.visualizerEngine.setRenderView(currentView, currentProj);
 				}

@@ -129,18 +129,18 @@ const getPassthroughLightingControlDefinitions = function(state) {
 		],
 		effectSemanticControls: effectSemanticControlsVisibleBool ? [
 			{
-				key: "effectTintShare",
-				label: "Tint",
-				value: state.effectTintShare == null ? 1 : state.effectTintShare,
+				key: "effectAdditiveShare",
+				label: "Additive",
+				value: state.effectAdditiveShare == null ? 1 : state.effectAdditiveShare,
 				min: 0,
 				max: 1,
 				minLabel: "Off",
 				maxLabel: "Full"
 			},
 			{
-				key: "effectRevealShare",
-				label: "Reveal",
-				value: state.effectRevealShare == null ? 1 : state.effectRevealShare,
+				key: "effectAlphaBlendShare",
+				label: "Alpha Blend",
+				value: state.effectAlphaBlendShare == null ? 1 : state.effectAlphaBlendShare,
 				min: 0,
 				max: 1,
 				minLabel: "Off",

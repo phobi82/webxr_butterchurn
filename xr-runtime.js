@@ -68,6 +68,9 @@ const createRuntime = function(options) {
 		xrSession: null,
 		xrSessionMode: "",
 		xrEnvironmentBlendMode: "opaque",
+		xrDepthUsage: "",
+		xrDepthDataFormat: "",
+		depthSensingActiveBool: false,
 		passthroughAvailableBool: false,
 		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
 		baseRefSpace: null,
@@ -137,6 +140,22 @@ const createRuntime = function(options) {
 			sceneTimeSeconds: state.sceneTimeSeconds
 		}) : getAudioReactiveFloorColors();
 	};
+	const getPassthroughDepthInfoByView = function(frame, pose) {
+		if (!state.depthSensingActiveBool || !frame || !pose || !pose.views || typeof frame.getDepthInformation !== "function") {
+			return [];
+		}
+		const depthInfoByView = [];
+		for (let i = 0; i < pose.views.length; i += 1) {
+			let depthInfo = null;
+			try {
+				depthInfo = frame.getDepthInformation(pose.views[i]) || null;
+			} catch (error) {
+				depthInfo = null;
+			}
+			depthInfoByView.push(depthInfo);
+		}
+		return depthInfoByView;
+	};
 	const updateReferenceSpace = function(viewerTransform) {
 		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
 	};
@@ -194,7 +213,7 @@ const createRuntime = function(options) {
 		onLightPresetVariantAction: cycleLightingVariant,
 		onEffectSemanticModeAction: function(direction) {
 			const semanticState = getEffectSemanticModeState();
-			const currentIndex = semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY ? 1 : (semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY ? 2 : 0);
+			const currentIndex = semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 1 : (semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 2 : 0);
 			const nextIndex = (currentIndex + (direction < 0 ? -1 : 1) + passthroughEffectSemanticModeDefinitions.length) % passthroughEffectSemanticModeDefinitions.length;
 			if (passthroughController && passthroughController.selectEffectSemanticMode) {
 				passthroughController.selectEffectSemanticMode(passthroughEffectSemanticModeDefinitions[nextIndex].key);
@@ -331,6 +350,8 @@ const createRuntime = function(options) {
 		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: pose, callbacks: xrMenuActionCallbacks});
 		applyLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
+		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
+		const passthroughDepthInfoByView = getPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
 		}
@@ -342,7 +363,7 @@ const createRuntime = function(options) {
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, passthroughPose: state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -369,6 +390,9 @@ const createRuntime = function(options) {
 		state.xrSession = null;
 		state.xrSessionMode = "";
 		state.xrEnvironmentBlendMode = "opaque";
+		state.xrDepthUsage = "";
+		state.xrDepthDataFormat = "";
+		state.depthSensingActiveBool = false;
 		state.passthroughAvailableBool = false;
 		state.baseRefSpace = null;
 		state.xrRefSpace = null;
@@ -396,6 +420,9 @@ const createRuntime = function(options) {
 			state.xrSession = xrState.session;
 			state.xrSessionMode = xrState.sessionMode || "immersive-vr";
 			state.xrEnvironmentBlendMode = xrState.environmentBlendMode || "opaque";
+			state.xrDepthUsage = xrState.depthUsage || "";
+			state.xrDepthDataFormat = xrState.depthDataFormat || "";
+			state.depthSensingActiveBool = !!xrState.depthSensingActiveBool;
 			state.passthroughAvailableBool = !!xrState.passthroughAvailableBool;
 			state.baseRefSpace = xrState.baseRefSpace;
 			locomotion.resetXrState(xrMovementState);
@@ -413,6 +440,9 @@ const createRuntime = function(options) {
 			state.xrSession = null;
 			state.xrSessionMode = "";
 			state.xrEnvironmentBlendMode = "opaque";
+			state.xrDepthUsage = "";
+			state.xrDepthDataFormat = "";
+			state.depthSensingActiveBool = false;
 			state.passthroughAvailableBool = false;
 			updatePassthroughUiState();
 			updateDesktopMenuPreview();

@@ -44,12 +44,6 @@ const createTestLabMenuSections = function(args) {
 			hoveredAction: args.hoveredLightPresetVariantAction || ""
 		}));
 	}
-	controls.push(createCyclerMenuControlState({
-		key: "effectSemanticMode",
-		label: "Semantics",
-		valueText: args.effectSemanticModeLabel || "Current",
-		hoveredAction: args.hoveredEffectSemanticModeAction || ""
-	}));
 	const effectReviewSliderControls = (args.sceneLightingControls || []).concat(args.effectSemanticControls || []);
 	for (let i = 0; i < effectReviewSliderControls.length; i += 1) {
 		const sliderControl = effectReviewSliderControls[i];
@@ -78,7 +72,7 @@ const createTestLabMenuSections = function(args) {
 		createMenuSectionState({
 			key: "testLabIsolation",
 			title: "Isolation",
-			statusText: "Audio: " + getTestLabAudioModeLabel(args) + " | Semantics: " + (args.effectSemanticModeLabel || "Current") + " | Baseline: Uniform / Manual / Mix 100%",
+			statusText: "Audio: " + getTestLabAudioModeLabel(args) + " | Baseline: Uniform / Manual / Mix 100%",
 			controls: []
 		}),
 		createSessionMenuSectionState({
