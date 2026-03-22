@@ -7,6 +7,7 @@ const FIXTURE_EFFECT_MODE_SILHOUETTE = "silhouette";
 const FIXTURE_EFFECT_MODE_WINDOW_BEAT = "windowBeat";
 const FIXTURE_EFFECT_MODE_AURORA_CURTAIN = "auroraCurtain";
 const FIXTURE_EFFECT_MODE_FLOOR_HALO = "floorHalo";
+const FIXTURE_EFFECT_MODE_FLASHLIGHT = "flashlight";
 
 const getDefaultFixtureEffectMode = function(type) {
 	if (type === "wash") {
@@ -40,6 +41,9 @@ const getFixtureEffectTypeId = function(effectMode) {
 	if (effectMode === FIXTURE_EFFECT_MODE_FLOOR_HALO) {
 		return 6;
 	}
+	if (effectMode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
+		return 7;
+	}
 	return 0;
 };
 
@@ -55,6 +59,9 @@ const getFixtureRevealStrength = function(type, effectMode) {
 	}
 	if (effectMode === FIXTURE_EFFECT_MODE_FLOOR_HALO) {
 		return 0.78;
+	}
+	if (effectMode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
+		return 0.94;
 	}
 	if (type === "wash") {
 		return 0.72;
@@ -97,6 +104,9 @@ const getFixtureEffectState = function(args) {
 	} else if (effectType === 6) {
 		effectDensity = 0.72 + (audioMetrics.bass || 0) * 0.7 + (audioMetrics.bassHit || 0) * 0.4;
 		effectAmount = clampNumber((audioMetrics.bassHit || 0) * 0.62 + (audioMetrics.kickGate || 0) * 0.26 + (audioMetrics.roomFill || 0) * 0.18, 0, 1);
+	} else if (effectType === 7) {
+		effectDensity = 0.22 + (audioMetrics.level || 0) * 0.2 + (audioMetrics.roomFill || 0) * 0.14;
+		effectAmount = clampNumber(0.08 + (audioMetrics.transient || 0) * 0.16 + (audioMetrics.beatPulse || 0) * 0.12, 0, 1);
 	}
 	return {
 		mode: effectMode,
@@ -172,6 +182,14 @@ const fixtureEffectFragmentSource = [
 	"float haloPulse=0.5+0.5*sin((phase+amount*0.24)*6.28318);",
 	"float core=1.0-smoothstep(0.06,0.54,radial);",
 	"float ring=1.0-smoothstep(0.08,0.34,abs(radial-(0.3+haloPulse*0.22)));",
+	"if(effectType<6.5){",
 	"return vec2(0.54+core*0.18+ring*0.28,max(core*(0.64+amount*0.18),ring*(0.38+amount*0.16)));",
+	"}",
+	"float beamRadial=length(localNorm);",
+	"float beamCone=1.0-smoothstep(0.02,0.98,beamRadial);",
+	"float beamSpill=1.0-smoothstep(0.08,1.04,beamRadial);",
+	"float hotspot=1.0-smoothstep(0.0,0.22+density*0.22,beamRadial);",
+	"float shoulder=1.0-smoothstep(0.12,0.58+density*0.12,beamRadial);",
+	"return vec2(0.32+beamSpill*0.22+hotspot*0.46,beamCone*(0.22+shoulder*0.42+hotspot*(0.16+amount*0.12)));",
 	"}"
 ].join("");

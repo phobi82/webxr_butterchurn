@@ -521,6 +521,8 @@ const createMenuController = function(options) {
 		hoveredExitVrBool: false,
 		hoveredShaderModeAction: "",
 		hoveredLightPresetAction: "",
+		hoveredLightPresetVariantAction: "",
+		hoveredEffectSemanticModeAction: "",
 		hoveredPresetAction: "",
 		xrSessionActiveBool: false,
 		desktopPreviewVisibleBool: options.initialDesktopPreviewVisibleBool !== false,
@@ -533,10 +535,17 @@ const createMenuController = function(options) {
 			currentLightPresetIndex: 0,
 			currentLightPresetName: "Aurora Drift",
 			currentLightPresetDescription: "Slow colorful overhead drift",
-			currentLightPresetFamilyName: "Aurora Drift",
+			currentLightPresetEffectDescription: "Slow colorful overhead drift",
+			currentLightPresetEffectName: "Aurora Drift",
+			currentLightPresetEffectIndex: 0,
+			currentLightPresetEffectCount: 1,
 			currentLightPresetVariantKey: "",
+			currentLightPresetVariantIndex: 0,
+			currentLightPresetVariantCount: 1,
 			currentLightPresetVariantLabel: "",
-			currentLightPresetSurfaceKey: ""
+			currentLightPresetSurfaceKey: "",
+			effectSemanticModeKey: PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+			effectSemanticModeLabel: "Current"
 		}
 	};
 	const menuPlane = {
@@ -573,10 +582,17 @@ const createMenuController = function(options) {
 				currentLightPresetIndex: externalState.currentLightPresetIndex || 0,
 				currentLightPresetName: externalState.currentLightPresetName || "",
 				currentLightPresetDescription: externalState.currentLightPresetDescription || "",
-				currentLightPresetFamilyName: externalState.currentLightPresetFamilyName || externalState.currentLightPresetName || "",
+				currentLightPresetEffectDescription: externalState.currentLightPresetEffectDescription || externalState.currentLightPresetDescription || "",
+				currentLightPresetEffectName: externalState.currentLightPresetEffectName || externalState.currentLightPresetName || "",
+				currentLightPresetEffectIndex: externalState.currentLightPresetEffectIndex || 0,
+				currentLightPresetEffectCount: externalState.currentLightPresetEffectCount || 1,
 				currentLightPresetVariantKey: externalState.currentLightPresetVariantKey || "",
+				currentLightPresetVariantIndex: externalState.currentLightPresetVariantIndex || 0,
+				currentLightPresetVariantCount: externalState.currentLightPresetVariantCount || 1,
 				currentLightPresetVariantLabel: externalState.currentLightPresetVariantLabel || "",
-				currentLightPresetSurfaceKey: externalState.currentLightPresetSurfaceKey || ""
+				currentLightPresetSurfaceKey: externalState.currentLightPresetSurfaceKey || "",
+				effectSemanticModeKey: externalState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+				effectSemanticModeLabel: externalState.effectSemanticModeLabel || "Current"
 			};
 		}
 	};
@@ -626,11 +642,20 @@ const createMenuController = function(options) {
 			currentLightPresetIndex: lightPresetIndex,
 			currentLightPresetName: lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
 			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
-			currentLightPresetFamilyName: lightingState.currentLightPresetFamilyName || lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetEffectDescription: lightingState.currentLightPresetEffectDescription || lightingState.currentLightPresetDescription || "",
+			currentLightPresetEffectName: lightingState.currentLightPresetEffectName || lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetEffectIndex: lightingState.currentLightPresetEffectIndex || 0,
+			currentLightPresetEffectCount: lightingState.currentLightPresetEffectCount || 1,
 			currentLightPresetVariantKey: lightingState.currentLightPresetVariantKey || "",
+			currentLightPresetVariantIndex: lightingState.currentLightPresetVariantIndex || 0,
+			currentLightPresetVariantCount: lightingState.currentLightPresetVariantCount || 1,
 			currentLightPresetVariantLabel: lightingState.currentLightPresetVariantLabel || "",
 			currentLightPresetSurfaceKey: lightingState.currentLightPresetSurfaceKey || "",
 			hoveredLightPresetAction: state.hoveredLightPresetAction,
+			hoveredLightPresetVariantAction: state.hoveredLightPresetVariantAction,
+			effectSemanticModeKey: lightingState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+			effectSemanticModeLabel: lightingState.effectSemanticModeLabel || "Current",
+			hoveredEffectSemanticModeAction: state.hoveredEffectSemanticModeAction,
 			sceneLightingPrimaryControl: passthroughUiState.lightingPrimaryControl,
 			sceneLightingSecondaryControl: passthroughUiState.lightingSecondaryControl,
 			sceneLightingTertiaryControl: passthroughUiState.lightingTertiaryControl,
@@ -687,6 +712,8 @@ const createMenuController = function(options) {
 		state.hoveredExitVrBool = false;
 		state.hoveredShaderModeAction = "";
 		state.hoveredLightPresetAction = "";
+		state.hoveredLightPresetVariantAction = "";
+		state.hoveredEffectSemanticModeAction = "";
 		state.hoveredPresetAction = "";
 	};
 	const releaseSliderHand = function(hand) {
@@ -792,6 +819,8 @@ const createMenuController = function(options) {
 			state.hoveredExitVrBool = false;
 			state.hoveredShaderModeAction = "";
 			state.hoveredLightPresetAction = "";
+			state.hoveredLightPresetVariantAction = "";
+			state.hoveredEffectSemanticModeAction = "";
 			state.hoveredPresetAction = "";
 			return;
 		}
@@ -810,6 +839,8 @@ const createMenuController = function(options) {
 		state.hoveredExitVrBool = hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr";
 		state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : "";
 		state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : "";
+		state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : "";
+		state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : "";
 		state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : "";
 		if (state.activeSliderHand === "desktop") {
 			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
@@ -921,6 +952,8 @@ const createMenuController = function(options) {
 				state.hoveredExitVrBool = (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr") || state.hoveredExitVrBool;
 				state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : state.hoveredShaderModeAction;
 				state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : state.hoveredLightPresetAction;
+				state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : state.hoveredLightPresetVariantAction;
+				state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : state.hoveredEffectSemanticModeAction;
 				state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : state.hoveredPresetAction;
 			}
 			controllerRays.push(ray);
@@ -1088,6 +1121,12 @@ const createMenuController = function(options) {
 			if (hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
 				callbacks.onLightPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
+			if (hit.moduleCycleControlKey === "sceneLightVariant" && callbacks.onLightPresetVariantAction) {
+				callbacks.onLightPresetVariantAction(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
+			if (hit.moduleCycleControlKey === "effectSemanticMode" && callbacks.onEffectSemanticModeAction) {
+				callbacks.onEffectSemanticModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
 			if (hit.moduleChoiceControlKey === "passthroughUniformBlendMode" && passthroughController && passthroughController.selectUniformBlendMode) {
 				passthroughController.selectUniformBlendMode(hit.moduleChoiceItemKey);
 			}
@@ -1246,6 +1285,12 @@ const createMenuController = function(options) {
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
 					callbacks.onLightPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightVariant" && callbacks.onLightPresetVariantAction) {
+					callbacks.onLightPresetVariantAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "effectSemanticMode" && callbacks.onEffectSemanticModeAction) {
+					callbacks.onEffectSemanticModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughUniformBlendMode" && passthroughController && passthroughController.selectUniformBlendMode) {
 					passthroughController.selectUniformBlendMode(ray.hit.moduleChoiceItemKey);

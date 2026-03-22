@@ -99,6 +99,9 @@ const createRuntime = function(options) {
 	const getLightingSelectionState = function() {
 		return sceneLighting && sceneLighting.getSelectionState ? sceneLighting.getSelectionState() : null;
 	};
+	const getEffectSemanticModeState = function() {
+		return passthroughController && passthroughController.getEffectSemanticModeState ? passthroughController.getEffectSemanticModeState() : {key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT, label: "Current"};
+	};
 	const getAudioSourceState = function() {
 		return audioController && audioController.getState ? audioController.getState() : {sourceKind: "none", sourceName: ""};
 	};
@@ -163,11 +166,40 @@ const createRuntime = function(options) {
 		cycleSelection(state.visualizerEngine, getVisualizerSelectionState, "modeNames", "currentModeIndex", function(i) { this.selectMode(i); }, direction);
 	};
 	const cycleLightingPreset = function(direction) {
-		cycleSelection(sceneLighting, getLightingSelectionState, "presetNames", "currentPresetIndex", function(i) { this.selectPreset(i); }, direction);
+		if (!sceneLighting || !sceneLighting.selectPreset) {
+			return Promise.resolve();
+		}
+		const selectionState = getLightingSelectionState();
+		const count = selectionState ? selectionState.presetNames.length : 0;
+		if (!count) {
+			return Promise.resolve();
+		}
+		return sceneLighting.selectPreset((selectionState.currentPresetIndex + direction + count) % count);
+	};
+	const cycleLightingEffect = function(direction) {
+		if (!sceneLighting || !sceneLighting.cycleEffect) {
+			return Promise.resolve();
+		}
+		return sceneLighting.cycleEffect(direction < 0 ? -1 : 1);
+	};
+	const cycleLightingVariant = function(direction) {
+		if (!sceneLighting || !sceneLighting.cycleVariant) {
+			return Promise.resolve();
+		}
+		return sceneLighting.cycleVariant(direction < 0 ? -1 : 1);
 	};
 	const xrMenuActionCallbacks = {
 		onShaderModeAction: cycleShaderMode,
-		onLightPresetAction: cycleLightingPreset,
+		onLightPresetAction: cycleLightingEffect,
+		onLightPresetVariantAction: cycleLightingVariant,
+		onEffectSemanticModeAction: function(direction) {
+			const semanticState = getEffectSemanticModeState();
+			const currentIndex = semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY ? 1 : (semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY ? 2 : 0);
+			const nextIndex = (currentIndex + (direction < 0 ? -1 : 1) + passthroughEffectSemanticModeDefinitions.length) % passthroughEffectSemanticModeDefinitions.length;
+			if (passthroughController && passthroughController.selectEffectSemanticMode) {
+				passthroughController.selectEffectSemanticMode(passthroughEffectSemanticModeDefinitions[nextIndex].key);
+			}
+		},
 		onPresetAction: cyclePreset,
 		onExitVrAction: function() {
 			if (state.xrSession) {
@@ -177,7 +209,9 @@ const createRuntime = function(options) {
 	};
 	const desktopMenuActionCallbacks = {
 		onShaderModeAction: cycleShaderMode,
-		onLightPresetAction: cycleLightingPreset,
+		onLightPresetAction: cycleLightingEffect,
+		onLightPresetVariantAction: cycleLightingVariant,
+		onEffectSemanticModeAction: xrMenuActionCallbacks.onEffectSemanticModeAction,
 		onPresetAction: function(direction) {
 			audioController.activate();
 			cyclePreset(direction);
@@ -236,6 +270,7 @@ const createRuntime = function(options) {
 		const visualizerSelectionState = getVisualizerSelectionState();
 		const lightingSelectionState = getLightingSelectionState();
 		const audioSourceState = getAudioSourceState();
+		const effectSemanticModeState = getEffectSemanticModeState();
 		return {
 			sceneTimeSeconds: state.sceneTimeSeconds,
 			audioMetrics: getAudioMetrics(),
@@ -247,10 +282,17 @@ const createRuntime = function(options) {
 			currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
 			currentLightPresetName: lightingSelectionState ? lightingSelectionState.currentPresetName : "Aurora Drift",
 			currentLightPresetDescription: lightingSelectionState ? lightingSelectionState.currentPresetDescription : "Slow colorful overhead drift",
-			currentLightPresetFamilyName: lightingSelectionState ? lightingSelectionState.currentPresetFamilyName : "Aurora Drift",
+			currentLightPresetEffectName: lightingSelectionState ? lightingSelectionState.currentPresetEffectName : "Aurora Drift",
+			currentLightPresetEffectDescription: lightingSelectionState ? lightingSelectionState.currentPresetEffectDescription : "Slow colorful overhead drift",
+			currentLightPresetEffectIndex: lightingSelectionState ? lightingSelectionState.currentPresetEffectIndex : 0,
+			currentLightPresetEffectCount: lightingSelectionState ? lightingSelectionState.currentPresetEffectCount : 1,
 			currentLightPresetVariantKey: lightingSelectionState ? lightingSelectionState.currentPresetVariantKey : "",
+			currentLightPresetVariantIndex: lightingSelectionState ? lightingSelectionState.currentPresetVariantIndex : 0,
+			currentLightPresetVariantCount: lightingSelectionState ? lightingSelectionState.currentPresetVariantCount : 1,
 			currentLightPresetVariantLabel: lightingSelectionState ? lightingSelectionState.currentPresetVariantLabel : "",
 			currentLightPresetSurfaceKey: lightingSelectionState ? lightingSelectionState.currentPresetSurfaceKey : "",
+			effectSemanticModeKey: effectSemanticModeState.key,
+			effectSemanticModeLabel: effectSemanticModeState.label,
 			presetNames: visualizerSelectionState ? visualizerSelectionState.presetNames : ["Preset 1"],
 			currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0,
 			xrSessionActiveBool: !!state.xrSession
@@ -496,12 +538,23 @@ const createRuntime = function(options) {
 			shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
 			windowRef.requestAnimationFrame(renderPreview);
 		},
+		cycleLightingEffect: cycleLightingEffect,
+		cycleLightingVariant: cycleLightingVariant,
 		cycleLightingPreset: cycleLightingPreset,
 		selectLightingPreset: function(index) {
 			if (!sceneLighting || !sceneLighting.selectPreset) {
 				return Promise.resolve();
 			}
 			return sceneLighting.selectPreset(index);
+		},
+		selectEffectSemanticMode: function(key) {
+			if (passthroughController && passthroughController.selectEffectSemanticMode) {
+				passthroughController.selectEffectSemanticMode(key);
+			}
+			return Promise.resolve();
+		},
+		getEffectSemanticModeState: function() {
+			return getEffectSemanticModeState();
 		},
 		getLightingSelectionState: function() {
 			return getLightingSelectionState();

@@ -551,9 +551,34 @@ const createSceneLighting = function(options) {
 		}
 		return names;
 	};
+	const getCurrentPresetDefinition = function() {
+		return presetDefinitions[currentPresetIndex] || {};
+	};
+	const getPresetIndexForEffectVariant = function(effectIndex, variantIndex) {
+		const matchingIndexes = [];
+		for (let i = 0; i < presetDefinitions.length; i += 1) {
+			if ((presetDefinitions[i].effectIndex == null ? i : presetDefinitions[i].effectIndex) === effectIndex) {
+				matchingIndexes.push(i);
+			}
+		}
+		if (!matchingIndexes.length) {
+			return currentPresetIndex;
+		}
+		return matchingIndexes[(variantIndex + matchingIndexes.length) % matchingIndexes.length];
+	};
+	const getEffectIndexes = function() {
+		const indexes = [];
+		for (let i = 0; i < presetDefinitions.length; i += 1) {
+			const effectIndex = presetDefinitions[i].effectIndex == null ? i : presetDefinitions[i].effectIndex;
+			if (indexes.indexOf(effectIndex) === -1) {
+				indexes.push(effectIndex);
+			}
+		}
+		return indexes;
+	};
 	return {
 		update: function(timeSeconds, audioMetrics) {
-			const preset = presetDefinitions[currentPresetIndex] || presetDefinitions[0];
+			const preset = getCurrentPresetDefinition() || presetDefinitions[0];
 			clearLightingState(state);
 			preset.buildState(state, timeSeconds || 0, audioMetrics || {});
 			state.name = preset.name;
@@ -564,14 +589,19 @@ const createSceneLighting = function(options) {
 			return state;
 		},
 		getSelectionState: function() {
-			const presetDefinition = presetDefinitions[currentPresetIndex] || {};
+			const presetDefinition = getCurrentPresetDefinition();
 			return {
 				presetNames: getPresetNames(),
 				currentPresetIndex: currentPresetIndex,
 				currentPresetName: presetDefinition.name || "",
 				currentPresetDescription: presetDefinition.description || "",
-				currentPresetFamilyName: presetDefinition.familyName || presetDefinition.name || "",
+				currentPresetEffectName: presetDefinition.effectName || presetDefinition.name || "",
+				currentPresetEffectDescription: presetDefinition.effectDescription || presetDefinition.description || "",
+				currentPresetEffectIndex: presetDefinition.effectIndex == null ? currentPresetIndex : presetDefinition.effectIndex,
+				currentPresetEffectCount: presetDefinition.effectCount == null ? presetDefinitions.length : presetDefinition.effectCount,
 				currentPresetVariantKey: presetDefinition.variantKey || "",
+				currentPresetVariantIndex: presetDefinition.variantIndex == null ? 0 : presetDefinition.variantIndex,
+				currentPresetVariantCount: presetDefinition.variantCount == null ? 1 : presetDefinition.variantCount,
 				currentPresetVariantLabel: presetDefinition.variantLabel || "",
 				currentPresetSurfaceKey: presetDefinition.surfaceKey || ""
 			};
@@ -581,6 +611,27 @@ const createSceneLighting = function(options) {
 				return Promise.resolve();
 			}
 			currentPresetIndex = (index + presetDefinitions.length) % presetDefinitions.length;
+			return Promise.resolve();
+		},
+		cycleEffect: function(direction) {
+			const effectIndexes = getEffectIndexes();
+			const presetDefinition = getCurrentPresetDefinition();
+			const currentEffectIndex = presetDefinition.effectIndex == null ? currentPresetIndex : presetDefinition.effectIndex;
+			const effectPosition = effectIndexes.indexOf(currentEffectIndex);
+			const safeEffectPosition = effectPosition >= 0 ? effectPosition : 0;
+			const nextEffectIndex = effectIndexes[(safeEffectPosition + (direction < 0 ? -1 : 1) + effectIndexes.length) % effectIndexes.length];
+			currentPresetIndex = getPresetIndexForEffectVariant(nextEffectIndex, presetDefinition.variantIndex || 0);
+			return Promise.resolve();
+		},
+		cycleVariant: function(direction) {
+			const presetDefinition = getCurrentPresetDefinition();
+			const variantCount = presetDefinition.variantCount == null ? 1 : presetDefinition.variantCount;
+			if (variantCount <= 1) {
+				return Promise.resolve();
+			}
+			const effectIndex = presetDefinition.effectIndex == null ? currentPresetIndex : presetDefinition.effectIndex;
+			const nextVariantIndex = ((presetDefinition.variantIndex || 0) + (direction < 0 ? -1 : 1) + variantCount) % variantCount;
+			currentPresetIndex = getPresetIndexForEffectVariant(effectIndex, nextVariantIndex);
 			return Promise.resolve();
 		}
 	};

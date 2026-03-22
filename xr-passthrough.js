@@ -8,6 +8,25 @@ const PASSTHROUGH_ROOM_HALF_DEPTH = 4.4;
 const PASSTHROUGH_ROOM_FLOOR_Y = 0.08;
 const PASSTHROUGH_ROOM_WALL_Y = 1.35;
 
+const PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT = "current";
+const PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY = "tintOnly";
+const PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY = "revealOnly";
+
+const passthroughEffectSemanticModeDefinitions = [
+	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT, label: "Current"},
+	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY, label: "Tint Only"},
+	{key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY, label: "Reveal Only"}
+];
+
+const getPassthroughEffectSemanticModeLabel = function(modeKey) {
+	for (let i = 0; i < passthroughEffectSemanticModeDefinitions.length; i += 1) {
+		if (passthroughEffectSemanticModeDefinitions[i].key === modeKey) {
+			return passthroughEffectSemanticModeDefinitions[i].label;
+		}
+	}
+	return "Current";
+};
+
 const getPassthroughAvailabilityState = function(args) {
 	args = args || {};
 	if (args.availableBool) {
@@ -370,6 +389,9 @@ const createPassthroughController = function(options) {
 		uniformBlendModeKey: options.initialUniformBlendModeKey || "manual",
 		lightingModeKey: options.initialLightingModeKey || "uniform",
 		lightingDarkness: options.initialLightingDarkness == null ? 0.05 : options.initialLightingDarkness,
+		effectSemanticModeKey: options.initialEffectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+		effectTintShare: options.initialEffectTintShare == null ? 1 : options.initialEffectTintShare,
+		effectRevealShare: options.initialEffectRevealShare == null ? 1 : options.initialEffectRevealShare,
 		manualMix: options.initialManualMix == null ? 0 : options.initialManualMix,
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
@@ -560,7 +582,9 @@ const createPassthroughController = function(options) {
 				lightingTertiaryControl: lightingControlState.tertiaryControl,
 				uniformBlendModeVisibleBool: controlState.uniformBlendModeVisibleBool,
 				audioDrive: state.smoothedBlendDrive,
-				visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive)
+				visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive),
+				effectSemanticModeKey: state.effectSemanticModeKey,
+				effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
 			};
 		},
 		cycleBlendMode: function(direction) {
@@ -585,6 +609,20 @@ const createPassthroughController = function(options) {
 				}
 			}
 		},
+		selectEffectSemanticMode: function(key) {
+			for (let i = 0; i < passthroughEffectSemanticModeDefinitions.length; i += 1) {
+				if (passthroughEffectSemanticModeDefinitions[i].key === key) {
+					state.effectSemanticModeKey = key;
+					return;
+				}
+			}
+		},
+		getEffectSemanticModeState: function() {
+			return {
+				key: state.effectSemanticModeKey,
+				label: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
+			};
+		},
 		setControlValue: function(key, value) {
 			if (key === "manualMix") {
 				state.manualMix = clampNumber(value, 0, 1);
@@ -600,6 +638,12 @@ const createPassthroughController = function(options) {
 			}
 			if (key === "lightingDarkness") {
 				state.lightingDarkness = clampNumber(value, 0, 1);
+			}
+			if (key === "effectTintShare") {
+				state.effectTintShare = clampNumber(value, 0, 1);
+			}
+			if (key === "effectRevealShare") {
+				state.effectRevealShare = clampNumber(value, 0, 1);
 			}
 		},
 		getBackgroundCompositeState: function(args) {
@@ -619,6 +663,8 @@ const createPassthroughController = function(options) {
 			const lightingColor = getAveragedLightingColor(lightingState);
 			const tintStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
 			const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
+			const spotTintScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_REVEAL_ONLY ? 0 : clampNumber(state.effectTintShare, 0, 1);
+			const spotRevealScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_TINT_ONLY ? 0 : clampNumber(state.effectRevealShare, 0, 1);
 			return {
 				visibleShare: visibleShare,
 				maskCount: flashlightMasks.length,
@@ -627,6 +673,9 @@ const createPassthroughController = function(options) {
 				uniformTintColor: lightingColor,
 				uniformTintStrength: tintStrength,
 				lightingModeKey: state.lightingModeKey,
+				effectSemanticModeKey: state.effectSemanticModeKey,
+				spotTintScale: spotTintScale,
+				spotRevealScale: spotRevealScale,
 				spots: state.lightingModeKey === "club" ? getClubLights(args) : getSpotLights(args)
 			};
 		}
@@ -663,6 +712,8 @@ const createPassthroughOverlayRenderer = function() {
 	let spotParamsLoc = null;
 	let spotRevealStrengthsLoc = null;
 	let spotEffectParamsLoc = null;
+	let spotTintScaleLoc = null;
+	let spotRevealScaleLoc = null;
 	let buffer = null;
 	const maskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
@@ -688,6 +739,8 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform float spotRevealStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
 		"uniform vec4 spotEffectParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotTintScale;",
+		"uniform float spotRevealScale;",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){",
 		"float radius=max(params.x,0.0001);",
@@ -722,9 +775,9 @@ const createPassthroughOverlayRenderer = function() {
 		"if(float(i)>=spotCount){break;}",
 		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
 		"vec2 effectMask=spotEffect(vScreenUv,spotCenters[i],spotParams[i],spotEffectParams[i]);",
-		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*reveal;",
+		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*reveal*spotTintScale;",
 		"color+=spotColors[i].rgb*spotStrength;",
-		"lightReveal=max(lightReveal,clamp(spotColors[i].a*spotMask*effectMask.y*spotRevealStrengths[i]*1.65*reveal,0.0,1.0));",
+		"lightReveal=max(lightReveal,clamp(spotColors[i].a*spotMask*effectMask.y*spotRevealStrengths[i]*1.65*reveal*spotRevealScale,0.0,1.0));",
 		"}",
 		"gl_FragColor=vec4(color,darkAlpha*reveal*(1.0-lightReveal));",
 		"}"
@@ -748,6 +801,8 @@ const createPassthroughOverlayRenderer = function() {
 			spotParamsLoc = gl.getUniformLocation(program, "spotParams");
 			spotRevealStrengthsLoc = gl.getUniformLocation(program, "spotRevealStrengths");
 			spotEffectParamsLoc = gl.getUniformLocation(program, "spotEffectParams");
+			spotTintScaleLoc = gl.getUniformLocation(program, "spotTintScale");
+			spotRevealScaleLoc = gl.getUniformLocation(program, "spotRevealScale");
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
 		draw: function(renderState) {
@@ -824,6 +879,8 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform4fv(spotParamsLoc, spotParams);
 			gl.uniform1fv(spotRevealStrengthsLoc, spotRevealStrengths);
 			gl.uniform4fv(spotEffectParamsLoc, spotEffectParams);
+			gl.uniform1f(spotTintScaleLoc, renderState.spotTintScale == null ? 1 : renderState.spotTintScale);
+			gl.uniform1f(spotRevealScaleLoc, renderState.spotRevealScale == null ? 1 : renderState.spotRevealScale);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);

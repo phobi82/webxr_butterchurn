@@ -1,10 +1,10 @@
 // Isolated single-effect presets for TestLab.html.
 
-const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const hueA = wrapUnit(0.54 + timeSeconds * 0.02 + metrics.colorMomentum * 0.03);
 	const hueB = wrapUnit(hueA + 0.06);
-	if (contextKey === "wall") {
+	if (variantKey === "wall") {
 		addFixture(state, "wash", "wall", timeSeconds * 0.04 + 1.18, hslToRgb(hueA, 0.8, 0.58), 0.22 + metrics.roomFill * 0.14, 1.02, {
 			softness: 0.38,
 			sweep: 0.16,
@@ -22,7 +22,7 @@ const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics, contextK
 		applyFixtureGroupsToLightingState(state, 0.2);
 		return;
 	}
-	if (contextKey === "floor") {
+	if (variantKey === "floor") {
 		addFixture(state, "wash", "floor", timeSeconds * 0.04 + 0.62, hslToRgb(hueA, 0.78, 0.56), 0.2 + metrics.bassHit * 0.18 + metrics.roomFill * 0.1, 1.1, {
 			softness: 0.42,
 			sweep: 0.08,
@@ -49,11 +49,11 @@ const buildTestLabSoftWash = function(state, timeSeconds, audioMetrics, contextK
 	applyFixtureGroupsToLightingState(state, 0.28);
 };
 
-const buildTestLabShutters = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabShutters = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const hueA = wrapUnit(0.96 + timeSeconds * 0.035 + metrics.colorMomentum * 0.03);
 	const hueB = wrapUnit(hueA + 0.09);
-	if (contextKey === "wall") {
+	if (variantKey === "wall") {
 		addFixture(state, "wash", "wall", timeSeconds * 0.06 + 1.1, hslToRgb(hueA, 0.9, 0.6), 0.24 + metrics.roomFill * 0.14, 0.88, {
 			softness: 0.24,
 			sweep: 0.22,
@@ -84,11 +84,11 @@ const buildTestLabShutters = function(state, timeSeconds, audioMetrics, contextK
 	applyFixtureGroupsToLightingState(state, 0.22);
 };
 
-const buildTestLabEdgeRunner = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabEdgeRunner = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const leftHue = wrapUnit(0.58 + timeSeconds * 0.06);
 	const rightHue = wrapUnit(leftHue + 0.34);
-	if (contextKey === "ceiling") {
+	if (variantKey === "ceiling") {
 		addFixture(state, "beam", "ceiling", timeSeconds * 0.44 + 0.9, hslToRgb(leftHue, 0.98, 0.62), 0.24 + metrics.leftImpact * 0.5 + metrics.motionEnergy * 0.14, 0.26, {
 			softness: 0.04,
 			sweep: 1.22,
@@ -119,38 +119,38 @@ const buildTestLabEdgeRunner = function(state, timeSeconds, audioMetrics, contex
 	applyFixtureGroupsToLightingState(state, 0.16);
 };
 
-const buildTestLabSilhouetteCut = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabSilhouetteCut = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const hue = wrapUnit(0.1 + timeSeconds * 0.08);
-	addFixture(state, "strobe", contextKey === "ceiling" ? "ceiling" : "wall", timeSeconds * 0.44 + 1.2, hslToRgb(hue, 1, 0.72), 0.28 + metrics.transientGate * 0.44 + metrics.strobeGate * 0.26, 0.24, {
+	addFixture(state, "strobe", variantKey === "ceiling" ? "ceiling" : "wall", timeSeconds * 0.44 + 1.2, hslToRgb(hue, 1, 0.72), 0.28 + metrics.transientGate * 0.44 + metrics.strobeGate * 0.26, 0.24, {
 		softness: 0.04,
-		sweep: contextKey === "ceiling" ? 0.66 : 0.72,
-		vertical: contextKey === "ceiling" ? 0.55 : 0.7,
+		sweep: variantKey === "ceiling" ? 0.66 : 0.72,
+		vertical: variantKey === "ceiling" ? 0.55 : 0.7,
 		strobeAmount: metrics.strobeGate,
 		effectMode: FIXTURE_EFFECT_MODE_SILHOUETTE
 	});
 	applyFixtureGroupsToLightingState(state, 0.1);
 };
 
-const buildTestLabRoomWindowBeat = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabRoomWindowBeat = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const hue = wrapUnit(0.34 + timeSeconds * 0.08);
-	addFixture(state, "strobe", contextKey === "ceiling" ? "ceiling" : "wall", timeSeconds * 0.52 + 1.4, hslToRgb(hue, 0.98, 0.68), 0.26 + metrics.beatPulse * 0.38 + metrics.strobeGate * 0.24, 0.24, {
+	addFixture(state, "strobe", variantKey === "ceiling" ? "ceiling" : "wall", timeSeconds * 0.52 + 1.4, hslToRgb(hue, 0.98, 0.68), 0.26 + metrics.beatPulse * 0.38 + metrics.strobeGate * 0.24, 0.24, {
 		softness: 0.04,
-		sweep: contextKey === "ceiling" ? 0.7 : 0.76,
-		vertical: contextKey === "ceiling" ? 0.56 : 0.68,
+		sweep: variantKey === "ceiling" ? 0.7 : 0.76,
+		vertical: variantKey === "ceiling" ? 0.56 : 0.68,
 		strobeAmount: metrics.strobeGate,
 		effectMode: FIXTURE_EFFECT_MODE_WINDOW_BEAT
 	});
 	applyFixtureGroupsToLightingState(state, 0.1);
 };
 
-const buildTestLabAuroraCurtain = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabAuroraCurtain = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const bandHueA = wrapUnit(0.34 + timeSeconds * 0.004 + metrics.colorMomentum * 0.012);
 	const bandHueB = wrapUnit(bandHueA + 0.1);
 	const bandHueC = wrapUnit(bandHueA + 0.22);
-	if (contextKey === "wall") {
+	if (variantKey === "wall") {
 		addFixture(state, "wash", "wall", timeSeconds * 0.06 + 1.1, hslToRgb(bandHueA, 0.88, 0.56), 0.26 + metrics.roomFill * 0.18, 0.74, {
 			softness: 0.24,
 			sweep: 0.2,
@@ -192,190 +192,216 @@ const buildTestLabAuroraCurtain = function(state, timeSeconds, audioMetrics, con
 	applyFixtureGroupsToLightingState(state, 0.24);
 };
 
-const buildTestLabFloorHalo = function(state, timeSeconds, audioMetrics, contextKey) {
+const buildTestLabFloorHalo = function(state, timeSeconds, audioMetrics, variantKey) {
 	const metrics = getHybridClubMetrics(audioMetrics);
 	const hueA = wrapUnit(0.98 + timeSeconds * 0.04);
 	const hueB = wrapUnit(hueA + 0.42);
-	addFixture(state, "wash", "floor", timeSeconds * 0.16 + 0.8 + (contextKey === "directional" ? -0.42 : 0), hslToRgb(hueA, 0.9, 0.58), 0.24 + metrics.bassHit * 0.34 + metrics.kickGate * 0.16, contextKey === "directional" ? 0.84 : 0.96, {
-		softness: contextKey === "directional" ? 0.28 : 0.34,
+	addFixture(state, "wash", "floor", timeSeconds * 0.16 + 0.8 + (variantKey === "directional" ? -0.42 : 0), hslToRgb(hueA, 0.9, 0.58), 0.24 + metrics.bassHit * 0.34 + metrics.kickGate * 0.16, variantKey === "directional" ? 0.84 : 0.96, {
+		softness: variantKey === "directional" ? 0.28 : 0.34,
 		sweep: 0.12,
 		effectMode: FIXTURE_EFFECT_MODE_FLOOR_HALO
 	});
-	addFixture(state, "wash", "floor", -(timeSeconds * 0.14) + 3.1 + (contextKey === "directional" ? 0.52 : 0), hslToRgb(hueB, 0.88, 0.58), 0.24 + metrics.bassHit * 0.34 + metrics.kickGate * 0.16, contextKey === "directional" ? 0.72 : 0.92, {
-		softness: contextKey === "directional" ? 0.26 : 0.34,
+	addFixture(state, "wash", "floor", -(timeSeconds * 0.14) + 3.1 + (variantKey === "directional" ? 0.52 : 0), hslToRgb(hueB, 0.88, 0.58), 0.24 + metrics.bassHit * 0.34 + metrics.kickGate * 0.16, variantKey === "directional" ? 0.72 : 0.92, {
+		softness: variantKey === "directional" ? 0.26 : 0.34,
 		sweep: 0.12,
 		effectMode: FIXTURE_EFFECT_MODE_FLOOR_HALO
 	});
 	applyFixtureGroupsToLightingState(state, 0.18);
 };
 
-const createTestLabPresetDefinition = function(args) {
+const buildTestLabFlashlight = function(state, timeSeconds, audioMetrics, variantKey) {
+	const metrics = getHybridClubMetrics(audioMetrics);
+	const beamColor = hslToRgb(wrapUnit(0.12 + timeSeconds * 0.01), 0.12, 0.86);
+	if (variantKey === "wall") {
+		addFixture(state, "beam", "wall", 3.14, beamColor, 0.34 + metrics.level * 0.16 + metrics.transient * 0.08, 0.42, {
+			softness: 0.08,
+			sweep: 0.22,
+			vertical: 0.64,
+			effectMode: FIXTURE_EFFECT_MODE_FLASHLIGHT
+		});
+		applyFixtureGroupsToLightingState(state, 0.08);
+		return;
+	}
+	if (variantKey === "floor") {
+		addFixture(state, "wash", "floor", 2.9, beamColor, 0.28 + metrics.level * 0.12 + metrics.bassHit * 0.12, 0.56, {
+			softness: 0.1,
+			sweep: 0.1,
+			effectMode: FIXTURE_EFFECT_MODE_FLASHLIGHT
+		});
+		applyFixtureGroupsToLightingState(state, 0.06);
+		return;
+	}
+	addFixture(state, "beam", "ceiling", 0.22, beamColor, 0.32 + metrics.level * 0.14 + metrics.roomFill * 0.1, 0.46, {
+		softness: 0.08,
+		sweep: 0.18,
+		effectMode: FIXTURE_EFFECT_MODE_FLASHLIGHT
+	});
+	applyFixtureGroupsToLightingState(state, 0.08);
+};
+
+const createTestLabVariantDefinition = function(args) {
 	return {
-		name: args.familyName,
-		description: args.description,
-		familyName: args.familyName,
 		variantKey: args.variantKey,
 		variantLabel: args.variantLabel,
 		surfaceKey: args.surfaceKey,
-		buildState: function(state, timeSeconds, audioMetrics) {
-			args.buildState(state, timeSeconds, audioMetrics, args.variantKey);
-		}
+		buildState: args.buildState
 	};
 };
 
-const testLabLightingFamilyDefinitions = [
+const testLabLightingEffectDefinitions = [
 	{
-		familyName: "Soft Wash",
+		effectName: "Soft Wash",
+		effectDescription: "Broad diffuse room-light fill for neutral tint-versus-reveal evaluation.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Soft Wash",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Broad diffuse ceiling fill for neutral room-light evaluation",
 				buildState: buildTestLabSoftWash
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Soft Wash",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Broad wall fill to test whether Soft Wash still reads as room light on vertical surfaces",
 				buildState: buildTestLabSoftWash
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Soft Wash",
+			createTestLabVariantDefinition({
 				variantKey: "floor",
 				variantLabel: "Floor",
 				surfaceKey: "floor",
-				description: "Diffuse floor spill to check whether Soft Wash belongs on the floor at all",
 				buildState: buildTestLabSoftWash
 			})
 		]
 	},
 	{
-		familyName: "Shutters",
+		effectName: "Shutters",
+		effectDescription: "Structured sliced wash that should read like light shaping rather than glowing panels.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Shutters",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Striped ceiling wash for shutter readability without panel-like framing",
 				buildState: buildTestLabShutters
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Shutters",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Striped wall wash to compare vertical slicing against the ceiling version",
 				buildState: buildTestLabShutters
 			})
 		]
 	},
 	{
-		familyName: "Edge Runner",
+		effectName: "Edge Runner",
+		effectDescription: "Directed runner beam intended to travel along room structure instead of filling surfaces broadly.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Edge Runner",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Side-wall runner beams for left-right lane motion evaluation",
 				buildState: buildTestLabEdgeRunner
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Edge Runner",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Ceiling-track runner test to judge whether this family belongs overhead or not",
 				buildState: buildTestLabEdgeRunner
 			})
 		]
 	},
 	{
-		familyName: "Silhouette Cut",
+		effectName: "Silhouette Cut",
+		effectDescription: "Hard reveal cut that should open the room sharply instead of behaving like a wash.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Silhouette Cut",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Hard wall reveal cut for room-opening evaluation",
 				buildState: buildTestLabSilhouetteCut
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Silhouette Cut",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Overhead reveal cut to compare against the wall opening behavior",
 				buildState: buildTestLabSilhouetteCut
 			})
 		]
 	},
 	{
-		familyName: "Room Window Beat",
+		effectName: "Room Window Beat",
+		effectDescription: "Rhythmic window-like reveal keyed to beats rather than continuous motion or fill.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Room Window Beat",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Beat-linked wall window for rhythmic reveal evaluation",
 				buildState: buildTestLabRoomWindowBeat
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Room Window Beat",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Beat-linked ceiling window to test whether the effect stays distinct overhead",
 				buildState: buildTestLabRoomWindowBeat
 			})
 		]
 	},
 	{
-		familyName: "Aurora Curtain",
+		effectName: "Aurora Curtain",
+		effectDescription: "Ribbon-like drifting bands that should read atmospheric rather than as broad wash blobs.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Aurora Curtain",
+			createTestLabVariantDefinition({
 				variantKey: "ceiling",
 				variantLabel: "Ceiling",
 				surfaceKey: "ceiling",
-				description: "Aurora-style ceiling bands for ribbon readability evaluation",
 				buildState: buildTestLabAuroraCurtain
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Aurora Curtain",
+			createTestLabVariantDefinition({
 				variantKey: "wall",
 				variantLabel: "Wall",
 				surfaceKey: "wall",
-				description: "Wall-mounted aurora ribbons to verify whether the family should stay ceiling-only",
 				buildState: buildTestLabAuroraCurtain
 			})
 		]
 	},
 	{
-		familyName: "Floor Halo",
+		effectName: "Floor Halo",
+		effectDescription: "Localized underglow effect that should read as deliberate floor light rather than diffuse spill.",
 		variants: [
-			createTestLabPresetDefinition({
-				familyName: "Floor Halo",
+			createTestLabVariantDefinition({
 				variantKey: "floor",
 				variantLabel: "Centered",
 				surfaceKey: "floor",
-				description: "Centered floor underglow for ring and core visibility evaluation",
 				buildState: buildTestLabFloorHalo
 			}),
-			createTestLabPresetDefinition({
-				familyName: "Floor Halo",
+			createTestLabVariantDefinition({
 				variantKey: "directional",
 				variantLabel: "Directional",
 				surfaceKey: "floor",
-				description: "Offset floor underglow to test whether a directional floor read works better than symmetry",
 				buildState: buildTestLabFloorHalo
+			})
+		]
+	},
+	{
+		effectName: "Flashlight",
+		effectDescription: "Focused cone-like effect for judging isolated reveal-versus-tint behavior under a tight beam.",
+		variants: [
+			createTestLabVariantDefinition({
+				variantKey: "ceiling",
+				variantLabel: "Ceiling",
+				surfaceKey: "ceiling",
+				buildState: buildTestLabFlashlight
+			}),
+			createTestLabVariantDefinition({
+				variantKey: "wall",
+				variantLabel: "Wall",
+				surfaceKey: "wall",
+				buildState: buildTestLabFlashlight
+			}),
+			createTestLabVariantDefinition({
+				variantKey: "floor",
+				variantLabel: "Floor",
+				surfaceKey: "floor",
+				buildState: buildTestLabFlashlight
 			})
 		]
 	}
@@ -383,43 +409,27 @@ const testLabLightingFamilyDefinitions = [
 
 const testLabLightingPresetDefinitions = [];
 
-for (let familyIndex = 0; familyIndex < testLabLightingFamilyDefinitions.length; familyIndex += 1) {
-	const familyDefinition = testLabLightingFamilyDefinitions[familyIndex];
-	familyDefinition.startPresetIndex = testLabLightingPresetDefinitions.length;
-	for (let variantIndex = 0; variantIndex < familyDefinition.variants.length; variantIndex += 1) {
-		const presetDefinition = familyDefinition.variants[variantIndex];
-		presetDefinition.familyIndex = familyIndex;
-		presetDefinition.variantIndex = variantIndex;
-		testLabLightingPresetDefinitions.push(presetDefinition);
+for (let effectIndex = 0; effectIndex < testLabLightingEffectDefinitions.length; effectIndex += 1) {
+	const effectDefinition = testLabLightingEffectDefinitions[effectIndex];
+	for (let variantIndex = 0; variantIndex < effectDefinition.variants.length; variantIndex += 1) {
+		const variantDefinition = effectDefinition.variants[variantIndex];
+		testLabLightingPresetDefinitions.push({
+			name: effectDefinition.effectName,
+			description: effectDefinition.effectDescription,
+			effectName: effectDefinition.effectName,
+			effectDescription: effectDefinition.effectDescription,
+			effectIndex: effectIndex,
+			effectCount: testLabLightingEffectDefinitions.length,
+			variantKey: variantDefinition.variantKey,
+			variantIndex: variantIndex,
+			variantCount: effectDefinition.variants.length,
+			variantLabel: variantDefinition.variantLabel,
+			surfaceKey: variantDefinition.surfaceKey,
+			buildState: (function(currentVariantDefinition) {
+				return function(state, timeSeconds, audioMetrics) {
+					currentVariantDefinition.buildState(state, timeSeconds, audioMetrics, currentVariantDefinition.variantKey);
+				};
+			})(variantDefinition)
+		});
 	}
 }
-
-const getTestLabLightingFamilyNames = function() {
-	const names = [];
-	for (let i = 0; i < testLabLightingFamilyDefinitions.length; i += 1) {
-		names.push(testLabLightingFamilyDefinitions[i].familyName);
-	}
-	return names;
-};
-
-const getTestLabPresetMetaByIndex = function(index) {
-	if (!testLabLightingPresetDefinitions.length) {
-		return null;
-	}
-	return testLabLightingPresetDefinitions[(index + testLabLightingPresetDefinitions.length) % testLabLightingPresetDefinitions.length];
-};
-
-const getTestLabFamilyByIndex = function(index) {
-	if (!testLabLightingFamilyDefinitions.length) {
-		return null;
-	}
-	return testLabLightingFamilyDefinitions[(index + testLabLightingFamilyDefinitions.length) % testLabLightingFamilyDefinitions.length];
-};
-
-const getTestLabPresetIndexForFamilyVariant = function(familyIndex, variantIndex) {
-	const familyDefinition = getTestLabFamilyByIndex(familyIndex);
-	if (!familyDefinition || !familyDefinition.variants || !familyDefinition.variants.length) {
-		return 0;
-	}
-	return familyDefinition.startPresetIndex + (variantIndex + familyDefinition.variants.length) % familyDefinition.variants.length;
-};

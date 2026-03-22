@@ -111,6 +111,7 @@ const getPassthroughLightingControlDefinitions = function(state) {
 			tertiaryControl: null
 		};
 	}
+	const effectSemanticControlsVisibleBool = state.lightingModeKey === "club" || state.lightingModeKey === "spots";
 	return {
 		primaryControl: {
 			key: "lightingDarkness",
@@ -121,7 +122,23 @@ const getPassthroughLightingControlDefinitions = function(state) {
 			minLabel: "Lights Only",
 			maxLabel: "Additive"
 		},
-		secondaryControl: null,
-		tertiaryControl: null
+		secondaryControl: effectSemanticControlsVisibleBool ? {
+			key: "effectTintShare",
+			label: "Tint",
+			value: state.effectTintShare == null ? 1 : state.effectTintShare,
+			min: 0,
+			max: 1,
+			minLabel: "Off",
+			maxLabel: "Full"
+		} : null,
+		tertiaryControl: effectSemanticControlsVisibleBool ? {
+			key: "effectRevealShare",
+			label: "Reveal",
+			value: state.effectRevealShare == null ? 1 : state.effectRevealShare,
+			min: 0,
+			max: 1,
+			minLabel: "Off",
+			maxLabel: "Full"
+		} : null
 	};
 };

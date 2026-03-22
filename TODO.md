@@ -26,14 +26,14 @@ Create a reliable way to inspect one lighting effect at a time in a VR-like room
 - [x] Feed live audio metrics into the test page through the normal runtime, while preserving a debug-audio path for deterministic testing.
 - [x] Improve the room preview so ceiling, walls, and floor feel more spatially natural and less like clipped planes.
 - [x] Improve the VR readability of the isolated effect page so the same effect isolation path works cleanly in-headset, not only on desktop.
-- [x] Support explicit context variants when useful, such as `ceiling`, `wall`, and `floor` for the same effect family.
+- [x] Support explicit effect variants when useful, such as `ceiling`, `wall`, and `floor` staging for the same effect.
 - [x] Make the active test conditions more explicit when the test page is using live audio versus debug audio.
 
 ### Next decision point
 
-- [ ] Evaluate whether passthrough reveal versus additive tint should follow one shared rule or remain effect-family-specific by design.
+- [ ] Evaluate whether passthrough reveal versus additive tint should follow one shared rule or remain effect-specific by design.
 - [ ] Compare the same lab variants under matched darkness and audio conditions before changing preset composition again.
-- [ ] Record which families should primarily open the room, which should primarily tint it, and which intentionally mix both.
+- [ ] Record which effects should primarily open the room, which should primarily tint it, and which intentionally mix both.
 
 ### Definition of done
 
@@ -45,7 +45,7 @@ Create a reliable way to inspect one lighting effect at a time in a VR-like room
 ## 2. Individual Effect Tuning
 
 Goal:
-Tune each effect family until it has a clear visual identity on its own.
+Tune each effect until it has a clear visual identity on its own.
 
 ### 2.1 Soft Wash
 

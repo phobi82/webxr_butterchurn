@@ -88,14 +88,18 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 
 ## Effect Test Lab
 
-- Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect family at a time instead of testing full presets.
+- Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect at a time instead of testing full presets.
 - The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, so Butterchurn is suppressed and the effect overlay stays isolated against the fallback/room test setup.
 - Its floor and grid are also kept neutral and non-audio-reactive in the lab path, using a darker gray floor and a slightly brighter gray grid so effect tint and passthrough reveal can be judged without a second moving color source.
 - Its desktop preview starts outside an open-front room shell with a clearer inner floor, thicker side/back surfaces, and a front frame, so ceiling, wall, and floor effects read more like a lighting diorama before entering VR.
-- `Prev Effect` and `Next Effect` now cycle effect families, while `Prev Context` and `Next Context` switch explicit surface/context variants such as `ceiling`, `wall`, `floor`, or directional floor layouts inside that family.
-- The page shows the active family, current context, active audio mode, and the shared isolation baseline explicitly, so live audio versus debug audio is visible before judging the effect.
+- Effect, variant, and semantics selection on desktop now goes through the mirrored menu, which is shown by default and can still be toggled with `M`, matching the in-headset control path instead of duplicating those controls as separate page buttons.
+- Effect descriptions now belong to the effect itself, while variants only change the staging/placement inside that effect instead of masquerading as separate effects.
+- The isolated effect list now also includes `Flashlight` as a normal fixture effect inside the shared Club/effect pipeline, instead of introducing a separate scene-lighting mode just for the lab.
+- `Current`, `Tint Only`, and `Reveal Only` let the same isolated effect be compared under matched conditions, so passthrough color contribution and passthrough opening can be judged separately before deciding on the final semantics for that effect.
+- The mirrored TestLab menu now also exposes dedicated `Tint` and `Reveal` sliders under `Scene Lighting`, so those shares can be tuned directly instead of only toggled by semantic mode.
+- The left desktop panel now stays minimal and leaves effect, variant, and semantics readout to the mirrored menu, while still keeping audio/XR controls and the shared isolation baseline visible.
 - The page keeps the normal XR enter path, so the same isolated effects can be inspected in headset instead of only on desktop.
-- Its in-headset menu is also reduced to the active effect, the key lighting slider, focused audio meters, and explicit context/audio status instead of mirroring the full production menu.
+- Its in-headset menu is also reduced to separate `Active Effect` and `Variant` cyclers, the semantic comparison cycler, the key lighting slider, focused audio meters, and explicit variant/audio status instead of mirroring the full production menu.
 - While inside VR, the TestLab menu also includes an `Exit VR` button so the session can be ended without leaving the in-headset UI first.
 
 ## Desktop Preview Controls
@@ -171,7 +175,7 @@ The current menu exposes:
 - Fixture effect families are now defined in one shared lighting module, so presets choose shuttered washes, edge-running beams, silhouette cuts, or room-window beats without duplicating the effect rules inside the passthrough renderer.
 - Those passthrough-native effect families now also include aurora-curtain ceiling bands and floor-halo underglow, so `Aurora Drift` reads more like a moving northern-light canopy and the room-fill presets get a more deliberate floor spill instead of only soft blobs.
 - The remaining Club presets are now pulled further apart as well: `Disco Storm` is busier and more cutout-heavy, `Neon Wash` pushes stronger ceiling-plus-wall color fill, `Stereo Chase` emphasizes mirrored side runners and split floor color, and `Pulse Strobe` keeps a darker base with sharper ceiling and wall hits.
-- A separate `TestLab.html` page now isolates one effect family at a time through the normal Club/passthrough pipeline, so effect families can be judged on their own before being recomposed into presets.
+- A separate `TestLab.html` page now isolates one effect at a time through the normal Club/passthrough pipeline, so effects can be judged on their own before being recomposed into presets.
 - The app shell is now passed into `createApp(...)` explicitly instead of being read from an implicit global, and the shared runtime lives in `xr-runtime.js`, so alternative entry pages can reuse the same engine stack without baking test-specific hooks into the main app module.
 - The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
 - The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.

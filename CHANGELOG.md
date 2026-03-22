@@ -10,14 +10,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added a separate `TestLab.html` page with isolated single-effect presets plus direct previous/next effect controls, so individual lighting behaviors can be inspected through the normal XR/passthrough pipeline on desktop and in VR without embedding the test UI into the main application.
 - Added a dedicated reduced TestLab menu configuration, so the effect-lab page no longer shows the full production VR menu and can focus on effect selection, the key lighting slider, and relevant audio meters.
-- Added explicit TestLab surface/context variants for the isolated effect families, so the same family can now be judged deliberately on `ceiling`, `wall`, `floor`, or directional floor layouts instead of only through one default placement.
+- Added explicit TestLab effect variants, so the same effect can now be judged deliberately on `ceiling`, `wall`, `floor`, or directional layouts instead of only through one default placement.
+- Added a shared fixture effect `Flashlight` plus isolated TestLab variants for it, so flashlight-like reveal/tint behavior can be evaluated inside the normal Club/effect architecture instead of through a separate lighting mode.
 
 ### Changed
 - Opened `createSceneLighting(...)` to custom preset-definition lists, so the new test lab can reuse the shared lighting pipeline with its own isolated effect catalog instead of patching the main preset list.
 - Split the previous mixed entry/runtime layer into an explicit shell contract in `xr-shell.js`, a shared runtime core in `xr-runtime.js`, and a thinner shared app composition module, so alternate pages such as `TestLab.html` can reuse the same engine stack without relying on an implicit `window.appShell`.
 - Changed the TestLab desktop preview to start outside a more architectural open-front room shell, adding clearer floor mass, thicker room surfaces, and a front frame so isolated ceiling, wall, and floor effects read less like clipped planes.
 - Added an `Exit VR` button to the in-headset menu, including the reduced TestLab menu, so immersive sessions can be ended from inside the menu without remapping controller buttons.
-- Made the TestLab status path more explicit on both desktop and in-headset, so the active effect family, context variant, audio mode, and `Uniform / Manual / Mix 100%` isolation baseline stay visible while comparing single-effect behavior.
+- Made the TestLab status path more explicit on both desktop and in-headset, so the active effect, variant, audio mode, and `Uniform / Manual / Mix 100%` isolation baseline stay visible while comparing single-effect behavior.
+- Changed the TestLab effect catalog to a direct `effect -> variants` model, so each effect now owns one description and the runtime/menu state no longer has to reconstruct variant semantics from flat preset metadata.
+- Split the reduced TestLab VR menu into separate `Active Effect` and `Variant` cyclers, so variant switching is no longer hidden inside the effect control path.
+- Removed the duplicate desktop effect/variant/semantics buttons from `TestLab.html`, so desktop review now uses the same mirrored menu path as the in-headset UI instead of maintaining two competing control surfaces.
+- Reduced the remaining left-side TestLab desktop panel further, so effect, variant, and semantics readout now lives only in the mirrored menu instead of being repeated beside it.
+- Changed the TestLab desktop start state so the mirrored VR menu is visible immediately on page load, removing the extra open-menu step before desktop review.
+- Restored generic TestLab semantic comparison modes `Current`, `Tint Only`, and `Reveal Only` through the shared passthrough/runtime/menu path, so reveal and tint can be judged per effect without introducing a separate flashlight lighting mode.
+- Added direct `Tint` and `Reveal` sliders to the TestLab scene-lighting controls, so the strength of both semantic contributions can now be tuned independently inside the VR menu.
 - Changed the TestLab floor and grid to static neutral grays instead of music-reactive color, so isolated effect review can focus on passthrough reveal and tint behavior without competing animated floor feedback.
 - Moved shared Club fixture-effect semantics into a dedicated `xr-light-fixture-effects.js` module, so presets now choose named effect families and the passthrough renderer consumes one centralized effect contract for shutters, edge runners, silhouette cuts, and room-window beats.
 - Renamed the desktop `YouTube Playlist` shortcut to `YT Synth` and added a second desktop tab-audio shortcut `YT House/Disco` that opens the configured house/disco playlist on its selected first track.

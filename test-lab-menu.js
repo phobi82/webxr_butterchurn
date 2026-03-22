@@ -11,26 +11,6 @@ const getTestLabAudioModeLabel = function(args) {
 	return "None";
 };
 
-const getTestLabSelectionMeta = function(args) {
-	args = args || {};
-	if (typeof getTestLabPresetMetaByIndex !== "function") {
-		return {
-			metadata: null,
-			familyDefinition: null,
-			familyCount: 1,
-			variantCount: 1
-		};
-	}
-	const metadata = getTestLabPresetMetaByIndex(args.currentLightPresetIndex || 0);
-	const familyDefinition = metadata && typeof getTestLabFamilyByIndex === "function" ? getTestLabFamilyByIndex(metadata.familyIndex || 0) : null;
-	return {
-		metadata: metadata,
-		familyDefinition: familyDefinition,
-		familyCount: typeof testLabLightingFamilyDefinitions !== "undefined" && testLabLightingFamilyDefinitions.length ? testLabLightingFamilyDefinitions.length : 1,
-		variantCount: familyDefinition && familyDefinition.variants && familyDefinition.variants.length ? familyDefinition.variants.length : 1
-	};
-};
-
 const createTestLabAudioBarItems = function(audioMetrics) {
 	audioMetrics = audioMetrics || emptyAudioMetrics;
 	return [
@@ -46,16 +26,30 @@ const createTestLabAudioBarItems = function(audioMetrics) {
 
 const createTestLabMenuSections = function(args) {
 	args = args || {};
-	const selectionMeta = getTestLabSelectionMeta(args);
 	const controls = [
 		createCyclerMenuControlState({
 			key: "sceneLightPreset",
 			label: "Active Effect",
-			valueText: args.currentLightPresetFamilyName || args.currentLightPresetName || "Soft Wash",
-			metaText: args.currentLightPresetDescription || "",
+			valueText: args.currentLightPresetEffectName || args.currentLightPresetName || "Soft Wash",
+			metaText: args.currentLightPresetEffectDescription || args.currentLightPresetDescription || "",
 			hoveredAction: args.hoveredLightPresetAction || ""
 		})
 	];
+	if ((args.currentLightPresetVariantCount || 1) > 1) {
+		controls.push(createCyclerMenuControlState({
+			key: "sceneLightVariant",
+			label: "Variant",
+			valueText: args.currentLightPresetVariantLabel || "Base",
+			metaText: "Surface bias: " + (args.currentLightPresetSurfaceKey || "mixed"),
+			hoveredAction: args.hoveredLightPresetVariantAction || ""
+		}));
+	}
+	controls.push(createCyclerMenuControlState({
+		key: "effectSemanticMode",
+		label: "Semantics",
+		valueText: args.effectSemanticModeLabel || "Current",
+		hoveredAction: args.hoveredEffectSemanticModeAction || ""
+	}));
 	if (args.sceneLightingPrimaryControl) {
 		controls.push(createSliderMenuControlState({
 			key: args.sceneLightingPrimaryControl.key,
@@ -68,18 +62,42 @@ const createTestLabMenuSections = function(args) {
 			activeBool: !!args.sceneLightingPrimaryActiveBool
 		}));
 	}
+	if (args.sceneLightingSecondaryControl) {
+		controls.push(createSliderMenuControlState({
+			key: args.sceneLightingSecondaryControl.key,
+			label: args.sceneLightingSecondaryControl.label,
+			valueText: formatMenuPercentText(args.sceneLightingSecondaryControl.value),
+			sliderU: args.sceneLightingSecondarySliderU || 0,
+			minLabel: args.sceneLightingSecondaryControl.minLabel,
+			maxLabel: args.sceneLightingSecondaryControl.maxLabel,
+			hoveredBool: !!args.sceneLightingSecondaryHoverBool,
+			activeBool: !!args.sceneLightingSecondaryActiveBool
+		}));
+	}
+	if (args.sceneLightingTertiaryControl) {
+		controls.push(createSliderMenuControlState({
+			key: args.sceneLightingTertiaryControl.key,
+			label: args.sceneLightingTertiaryControl.label,
+			valueText: formatMenuPercentText(args.sceneLightingTertiaryControl.value),
+			sliderU: args.sceneLightingTertiarySliderU || 0,
+			minLabel: args.sceneLightingTertiaryControl.minLabel,
+			maxLabel: args.sceneLightingTertiaryControl.maxLabel,
+			hoveredBool: !!args.sceneLightingTertiaryHoverBool,
+			activeBool: !!args.sceneLightingTertiaryActiveBool
+		}));
+	}
 	return [
 		createMenuSectionState({
 			key: "testLabEffect",
 			title: "Effect Review",
-			badgeText: ((selectionMeta.metadata && selectionMeta.metadata.familyIndex != null ? selectionMeta.metadata.familyIndex : 0) + 1) + " / " + selectionMeta.familyCount,
-			statusText: "Context: " + ((selectionMeta.metadata && selectionMeta.metadata.variantIndex != null ? selectionMeta.metadata.variantIndex : 0) + 1) + " / " + selectionMeta.variantCount + " " + (args.currentLightPresetVariantLabel || "Base") + " | Surface: " + (args.currentLightPresetSurfaceKey || "mixed"),
+			badgeText: ((args.currentLightPresetEffectIndex || 0) + 1) + " / " + (args.currentLightPresetEffectCount || 1),
+			statusText: "Variant: " + ((args.currentLightPresetVariantIndex || 0) + 1) + " / " + (args.currentLightPresetVariantCount || 1),
 			controls: controls
 		}),
 		createMenuSectionState({
 			key: "testLabIsolation",
 			title: "Isolation",
-			statusText: "Audio: " + getTestLabAudioModeLabel(args) + " | Baseline: Uniform / Manual / Mix 100%",
+			statusText: "Audio: " + getTestLabAudioModeLabel(args) + " | Semantics: " + (args.effectSemanticModeLabel || "Current") + " | Baseline: Uniform / Manual / Mix 100%",
 			controls: []
 		}),
 		createSessionMenuSectionState({
