@@ -1,5 +1,9 @@
 // core/math.js
-const tau = Math.PI * 2;
+// Naming convention: boolean variables use *Bool suffix, boolean-returning methods use is*() prefix.
+// Load order: xr-foundation → xr-audio-controller → xr-light-fixture-effects → xr-light-presets →
+//   xr-passthrough-modes → xr-passthrough → xr-menu-sections → xr-menu → xr-visualizer-modes →
+//   xr-visualizer → xr-world → xr-runtime → app-composition
+const tau = Math.PI * 2; // full circle in radians (tau = 2 * pi)
 
 const clampNumber = function(value, minValue, maxValue) {
 	return Math.max(minValue, Math.min(maxValue, value));
@@ -157,6 +161,8 @@ const extractProjectionFov = function(projectionMatrix) {
 	};
 };
 
+// pre-allocated to avoid per-frame garbage in hot paths
+const reusableCameraPosition = {x: 0, y: 0, z: 0};
 const extractCameraPositionFromViewMatrix = function(viewMatrix) {
 	const rightX = viewMatrix[0];
 	const rightY = viewMatrix[4];
@@ -170,11 +176,10 @@ const extractCameraPositionFromViewMatrix = function(viewMatrix) {
 	const tx = viewMatrix[12];
 	const ty = viewMatrix[13];
 	const tz = viewMatrix[14];
-	return {
-		x: -(rightX * tx + rightY * ty + rightZ * tz),
-		y: -(upX * tx + upY * ty + upZ * tz),
-		z: -((-forwardX) * tx + (-forwardY) * ty + (-forwardZ) * tz)
-	};
+	reusableCameraPosition.x = -(rightX * tx + rightY * ty + rightZ * tz);
+	reusableCameraPosition.y = -(upX * tx + upY * ty + upZ * tz);
+	reusableCameraPosition.z = -((-forwardX) * tx + (-forwardY) * ty + (-forwardZ) * tz);
+	return reusableCameraPosition;
 };
 
 const identityMatrix = function() {
@@ -242,6 +247,24 @@ const applyStyles = function(element, styleMap) {
 	for (let i = 0; i < styleKeys.length; i += 1) {
 		element.style[styleKeys[i]] = styleMap[styleKeys[i]];
 	}
+};
+
+// event listener registry for trackable cleanup
+const createEventListenerRegistry = function() {
+	const listeners = [];
+	return {
+		on: function(target, eventType, handler, options) {
+			target.addEventListener(eventType, handler, options);
+			listeners.push({target: target, eventType: eventType, handler: handler, options: options});
+		},
+		removeAll: function() {
+			for (let i = listeners.length - 1; i >= 0; i -= 1) {
+				const entry = listeners[i];
+				entry.target.removeEventListener(entry.eventType, entry.handler, entry.options);
+			}
+			listeners.length = 0;
+		}
+	};
 };
 
 // core/render/gl-programs.js
@@ -342,6 +365,8 @@ const createDesktopInput = function(options) {
 		return true;
 	};
 
+	const eventRegistry = createEventListenerRegistry();
+
 	return {
 		isPointerLocked: function() {
 			return pointerLockedBool;
@@ -356,7 +381,7 @@ const createDesktopInput = function(options) {
 			desktopMovementState.jumpHeldBool = false;
 		},
 		registerEventHandlers: function(documentRef, windowRef) {
-			documentRef.addEventListener("pointerlockchange", function() {
+			eventRegistry.on(documentRef, "pointerlockchange", function() {
 				pointerLockedBool = documentRef.pointerLockElement !== null;
 				if (!pointerLockedBool) {
 					desktopMovementState.sprintBool = false;
@@ -365,15 +390,15 @@ const createDesktopInput = function(options) {
 				onPointerLockChange(pointerLockedBool);
 			});
 
-			documentRef.addEventListener("mousedown", function(event) {
+			eventRegistry.on(documentRef, "mousedown", function(event) {
 				setPointerModifierState(event, true);
 			}, true);
 
-			documentRef.addEventListener("mouseup", function(event) {
+			eventRegistry.on(documentRef, "mouseup", function(event) {
 				setPointerModifierState(event, false);
 			}, true);
 
-			documentRef.addEventListener("mousemove", function(event) {
+			eventRegistry.on(documentRef, "mousemove", function(event) {
 				if (!isPointerLockInputActive()) {
 					return;
 				}
@@ -381,7 +406,7 @@ const createDesktopInput = function(options) {
 				desktopMovementState.lookPitch = clampNumber(desktopMovementState.lookPitch - event.movementY * mouseSensitivity, -1.35, 1.35);
 			});
 
-			documentRef.addEventListener("keydown", function(event) {
+			eventRegistry.on(documentRef, "keydown", function(event) {
 				if (isXrSessionActive()) {
 					return;
 				}
@@ -390,15 +415,18 @@ const createDesktopInput = function(options) {
 				}
 			});
 
-			documentRef.addEventListener("keyup", function(event) {
+			eventRegistry.on(documentRef, "keyup", function(event) {
 				if (setMovementKeyState(event.code, false)) {
 					event.preventDefault();
 				}
 			});
 
-			windowRef.addEventListener("blur", function() {
+			eventRegistry.on(windowRef, "blur", function() {
 				this.releaseAllMovementKeys();
 			}.bind(this));
+		},
+		destroy: function() {
+			eventRegistry.removeAll();
 		}
 	};
 };
@@ -481,7 +509,9 @@ const applyFixtureGroupsToLightingState = function(state, ambientBaseStrength) {
 	if (!state) {
 		return;
 	}
-	const rankedGroups = (state.fixtureGroups || []).slice().sort(function(a, b) {
+	// sort in-place — array is rebuilt each frame by the active preset
+	const rankedGroups = state.fixtureGroups || [];
+	rankedGroups.sort(function(a, b) {
 		return (b.intensity || 0) - (a.intensity || 0);
 	});
 	for (let i = 0; i < MAX_DIRECTIONAL_LIGHTS; i += 1) {
@@ -641,44 +671,54 @@ const createSceneLighting = function(options) {
 const createXrSessionBridge = function(options) {
 	const xrApi = options.xrApi || null;
 	const xrWebGLLayer = options.xrWebGLLayer || null;
+	const xrWebGLBinding = options.xrWebGLBinding || null;
 	const xrRigidTransform = options.xrRigidTransform || null;
 	const depthDataFormats = options.depthDataFormats || ["luminance-alpha", "float32"];
 	const getSafeSessionDepthState = function(session) {
-		let depthUsage = "";
-		let depthDataFormat = "";
-		try {
-			depthUsage = session.depthUsage || "";
-		} catch (error) {
-			depthUsage = "";
-		}
-		try {
-			depthDataFormat = session.depthDataFormat || "";
-		} catch (error) {
-			depthDataFormat = "";
-		}
+		let depthUsage = "", depthDataFormat = "";
+		try { depthUsage = session.depthUsage || ""; } catch (e) {}
+		try { depthDataFormat = session.depthDataFormat || ""; } catch (e) {}
 		return {
 			depthUsage: depthUsage,
 			depthDataFormat: depthDataFormat,
 			depthSensingActiveBool: depthUsage === "cpu-optimized" || depthUsage === "gpu-optimized"
 		};
 	};
-	const startSessionWithOptionalDepth = async function(sessionMode) {
-		const sessionOptions = {requiredFeatures: ["local-floor"]};
+	const startSessionWithDepthLadder = async function(sessionMode) {
+		// VR: no depth needed, skip to plain session
 		if (sessionMode !== "immersive-ar") {
-			return xrApi.requestSession(sessionMode, sessionOptions);
+			return {session: await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]})};
 		}
-		sessionOptions.optionalFeatures = ["depth-sensing"];
-		// Browsers and docs have diverged on the request key name, so provide both.
-		sessionOptions.depthSensing = {
-			usagePreference: ["cpu-optimized"],
-			dataFormatPreference: depthDataFormats,
-			formatPreference: depthDataFormats
-		};
+		// Step 1: GPU depth (Quest uses gpu-optimized; no projection layer needed, XRWebGLBinding handles depth queries)
+		if (xrWebGLBinding) {
+			try {
+				const session = await xrApi.requestSession(sessionMode, {
+					requiredFeatures: ["local-floor"],
+					optionalFeatures: ["depth-sensing"],
+					depthSensing: {
+						usagePreference: ["gpu-optimized", "cpu-optimized"],
+						dataFormatPreference: ["unsigned-short", "luminance-alpha", "float32"],
+						formatPreference: ["unsigned-short", "luminance-alpha", "float32"]
+					}
+				});
+				return {session: session};
+			} catch (e) {}
+		}
+		// Step 2: CPU depth fallback
 		try {
-			return await xrApi.requestSession(sessionMode, sessionOptions);
-		} catch (error) {
-			return xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]});
-		}
+			const session = await xrApi.requestSession(sessionMode, {
+				requiredFeatures: ["local-floor"],
+				optionalFeatures: ["depth-sensing"],
+				depthSensing: {
+					usagePreference: ["cpu-optimized"],
+					dataFormatPreference: depthDataFormats,
+					formatPreference: depthDataFormats
+				}
+			});
+			return {session: session};
+		} catch (e) {}
+		// Step 3: plain AR, no depth
+		return {session: await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]})};
 	};
 	const getSupportState = async function() {
 		if (!xrApi) {
@@ -715,7 +755,8 @@ const createXrSessionBridge = function(options) {
 				throw new Error("No immersive XR session mode available.");
 			}
 			const sessionMode = supportState.preferredSessionMode;
-			const session = await startSessionWithOptionalDepth(sessionMode);
+			const ladderResult = await startSessionWithDepthLadder(sessionMode);
+			const session = ladderResult.session;
 			if (onEnd) {
 				session.addEventListener("end", onEnd);
 			}
@@ -727,9 +768,18 @@ const createXrSessionBridge = function(options) {
 			session.updateRenderState({
 				baseLayer: new xrWebGLLayer(session, gl, {framebufferScaleFactor: framebufferScaleFactor, alpha: sessionMode === "immersive-ar"})
 			});
+			// Create XRWebGLBinding for depth queries only (not for rendering)
+			const sessionDepthState = getSafeSessionDepthState(session);
+			let glBinding = null;
+			if (xrWebGLBinding && sessionDepthState.depthUsage === "gpu-optimized") {
+				try {
+					glBinding = new xrWebGLBinding(session, gl);
+				} catch (e) {
+					glBinding = null;
+				}
+			}
 			const baseRefSpace = await session.requestReferenceSpace("local-floor");
 			const environmentBlendMode = session.environmentBlendMode || (sessionMode === "immersive-ar" ? "alpha-blend" : "opaque");
-			const sessionDepthState = getSafeSessionDepthState(session);
 			return {
 				session: session,
 				baseRefSpace: baseRefSpace,
@@ -738,7 +788,8 @@ const createXrSessionBridge = function(options) {
 				passthroughAvailableBool: sessionMode === "immersive-ar" && environmentBlendMode !== "opaque",
 				depthSensingActiveBool: sessionMode === "immersive-ar" && sessionDepthState.depthSensingActiveBool,
 				depthUsage: sessionDepthState.depthUsage,
-				depthDataFormat: sessionDepthState.depthDataFormat
+				depthDataFormat: sessionDepthState.depthDataFormat,
+				glBinding: glBinding
 			};
 		},
 		createOffsetReferenceSpace: function(baseRefSpace, movementState, viewerTransform) {

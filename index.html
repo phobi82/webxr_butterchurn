@@ -50,6 +50,8 @@
 			const statusLabel = document.createElement("div");
 			statusLabel.textContent = "XR: checking support...";
 			statusLabel.style.fontSize = "14px";
+			statusLabel.setAttribute("role", "status");
+			statusLabel.setAttribute("aria-live", "polite");
 			panel.appendChild(statusLabel);
 
 			const xrHint = document.createElement("div");
@@ -87,11 +89,13 @@
 
 			const enterButton = document.createElement("button");
 			enterButton.textContent = "Enter VR";
+			enterButton.setAttribute("aria-label", "Enter VR session");
 			xrButtonRow.appendChild(enterButton);
 
 			const exitButton = document.createElement("button");
 			exitButton.textContent = "Exit VR";
 			exitButton.disabled = true;
+			exitButton.setAttribute("aria-label", "Exit VR session");
 			xrButtonRow.appendChild(exitButton);
 
 			const audioSection = document.createElement("div");
@@ -117,19 +121,23 @@
 
 			const audioButton = document.createElement("button");
 			audioButton.textContent = "Share Audio";
+			audioButton.setAttribute("aria-label", "Share system audio as visualizer input");
 			audioSourceRow.appendChild(audioButton);
 
 			const microphoneButton = document.createElement("button");
 			microphoneButton.textContent = "Use Microphone";
+			microphoneButton.setAttribute("aria-label", "Use microphone as visualizer input");
 			audioSourceRow.appendChild(microphoneButton);
 
 			const debugAudioButton = document.createElement("button");
 			debugAudioButton.textContent = "Debug Audio";
+			debugAudioButton.setAttribute("aria-label", "Start debug audio tone generator");
 			audioSourceRow.appendChild(debugAudioButton);
 
 			const stopAudioButton = document.createElement("button");
 			stopAudioButton.textContent = "Stop Audio";
 			stopAudioButton.disabled = true;
+			stopAudioButton.setAttribute("aria-label", "Stop current audio source");
 			audioSourceRow.appendChild(stopAudioButton);
 
 			const audioPlaylistRow = document.createElement("div");
@@ -140,19 +148,24 @@
 
 			const youtubeAudioButton = document.createElement("button");
 			youtubeAudioButton.textContent = "YT Synth";
+			youtubeAudioButton.setAttribute("aria-label", "Open YouTube synth playlist for audio capture");
 			audioPlaylistRow.appendChild(youtubeAudioButton);
 
 			const youtubeHouseDiscoButton = document.createElement("button");
 			youtubeHouseDiscoButton.textContent = "YT House/Disco";
+			youtubeHouseDiscoButton.setAttribute("aria-label", "Open YouTube house and disco playlist for audio capture");
 			audioPlaylistRow.appendChild(youtubeHouseDiscoButton);
 
 			const sunoLiveRadioButton = document.createElement("button");
 			sunoLiveRadioButton.textContent = "Suno Live Radio";
+			sunoLiveRadioButton.setAttribute("aria-label", "Open Suno live radio for audio capture");
 			audioPlaylistRow.appendChild(sunoLiveRadioButton);
 
 			const audioLabel = document.createElement("div");
 			audioLabel.textContent = "Audio: none";
 			audioLabel.style.fontSize = "13px";
+			audioLabel.setAttribute("role", "status");
+			audioLabel.setAttribute("aria-live", "polite");
 			audioSection.appendChild(audioLabel);
 
 			const audioHint = document.createElement("div");
@@ -164,6 +177,8 @@
 
 			const canvas = document.createElement("canvas");
 			applyStyles(canvas, {display: "block", width: "100vw", height: "100vh"});
+			canvas.setAttribute("role", "img");
+			canvas.setAttribute("aria-label", "WebXR 3D visualizer scene");
 			document.body.appendChild(canvas);
 
 			const appShell = createDomAppShell({

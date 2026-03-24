@@ -872,13 +872,19 @@ const createSceneRenderer = function(options) {
 	let texSamplerLoc = null;
 	let menuTexture = null;
 	let passthroughOverlayRenderer = null;
+	let depthMaskRenderer = null;
 	let geometry = null;
+	let webgl2Bool = false;
 	const currentView = new Float32Array(16);
 	const currentProj = new Float32Array(16);
 	const currentPassthroughView = new Float32Array(16);
 	const currentPassthroughProj = new Float32Array(16);
 	const adjustedView = new Float32Array(16);
 	const colorVec4 = new Float32Array(4);
+	// pre-allocated buffers to avoid per-frame garbage in render loop
+	const overlayLineData = new Float32Array(6);
+	const reusableRayEnd = {x: 0, y: 0, z: 0};
+	const reusableAdjustedEye = {x: 0, y: 0, z: 0};
 	const emptyMenuController = {
 		getState: function() {
 			return {
@@ -957,14 +963,16 @@ const createSceneRenderer = function(options) {
 		const offsetZ = eye.z - center.z;
 		const offsetLength = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
 		if (offsetLength < 0.000001) {
-			return {x: eye.x, y: eye.y, z: eye.z};
+			reusableAdjustedEye.x = eye.x;
+			reusableAdjustedEye.y = eye.y;
+			reusableAdjustedEye.z = eye.z;
+			return reusableAdjustedEye;
 		}
 		const scale = (eyeDistanceMeters * 0.5) / offsetLength;
-		return {
-			x: center.x + offsetX * scale,
-			y: center.y + offsetY * scale,
-			z: center.z + offsetZ * scale
-		};
+		reusableAdjustedEye.x = center.x + offsetX * scale;
+		reusableAdjustedEye.y = center.y + offsetY * scale;
+		reusableAdjustedEye.z = center.z + offsetZ * scale;
+		return reusableAdjustedEye;
 	};
 
 	const setColorUniform = function(uniformLoc, color) {
@@ -1059,9 +1067,16 @@ const createSceneRenderer = function(options) {
 	};
 
 	const drawOverlayLine = function(start, end, pointBool, color) {
-		const data = pointBool ? [start.x, start.y, start.z] : [start.x, start.y, start.z, end.x, end.y, end.z];
+		overlayLineData[0] = start.x;
+		overlayLineData[1] = start.y;
+		overlayLineData[2] = start.z;
+		if (!pointBool) {
+			overlayLineData[3] = end.x;
+			overlayLineData[4] = end.y;
+			overlayLineData[5] = end.z;
+		}
 		gl.bindBuffer(gl.ARRAY_BUFFER, geometry.lineBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, pointBool ? overlayLineData.subarray(0, 3) : overlayLineData, gl.DYNAMIC_DRAW);
 		drawColor(geometry.lineBuffer, pointBool ? 1 : 2, pointBool ? gl.POINTS : gl.LINES, identityMatrix(), color);
 	};
 
@@ -1111,8 +1126,10 @@ const createSceneRenderer = function(options) {
 		}
 		for (let i = 0; i < controllerRays.length; i += 1) {
 			const ray = controllerRays[i];
-			const end = {x: ray.origin.x + ray.dir.x * ray.length, y: ray.origin.y + ray.dir.y * ray.length, z: ray.origin.z + ray.dir.z * ray.length};
-			drawOverlayLine(ray.origin, end, false, ray.hitBool ? [1, 0.95, 0.2, 0.95] : [1, 0.2, 0.2, 0.9]);
+			reusableRayEnd.x = ray.origin.x + ray.dir.x * ray.length;
+			reusableRayEnd.y = ray.origin.y + ray.dir.y * ray.length;
+			reusableRayEnd.z = ray.origin.z + ray.dir.z * ray.length;
+			drawOverlayLine(ray.origin, reusableRayEnd, false, ray.hitBool ? [1, 0.95, 0.2, 0.95] : [1, 0.2, 0.2, 0.9]);
 			if (ray.hitPoint) {
 				drawOverlayLine(ray.hitPoint, null, true, [0.2, 1, 0.2, 1]);
 			}
@@ -1120,14 +1137,19 @@ const createSceneRenderer = function(options) {
 		if (args.visualizerEngine) {
 			args.visualizerEngine.drawPostScene();
 		}
+		if (depthMaskRenderer && args.depthMaskState && args.passthroughDepthInfo) {
+			depthMaskRenderer.draw(args.passthroughDepthInfo, args.depthFrameKind || "", args.depthMaskState, webgl2Bool, args.depthDataFormat || "");
+		}
 	};
 
 	return {
 		createProgram: function(vsSource, fsSource) {
 			return createProgram(gl, vsSource, fsSource, "Scene renderer");
 		},
+		isWebGL2: function() { return webgl2Bool; },
 		init: function() {
-			gl = canvas.getContext("webgl", {xrCompatible: true, antialias: true, alpha: true});
+			gl = canvas.getContext("webgl2", {xrCompatible: true, antialias: true, alpha: true}) || canvas.getContext("webgl", {xrCompatible: true, antialias: true, alpha: true});
+			webgl2Bool = !!gl && typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
 			if (!gl) {
 				options.onInitFailure();
 				return null;
@@ -1161,6 +1183,8 @@ const createSceneRenderer = function(options) {
 			texSamplerLoc = gl.getUniformLocation(texProgram, "tex");
 			passthroughOverlayRenderer = createPassthroughOverlayRenderer();
 			passthroughOverlayRenderer.init(gl);
+			depthMaskRenderer = createDepthMaskRenderer();
+			depthMaskRenderer.init(gl);
 			geometry = createSceneGeometry(gl);
 			menuTexture = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D, menuTexture);
@@ -1199,6 +1223,7 @@ const createSceneRenderer = function(options) {
 				gl.clearColor(args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.08, 1);
 			}
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			args.depthMaskState = args.passthroughController && args.passthroughController.getDepthMaskRenderState ? args.passthroughController.getDepthMaskRenderState() : null;
 			for (let i = 0; i < args.pose.views.length; i += 1) {
 				const view = args.pose.views[i];
 				const viewport = args.baseLayer.getViewport(view);

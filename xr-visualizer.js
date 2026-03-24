@@ -155,7 +155,7 @@ const createVisualizerEngine = function(options) {
 		init: function(args) {
 			this.gl = args.gl;
 			this.sourceBackend = createSourceBackend(args.sourceBackendOptions || null);
-			this.sourceBackend.init(1, 1);
+			this.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
 			this.modeNames = [];
 			this.modes = {};
 			for (let i = 0; i < modeDefinitions.length; i += 1) {

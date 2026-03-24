@@ -1,8 +1,12 @@
 // audio analysis shared by live sources and the debug synth
+const AUDIO_FFT_SIZE = 512;
+const AUDIO_SMOOTHING = 0.58; // frequency-domain smoothing, 0 = none, 1 = frozen
+const AUDIO_BASS_BIN_LIMIT = 14; // bins 0-13 (~0-600 Hz at 48kHz/512 FFT)
+const AUDIO_FLUX_BIN_LIMIT = 56; // bins 0-55 (~0-5.3 kHz) for spectral flux
 const createAnalyserNode = function(audioContext) {
 	const analyser = audioContext.createAnalyser();
-	analyser.fftSize = 512;
-	analyser.smoothingTimeConstant = 0.58;
+	analyser.fftSize = AUDIO_FFT_SIZE;
+	analyser.smoothingTimeConstant = AUDIO_SMOOTHING;
 	return analyser;
 };
 
@@ -12,8 +16,8 @@ const analyseAudioFrame = function(frequencyData, timeDomainData, previousFreque
 	let bassCount = 0;
 	let fluxSum = 0;
 	let rmsSum = 0;
-	const bassBinLimit = Math.min(14, frequencyData.length);
-	const fluxBinLimit = Math.min(56, frequencyData.length);
+	const bassBinLimit = Math.min(AUDIO_BASS_BIN_LIMIT, frequencyData.length);
+	const fluxBinLimit = Math.min(AUDIO_FLUX_BIN_LIMIT, frequencyData.length);
 	for (let i = 0; i < frequencyData.length; i += 1) {
 		const currentMagnitude = frequencyData[i] / 255;
 		levelSum += frequencyData[i];
@@ -40,6 +44,15 @@ const analyseAudioFrame = function(frequencyData, timeDomainData, previousFreque
 	};
 };
 
+// audio metric decay rates — multi-use rates are named, single-use rates are inline below
+const AUDIO_DECAY_STANDARD = 0.9;
+const AUDIO_DECAY_SIDE = 0.85;
+const AUDIO_DECAY_BEAT_BASELINE = 0.88;
+const AUDIO_DECAY_IMPACT = 0.82;
+
+// audio analyser — all metric state is closure-scoped for direct access in the hot advanceFrame path.
+// Web Audio nodes (analyserNode..previousFrequencyDataRight) are lifecycle-managed.
+// 28 metric variables (audioLevel..strobeCooldownSeconds) are read via getMetrics().
 const createAudioAnalyser = function() {
 	let analyserNode = null;
 	let frequencyData = null;
@@ -154,30 +167,31 @@ const createAudioAnalyser = function() {
 			}
 			lastFrameTimeSeconds = timeSeconds;
 			if (!analyserNode || !frequencyData) {
-				audioLevel *= 0.9;
-				audioPeak *= 0.9;
-				audioBassLevel *= 0.9;
+				// no-source decay — mirrors the decay constants defined above
+				audioLevel *= AUDIO_DECAY_STANDARD;
+				audioPeak *= AUDIO_DECAY_STANDARD;
+				audioBassLevel *= AUDIO_DECAY_STANDARD;
 				audioTransientLevel *= 0.86;
-				audioLeftLevel *= 0.9;
-				audioRightLevel *= 0.9;
-				audioLeftBassLevel *= 0.9;
-				audioRightBassLevel *= 0.9;
-				audioMidLevel *= 0.9;
-				audioSideLevel *= 0.85;
+				audioLeftLevel *= AUDIO_DECAY_STANDARD;
+				audioRightLevel *= AUDIO_DECAY_STANDARD;
+				audioLeftBassLevel *= AUDIO_DECAY_STANDARD;
+				audioRightBassLevel *= AUDIO_DECAY_STANDARD;
+				audioMidLevel *= AUDIO_DECAY_STANDARD;
+				audioSideLevel *= AUDIO_DECAY_SIDE;
 				audioStereoBalance *= 0.82;
-				audioStereoWidth *= 0.85;
-				audioBeatBaseline *= 0.88;
-				audioTransientBaseline *= 0.88;
+				audioStereoWidth *= AUDIO_DECAY_SIDE;
+				audioBeatBaseline *= AUDIO_DECAY_BEAT_BASELINE;
+				audioTransientBaseline *= AUDIO_DECAY_BEAT_BASELINE;
 				beatPulse *= 0.82;
 				kickGate *= 0.76;
 				bassHit *= 0.84;
 				transientGate *= 0.74;
 				strobeGate *= 0.68;
-				colorMomentum *= 0.9;
+				colorMomentum *= AUDIO_DECAY_STANDARD;
 				motionEnergy *= 0.86;
 				roomFill *= 0.88;
-				leftImpact *= 0.82;
-				rightImpact *= 0.82;
+				leftImpact *= AUDIO_DECAY_IMPACT;
+				rightImpact *= AUDIO_DECAY_IMPACT;
 				beatCooldownSeconds = 0;
 				kickCooldownSeconds = 0;
 				transientCooldownSeconds = 0;
@@ -423,11 +437,11 @@ const createAudioAnalyser = function() {
 			}
 			const stopNodes = debugAudioNodes.stopNodes || [];
 			for (let i = 0; i < stopNodes.length; i += 1) {
-				try { stopNodes[i].stop(); } catch (error) {}
+				try { stopNodes[i].stop(); } catch (error) { console.warn("audio stop node error:", error.message); }
 			}
 			const disconnectNodes = debugAudioNodes.disconnectNodes || [];
 			for (let i = 0; i < disconnectNodes.length; i += 1) {
-				try { disconnectNodes[i].disconnect(); } catch (error) {}
+				try { disconnectNodes[i].disconnect(); } catch (error) { console.warn("audio disconnect error:", error.message); }
 			}
 			debugAudioNodes = null;
 		}
@@ -611,7 +625,7 @@ const createAudioSourceController = function(options) {
 			if (!controller.windowHandles[args.key]) {
 				throw new Error(args.blockedMessage || "tab blocked");
 			}
-			try { controller.windowHandles[args.key].focus(); } catch (error) {}
+			try { controller.windowHandles[args.key].focus(); } catch (error) { console.warn("tab focus error:", error.message); }
 			setStatus(args.selectStatus || "select the tab and enable tab audio");
 			await requestDisplayAudio(args.sourceName, {preferCurrentTab: false});
 			setStatus(args.activeStatus || "tab audio active");

@@ -61,6 +61,7 @@ const createRuntime = function(options) {
 	const sceneGlbAssets = options.sceneGlbAssets || [];
 	const inputConfig = options.inputConfig || {};
 	const tabSources = options.tabSources || {};
+	const runtimeEventRegistry = createEventListenerRegistry();
 	const xrMovementState = locomotion.createXrState();
 	const desktopMovementState = locomotion.createDesktopState();
 	const state = {
@@ -71,6 +72,9 @@ const createRuntime = function(options) {
 		xrDepthUsage: "",
 		xrDepthDataFormat: "",
 		depthSensingActiveBool: false,
+		glBinding: null,
+		usableDepthAvailableBool: false,
+		depthFrameKind: "",
 		passthroughAvailableBool: false,
 		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
 		baseRefSpace: null,
@@ -141,14 +145,18 @@ const createRuntime = function(options) {
 		}) : getAudioReactiveFloorColors();
 	};
 	const getPassthroughDepthInfoByView = function(frame, pose) {
-		if (!state.depthSensingActiveBool || !frame || !pose || !pose.views || typeof frame.getDepthInformation !== "function") {
+		if (!state.depthSensingActiveBool || !frame || !pose || !pose.views) {
+			return [];
+		}
+		const useGlBinding = state.glBinding && typeof state.glBinding.getDepthInformation === "function";
+		if (!useGlBinding && typeof frame.getDepthInformation !== "function") {
 			return [];
 		}
 		const depthInfoByView = [];
 		for (let i = 0; i < pose.views.length; i += 1) {
 			let depthInfo = null;
 			try {
-				depthInfo = frame.getDepthInformation(pose.views[i]) || null;
+				depthInfo = (useGlBinding ? state.glBinding.getDepthInformation(pose.views[i]) : frame.getDepthInformation(pose.views[i])) || null;
 			} catch (error) {
 				depthInfo = null;
 			}
@@ -338,8 +346,11 @@ const createRuntime = function(options) {
 			updateReferenceSpace(rawViewerTransform);
 		}
 	};
+	let frameBudgetOverCount = 0;
+	let frameBudgetFrameCount = 0;
 	const renderXr = function(time, frame) {
 		state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
+		const frameStartMs = performance.now();
 		const pose = frame.getViewerPose(state.xrRefSpace);
 		if (!pose) {
 			return;
@@ -351,7 +362,30 @@ const createRuntime = function(options) {
 		applyLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
+		if (state.depthSensingActiveBool && state.xrSession && state.xrSession.depthActive === false) {
+			try { state.xrSession.resumeDepthSensing(); } catch (e) {}
+		}
 		const passthroughDepthInfoByView = getPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
+		if (!state.usableDepthAvailableBool && passthroughDepthInfoByView.length) {
+			for (let i = 0; i < passthroughDepthInfoByView.length; i += 1) {
+				const di = passthroughDepthInfoByView[i];
+				if (!di || di.isValid === false) { continue; }
+				if (typeof di.getDepthInMeters === "function") {
+					state.depthFrameKind = "cpu";
+				} else if (di.texture && di.textureType === "texture-array") {
+					state.depthFrameKind = "gpu-array";
+				} else if (di.texture) {
+					state.depthFrameKind = "gpu-texture";
+				}
+				if (state.depthFrameKind) {
+					state.usableDepthAvailableBool = true;
+					break;
+				}
+			}
+		}
+		if (passthroughController && passthroughController.setDepthAvailability) {
+			passthroughController.setDepthAvailability(state.usableDepthAvailableBool);
+		}
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
 		}
@@ -363,7 +397,15 @@ const createRuntime = function(options) {
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, depthFrameKind: state.depthFrameKind || "", depthDataFormat: state.xrDepthDataFormat || "", pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		const frameElapsedMs = performance.now() - frameStartMs;
+		frameBudgetFrameCount += 1;
+		if (frameElapsedMs > 13.9) { frameBudgetOverCount += 1; }
+		if (frameBudgetFrameCount >= 300) {
+			if (frameBudgetOverCount > 15) { console.warn("Frame budget: " + frameBudgetOverCount + "/300 over 13.9ms"); }
+			frameBudgetOverCount = 0;
+			frameBudgetFrameCount = 0;
+		}
 	};
 	const renderPreview = function(time) {
 		if (state.xrSession) {
@@ -393,6 +435,9 @@ const createRuntime = function(options) {
 		state.xrDepthUsage = "";
 		state.xrDepthDataFormat = "";
 		state.depthSensingActiveBool = false;
+		state.glBinding = null;
+		state.usableDepthAvailableBool = false;
+		state.depthFrameKind = "";
 		state.passthroughAvailableBool = false;
 		state.baseRefSpace = null;
 		state.xrRefSpace = null;
@@ -410,19 +455,26 @@ const createRuntime = function(options) {
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};
+	const SESSION_TIMEOUT_MS = 15000;
 	const startSession = async function() {
 		try {
 			if (shell.isCanvasPointerLocked(documentRef) && documentRef.exitPointerLock) {
 				documentRef.exitPointerLock();
 			}
 			updateDesktopMenuPreview(true);
-			const xrState = await sessionBridge.startSession(state.gl, endSession);
+			const timeoutPromise = new Promise(function(resolve, reject) {
+				setTimeout(function() {
+					reject(new Error("XR session request timed out after " + (SESSION_TIMEOUT_MS / 1000) + "s"));
+				}, SESSION_TIMEOUT_MS);
+			});
+			const xrState = await Promise.race([sessionBridge.startSession(state.gl, endSession), timeoutPromise]);
 			state.xrSession = xrState.session;
 			state.xrSessionMode = xrState.sessionMode || "immersive-vr";
 			state.xrEnvironmentBlendMode = xrState.environmentBlendMode || "opaque";
 			state.xrDepthUsage = xrState.depthUsage || "";
 			state.xrDepthDataFormat = xrState.depthDataFormat || "";
 			state.depthSensingActiveBool = !!xrState.depthSensingActiveBool;
+			state.glBinding = xrState.glBinding || null;
 			state.passthroughAvailableBool = !!xrState.passthroughAvailableBool;
 			state.baseRefSpace = xrState.baseRefSpace;
 			locomotion.resetXrState(xrMovementState);
@@ -443,6 +495,9 @@ const createRuntime = function(options) {
 			state.xrDepthUsage = "";
 			state.xrDepthDataFormat = "";
 			state.depthSensingActiveBool = false;
+			state.glBinding = null;
+			state.usableDepthAvailableBool = false;
+			state.depthFrameKind = "";
 			state.passthroughAvailableBool = false;
 			updatePassthroughUiState();
 			updateDesktopMenuPreview();
@@ -457,7 +512,7 @@ const createRuntime = function(options) {
 		if (!button || !action) {
 			return;
 		}
-		button.addEventListener("click", function() {
+		runtimeEventRegistry.on(button, "click", function() {
 			runAudioAction(action(), fallbackMessage);
 		});
 	};
@@ -465,7 +520,7 @@ const createRuntime = function(options) {
 		desktopInput.registerEventHandlers(documentRef, windowRef);
 		menuController.registerDesktopPreviewEvents({callbacks: desktopMenuActionCallbacks, getInteractionState: getDesktopMenuInteractionState});
 		if (shell.enterButton) {
-			shell.enterButton.addEventListener("click", function() {
+			runtimeEventRegistry.on(shell.enterButton, "click", function() {
 				if (sessionBridge.isAvailable() && state.gl && !state.xrSession) {
 					audioController.activate();
 					startSession();
@@ -485,39 +540,39 @@ const createRuntime = function(options) {
 		bindAsyncButton(shell.microphoneButton, audioController.requestMicrophoneAudio, "microphone capture failed");
 		bindAsyncButton(shell.debugAudioButton, audioController.startDebugAudio, "debug audio failed");
 		if (shell.stopAudioButton) {
-			shell.stopAudioButton.addEventListener("click", function() {
+			runtimeEventRegistry.on(shell.stopAudioButton, "click", function() {
 				audioController.stop();
 			});
 		}
 		if (shell.exitButton) {
-			shell.exitButton.addEventListener("click", function() {
+			runtimeEventRegistry.on(shell.exitButton, "click", function() {
 				if (state.xrSession) {
 					state.xrSession.end();
 				}
 			});
 		}
-		windowRef.addEventListener("resize", function() {
+		runtimeEventRegistry.on(windowRef, "resize", function() {
 			if (!state.xrSession) {
 				shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
 			}
 		});
-		shell.canvas.addEventListener("click", function() {
+		runtimeEventRegistry.on(shell.canvas, "click", function() {
 			if (!state.xrSession && !shell.isCanvasPointerLocked(documentRef)) {
 				shell.requestCanvasPointerLock();
 			}
 		});
-		shell.canvas.addEventListener("contextmenu", function(event) {
+		runtimeEventRegistry.on(shell.canvas, "contextmenu", function(event) {
 			if (!state.xrSession) {
 				event.preventDefault();
 			}
 		});
-		documentRef.addEventListener("pointerdown", function() {
+		runtimeEventRegistry.on(documentRef, "pointerdown", function() {
 			audioController.activate();
 		}, {passive: true});
-		documentRef.addEventListener("keydown", function() {
+		runtimeEventRegistry.on(documentRef, "keydown", function() {
 			audioController.activate();
 		});
-		documentRef.addEventListener("keydown", function(event) {
+		runtimeEventRegistry.on(documentRef, "keydown", function(event) {
 			if (state.xrSession) {
 				return;
 			}
@@ -526,10 +581,10 @@ const createRuntime = function(options) {
 				event.preventDefault();
 			}
 		});
-		documentRef.addEventListener("mouseup", function() {
+		runtimeEventRegistry.on(documentRef, "mouseup", function() {
 			menuController.handleDesktopPointerUp();
 		});
-		windowRef.addEventListener("blur", function() {
+		runtimeEventRegistry.on(windowRef, "blur", function() {
 			menuController.clearDesktopPointerState();
 		});
 	};
@@ -588,6 +643,15 @@ const createRuntime = function(options) {
 		},
 		getLightingSelectionState: function() {
 			return getLightingSelectionState();
+		},
+		destroy: function() {
+			runtimeEventRegistry.removeAll();
+			if (desktopInput && desktopInput.destroy) {
+				desktopInput.destroy();
+			}
+			if (menuController && menuController.destroy) {
+				menuController.destroy();
+			}
 		}
 	};
 };

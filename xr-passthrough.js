@@ -101,16 +101,14 @@ const getWorldDirectionForUv = function(viewMatrix, projMatrix, uv) {
 	);
 };
 
+// pre-allocated to avoid per-frame garbage in depth anchor hot path
+const reusableDepthAnchorState = {depthMeters: 0, radiusScale: 1, point: {x: 0, y: 0, z: 0}};
 const getDepthAnchorState = function(args, projectedUv, fallbackPoint) {
 	if (!args || !args.depthInfo || typeof args.depthInfo.getDepthInMeters !== "function" || !args.viewMatrix || !args.projMatrix || !projectedUv) {
 		return null;
 	}
 	let depthMeters = 0;
-	try {
-		depthMeters = args.depthInfo.getDepthInMeters(projectedUv.x, 1 - projectedUv.y) || 0;
-	} catch (error) {
-		return null;
-	}
+	try { depthMeters = args.depthInfo.getDepthInMeters(projectedUv.x, 1 - projectedUv.y) || 0; } catch (e) { depthMeters = 0; }
 	if (!Number.isFinite(depthMeters) || depthMeters < PASSTHROUGH_DEPTH_MIN_METERS || depthMeters > PASSTHROUGH_DEPTH_MAX_METERS) {
 		return null;
 	}
@@ -121,15 +119,12 @@ const getDepthAnchorState = function(args, projectedUv, fallbackPoint) {
 		Math.pow(fallbackPoint.z - cameraPosition.z, 2)
 	) : depthMeters;
 	const worldDirection = getWorldDirectionForUv(args.viewMatrix, args.projMatrix, projectedUv);
-	return {
-		depthMeters: depthMeters,
-		radiusScale: clampNumber(fallbackDistance / Math.max(depthMeters, 0.0001), 0.65, 1.85),
-		point: {
-			x: cameraPosition.x + worldDirection.x * depthMeters,
-			y: cameraPosition.y + worldDirection.y * depthMeters,
-			z: cameraPosition.z + worldDirection.z * depthMeters
-		}
-	};
+	reusableDepthAnchorState.depthMeters = depthMeters;
+	reusableDepthAnchorState.radiusScale = clampNumber(fallbackDistance / Math.max(depthMeters, 0.0001), 0.65, 1.85);
+	reusableDepthAnchorState.point.x = cameraPosition.x + worldDirection.x * depthMeters;
+	reusableDepthAnchorState.point.y = cameraPosition.y + worldDirection.y * depthMeters;
+	reusableDepthAnchorState.point.z = cameraPosition.z + worldDirection.z * depthMeters;
+	return reusableDepthAnchorState;
 };
 
 const getWeightedAudioDrive = function(audioMetrics) {
@@ -506,6 +501,9 @@ const createPassthroughController = function(options) {
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
+		depthThreshold: 0.82,
+		depthFade: 0.0,
+		usableDepthAvailableBool: false,
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
 	};
@@ -646,9 +644,11 @@ const createPassthroughController = function(options) {
 		if (!lightingState || !lightingState.fixtureGroups || !lightingState.fixtureGroups.length) {
 			return [];
 		}
-		const rankedGroups = lightingState.fixtureGroups.slice().sort(function(a, b) {
+		// sort in-place — array is rebuilt each frame by the active preset
+		lightingState.fixtureGroups.sort(function(a, b) {
 			return (b.intensity || 0) - (a.intensity || 0);
 		});
+		const rankedGroups = lightingState.fixtureGroups;
 		const spots = [];
 		for (let i = 0; i < rankedGroups.length && spots.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
 			appendClubFixtureMasks(spots, args, rankedGroups[i], state);
@@ -681,7 +681,7 @@ const createPassthroughController = function(options) {
 				availableBool: state.availableBool,
 				fallbackBool: state.fallbackBool,
 				statusText: state.statusText,
-				blendModes: passthroughBlendModeDefinitions,
+				blendModes: passthroughBlendModeDefinitions.filter(function(m) { return m.key !== "depthAware" || state.usableDepthAvailableBool; }),
 				lightingModes: passthroughLightingModeDefinitions,
 				selectedBlendModeKey: state.blendModeKey,
 				selectedUniformBlendModeKey: state.uniformBlendModeKey,
@@ -698,7 +698,8 @@ const createPassthroughController = function(options) {
 			};
 		},
 		cycleBlendMode: function(direction) {
-			state.blendModeKey = cycleModeKey(passthroughBlendModeDefinitions, state.blendModeKey, direction < 0 ? -1 : 1);
+			const availableModes = passthroughBlendModeDefinitions.filter(function(m) { return m.key !== "depthAware" || state.usableDepthAvailableBool; });
+			state.blendModeKey = cycleModeKey(availableModes, state.blendModeKey, direction < 0 ? -1 : 1);
 		},
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);
@@ -755,12 +756,25 @@ const createPassthroughController = function(options) {
 			if (key === "effectAlphaBlendShare") {
 				state.effectAlphaBlendShare = clampNumber(value, 0, 1);
 			}
+			if (key === "depthThreshold") {
+				state.depthThreshold = clampNumber(value, 0, 5);
+			}
+			if (key === "depthFade") {
+				state.depthFade = clampNumber(value, 0, 2);
+			}
+		},
+		setDepthAvailability: function(availableBool) {
+			state.usableDepthAvailableBool = !!availableBool;
+		},
+		getDepthMaskRenderState: function() {
+			if (state.blendModeKey !== "depthAware") { return null; }
+			return {depthThreshold: state.depthThreshold, depthFade: state.depthFade};
 		},
 		getBackgroundCompositeState: function(args) {
 			args = args || {};
 			const flashlightMasks = getFlashlightMasks(args);
 			return {
-				alpha: state.blendModeKey === "flashlight" ? 1 : clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
+				alpha: state.blendModeKey === "flashlight" || state.blendModeKey === "depthAware" ? 1 : clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
 				maskCount: flashlightMasks.length,
 				masks: flashlightMasks
 			};
@@ -992,6 +1006,196 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform1f(spotAdditiveScaleLoc, renderState.spotAdditiveScale == null ? 1 : renderState.spotAdditiveScale);
 			gl.uniform1f(spotAlphaBlendScaleLoc, renderState.spotAlphaBlendScale == null ? 1 : renderState.spotAlphaBlendScale);
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			gl.enable(gl.CULL_FACE);
+			gl.enable(gl.DEPTH_TEST);
+			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+		}
+	};
+};
+
+const createDepthMaskRenderer = function() {
+	let gl = null;
+	let buffer = null;
+	let gpuArrayProgram = null;
+	let gpuArrayLocs = null;
+	let texture2dProgram = null;
+	let texture2dLocs = null;
+	let cpuDepthTexture = null;
+	let cpuUploadBuffer = null;
+	let depthDiagLoggedBool = false;
+	const depthUvTransform = new Float32Array(16);
+
+	// WebGL1 (CPU/gpu-texture) fragment shader
+	const texture2dFragSource = [
+		"precision mediump float;",
+		"uniform sampler2D depthTexture;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float rawValueToMeters;",
+		"uniform mat4 depthUvTransform;",
+		"varying vec2 vScreenUv;",
+		"void main(){",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
+		"float rawDepth=texture2D(depthTexture,depthUv).r;",
+		"float depthMeters=rawDepth*rawValueToMeters;",
+		"float valid=step(0.001,rawDepth);",
+		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"gl_FragColor=vec4(0.0,0.0,0.0,mix(1.0,mask,valid));",
+		"}"
+	].join("");
+
+	// WebGL2 (Quest gpu-array) vertex+fragment shaders — GLSL ES 3.0
+	const gpuArrayVertSource = [
+		"#version 300 es\n",
+		"in vec2 position;",
+		"out vec2 vScreenUv;",
+		"void main(){",
+		"vScreenUv=position*0.5+0.5;",
+		"gl_Position=vec4(position,0.0,1.0);",
+		"}"
+	].join("");
+	const gpuArrayFragSource = [
+		"#version 300 es\n",
+		"precision mediump float;",
+		"precision mediump sampler2DArray;",
+		"uniform sampler2DArray depthTexture;",
+		"uniform int depthTextureLayer;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float rawValueToMeters;",
+		"uniform mat4 depthUvTransform;",
+		"in vec2 vScreenUv;",
+		"out vec4 fragColor;",
+		"void main(){",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
+		"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
+		"float depthMeters=rawDepth*rawValueToMeters;",
+		"float valid=step(0.001,rawDepth);",
+		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"fragColor=vec4(0.0,0.0,0.0,mix(1.0,mask,valid));",
+		"}"
+	].join("");
+
+	const buildLocs = function(prog) {
+		return {
+			position: gl.getAttribLocation(prog, "position"),
+			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
+			depthTextureLayer: gl.getUniformLocation(prog, "depthTextureLayer"),
+			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
+			depthFade: gl.getUniformLocation(prog, "depthFade"),
+			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
+			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
+		};
+	};
+
+	return {
+		init: function(glContext) {
+			gl = glContext;
+			buffer = createFullscreenTriangleBuffer(gl);
+		},
+		draw: function(depthInfo, depthFrameKind, depthMaskState, webgl2Bool, depthDataFormat) {
+			if (!depthMaskState || !depthInfo) { return; }
+
+			// For CPU depth, upload data to a GL texture each frame
+			let cpuTextureBound = false;
+			let effectiveRawValueToMeters = depthInfo.rawValueToMeters || 0.001;
+			// GPU textures with unsigned-short format return normalized values (0-1)
+			// instead of raw integers (0-65535), so we must rescale.
+			if (depthFrameKind !== "cpu" && depthDataFormat === "unsigned-short" && effectiveRawValueToMeters < 1) {
+				effectiveRawValueToMeters = effectiveRawValueToMeters * 65535;
+			}
+			if (!depthDiagLoggedBool) {
+				depthDiagLoggedBool = true;
+				console.log("[DepthMask] kind=" + depthFrameKind + " format=" + depthDataFormat + " rawValueToMeters=" + depthInfo.rawValueToMeters + " effective=" + effectiveRawValueToMeters);
+			}
+			if (depthFrameKind === "cpu") {
+				if (!depthInfo.data || !depthInfo.width || !depthInfo.height) { return; }
+				if (!cpuDepthTexture) {
+					cpuDepthTexture = gl.createTexture();
+				}
+				var pixelCount = depthInfo.width * depthInfo.height;
+				if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
+					cpuUploadBuffer = new Float32Array(pixelCount);
+				}
+				var src = new Uint16Array(depthInfo.data);
+				for (var p = 0; p < pixelCount; p += 1) {
+					cpuUploadBuffer[p] = src[p];
+				}
+				gl.activeTexture(gl.TEXTURE0);
+				gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
+				if (webgl2Bool) {
+					gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+				} else {
+					gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+				}
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+				cpuTextureBound = true;
+			} else if (!depthInfo.texture) {
+				return;
+			}
+
+			// Select or lazily compile the correct shader variant
+			var program = null;
+			var locs = null;
+			if (depthFrameKind === "gpu-array" && webgl2Bool) {
+				if (!gpuArrayProgram) {
+					gpuArrayProgram = createProgram(gl, gpuArrayVertSource, gpuArrayFragSource, "Depth mask gpu-array");
+					gpuArrayLocs = buildLocs(gpuArrayProgram);
+				}
+				program = gpuArrayProgram;
+				locs = gpuArrayLocs;
+			} else {
+				if (!texture2dProgram) {
+					texture2dProgram = createProgram(gl, fullscreenVertexSource, texture2dFragSource, "Depth mask texture2d");
+					texture2dLocs = buildLocs(texture2dProgram);
+				}
+				program = texture2dProgram;
+				locs = texture2dLocs;
+			}
+
+			gl.useProgram(program);
+			gl.disable(gl.DEPTH_TEST);
+			gl.disable(gl.CULL_FACE);
+			gl.blendFuncSeparate(gl.ZERO, gl.ONE, gl.ZERO, gl.SRC_ALPHA);
+
+			// Bind depth texture
+			gl.activeTexture(gl.TEXTURE0);
+			if (cpuTextureBound) {
+				// already bound above
+			} else if (depthFrameKind === "gpu-array" && webgl2Bool) {
+				gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
+				// WebXR depth arrays expose the active slice as imageIndex per eye.
+				gl.uniform1i(locs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
+			} else {
+				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+			}
+			gl.uniform1i(locs.depthTexture, 0);
+
+			gl.uniform1f(locs.depthThreshold, depthMaskState.depthThreshold);
+			gl.uniform1f(locs.depthFade, depthMaskState.depthFade);
+			gl.uniform1f(locs.rawValueToMeters, effectiveRawValueToMeters);
+
+			// Depth UV transform matrix
+			if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
+				depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
+			} else if (depthInfo.normDepthBufferFromNormView) {
+				depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
+			} else {
+				depthUvTransform[0] = 1; depthUvTransform[1] = 0; depthUvTransform[2] = 0; depthUvTransform[3] = 0;
+				depthUvTransform[4] = 0; depthUvTransform[5] = 1; depthUvTransform[6] = 0; depthUvTransform[7] = 0;
+				depthUvTransform[8] = 0; depthUvTransform[9] = 0; depthUvTransform[10] = 1; depthUvTransform[11] = 0;
+				depthUvTransform[12] = 0; depthUvTransform[13] = 0; depthUvTransform[14] = 0; depthUvTransform[15] = 1;
+			}
+			gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
+
+			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+			gl.enableVertexAttribArray(locs.position);
+			gl.vertexAttribPointer(locs.position, 2, gl.FLOAT, false, 0, 0);
+			gl.drawArrays(gl.TRIANGLES, 0, 3);
+
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);

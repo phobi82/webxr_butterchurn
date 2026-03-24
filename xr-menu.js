@@ -26,8 +26,12 @@ const createMenuView = function(options) {
 	const menuCanvas = documentRef.createElement("canvas");
 	menuCanvas.width = menuLayoutWidth;
 	menuCanvas.height = options.canvasHeight || 960;
+	menuCanvas.setAttribute("role", "img");
+	menuCanvas.setAttribute("aria-label", "VR menu interface");
 	const menuCtx = menuCanvas.getContext("2d");
 	const previewCanvas = documentRef.createElement("canvas");
+	previewCanvas.setAttribute("role", "img");
+	previewCanvas.setAttribute("aria-label", "Desktop menu preview");
 	const previewCtx = previewCanvas.getContext("2d");
 	const previewWidthPixels = options.desktopMenuPreviewWidthPixels || 420;
 	previewCanvas.width = menuCanvas.width;
@@ -110,8 +114,27 @@ const createMenuView = function(options) {
 			nextTop: currentTop
 		};
 	};
+	let cachedLayoutKey = "";
+	let cachedLayoutResult = null;
+	const buildLayoutCacheKey = function(menuSections) {
+		let key = menuSections.length + ":";
+		for (let i = 0; i < menuSections.length; i += 1) {
+			const controls = menuSections[i].controls || [];
+			key += menuSections[i].key + controls.length;
+			for (let ci = 0; ci < controls.length; ci += 1) {
+				key += controls[ci].type || "";
+			}
+			key += "|";
+		}
+		return key;
+	};
 	const getLayoutMetrics = function(menuSections) {
 		menuSections = menuSections || [];
+		const layoutKey = buildLayoutCacheKey(menuSections);
+		if (layoutKey === cachedLayoutKey && cachedLayoutResult) {
+			cachedLayoutResult.menuSections = menuSections;
+			return cachedLayoutResult;
+		}
 		const audioBarItems = buildAudioBarItems(emptyAudioMetrics).length;
 		const innerFrameInset = 24;
 		const audioPanelTop = 108;
@@ -133,7 +156,7 @@ const createMenuView = function(options) {
 		const contentInset = canvasHeight - innerFrameInset - lastSectionBottom;
 		const contentLeft = innerFrameInset + contentInset;
 		const contentRight = menuLayoutWidth - innerFrameInset - contentInset;
-		return Object.assign({
+		cachedLayoutResult = Object.assign({
 			contentLeft: contentLeft,
 			contentWidth: contentRight - contentLeft,
 			contentRight: contentRight,
@@ -155,6 +178,8 @@ const createMenuView = function(options) {
 			sectionLayoutByKey: lowerSections.layoutByKey,
 			sectionLayouts: lowerSections.layouts
 		});
+		cachedLayoutKey = layoutKey;
+		return cachedLayoutResult;
 	};
 	const syncCanvasSize = function(layout) {
 		const targetHeight = Math.min(layout.canvasHeight, maxMenuTextureHeight);
@@ -165,8 +190,10 @@ const createMenuView = function(options) {
 			previewCanvas.width = menuCanvas.width;
 			previewCanvas.height = targetHeight;
 		}
-		previewCanvas.style.width = previewWidthPixels + "px";
-		previewCanvas.style.height = Math.round(previewWidthPixels * targetHeight / menuLayoutWidth) + "px";
+		applyStyles(previewCanvas, {
+			width: previewWidthPixels + "px",
+			height: Math.round(previewWidthPixels * targetHeight / menuLayoutWidth) + "px"
+		});
 	};
 	const getMenuPlaneDimensions = function(menuSections) {
 		const layout = getLayoutMetrics(menuSections);
@@ -180,11 +207,10 @@ const createMenuView = function(options) {
 		let currentFontSize = fontSize;
 		while (currentFontSize > minFontSize) {
 			menuCtx.font = (weight || "") + " " + currentFontSize + "px Arial";
-			if (menuCtx.measureText(text).width <= maxWidth) {
-				break;
-			}
+			if (menuCtx.measureText(text).width <= maxWidth) { break; }
 			currentFontSize -= 2;
 		}
+		menuCtx.font = (weight || "") + " " + currentFontSize + "px Arial";
 		menuCtx.fillStyle = color;
 		menuCtx.fillText(text, centerX, topY);
 	};
@@ -347,7 +373,7 @@ const createMenuView = function(options) {
 				for (let i = 0; i < items.length; i += 1) {
 					const item = items[i];
 					const itemX = rowStartX + i * (buttonWidth + gap);
-					menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
+					menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)";
 					menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
 					menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
 					menuCtx.lineWidth = 2;
@@ -397,12 +423,12 @@ const createMenuView = function(options) {
 							menuCtx.textAlign = "center";
 							menuCtx.fillText(control.label, layout.centerX, controlLayout.labelY);
 						}
-						menuCtx.fillStyle = control.hoveredAction === "prev" ? accentSoft : "rgba(255,255,255,0.06)";
+						menuCtx.fillStyle = control.hoveredAction === "prev" ? accentSoft : "rgba(255,255,255,0.12)";
 						menuCtx.fillRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
 						menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
 						menuCtx.lineWidth = 2;
 						menuCtx.strokeRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
-						menuCtx.fillStyle = control.hoveredAction === "next" ? accentSoft : "rgba(255,255,255,0.06)";
+						menuCtx.fillStyle = control.hoveredAction === "next" ? accentSoft : "rgba(255,255,255,0.12)";
 						menuCtx.fillRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
 						menuCtx.strokeRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
 						menuCtx.fillStyle = "#ffffff";
@@ -502,6 +528,7 @@ const createMenuController = function(options) {
 	const previewCanvas = menuView.previewCanvas;
 	const windowRef = options.windowRef || window;
 	const passthroughController = options.passthroughController || null;
+	const menuEventRegistry = createEventListenerRegistry();
 	const controllerRays = [];
 	const triggerPressedByHand = new Map();
 	const state = {
@@ -1036,26 +1063,26 @@ const createMenuController = function(options) {
 			const controller = this;
 			const callbacks = args.callbacks || {};
 			const getInteractionState = args.getInteractionState || function() { return {}; };
-			previewCanvas.addEventListener("mousemove", function(event) {
+			menuEventRegistry.on(previewCanvas, "mousemove", function(event) {
 				controller.handleDesktopPointerMove(event, getInteractionState());
 			});
-			previewCanvas.addEventListener("mouseleave", function() {
+			menuEventRegistry.on(previewCanvas, "mouseleave", function() {
 				controller.handleDesktopPointerLeave();
 			});
-			previewCanvas.addEventListener("mousedown", function(event) {
+			menuEventRegistry.on(previewCanvas, "mousedown", function(event) {
 				if (controller.handleDesktopPointerDown(event, callbacks, getInteractionState())) {
 					event.preventDefault();
 				}
 			});
-			previewCanvas.addEventListener("mouseup", function() {
+			menuEventRegistry.on(previewCanvas, "mouseup", function() {
 				controller.handleDesktopPointerUp();
 			});
-			windowRef.addEventListener("mousemove", function(event) {
+			menuEventRegistry.on(windowRef, "mousemove", function(event) {
 				if (getCapturedModuleSliderKey("desktop")) {
 					controller.handleDesktopPointerMove(event, getInteractionState());
 				}
 			});
-			windowRef.addEventListener("mouseup", function() {
+			menuEventRegistry.on(windowRef, "mouseup", function() {
 				controller.handleDesktopPointerUp();
 			});
 			state.desktopPreviewEventsRegisteredBool = true;
@@ -1149,10 +1176,10 @@ const createMenuController = function(options) {
 			state.desktopPreviewVisibleBool = !!visibleBool;
 			if (!state.desktopPreviewVisibleBool) {
 				this.clearDesktopPointerState();
-				previewCanvas.style.display = "none";
+				applyStyles(previewCanvas, {display: "none"});
 				return;
 			}
-			previewCanvas.style.display = "block";
+			applyStyles(previewCanvas, {display: "block"});
 		},
 		resetSessionState: function() {
 			state.xrSessionActiveBool = false;
@@ -1173,6 +1200,11 @@ const createMenuController = function(options) {
 			state.activeFloorAlphaSliderHand = "";
 			state.activeMenuSliderControlKeyByHand = {};
 			clearHoverState();
+			controllerRays.length = 0;
+			triggerPressedByHand.clear();
+		},
+		destroy: function() {
+			menuEventRegistry.removeAll();
 			controllerRays.length = 0;
 			triggerPressedByHand.clear();
 		},

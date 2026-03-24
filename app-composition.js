@@ -45,13 +45,13 @@ const appConfig = {
 		jumpModeDoubleMaxU: 0.45,
 		jumpModeMultiMinU: 0.55,
 		jumpModeMultiMaxU: 0.9,
-		menuSliderMinU: 0.18,
-		menuSliderMaxU: 0.82,
-		menuSliderHalfHeight: 0.055,
-		maxMenuTextureHeight: 2304,
-		presetPrevMinU: 0.08,
+		menuSliderMinU: 0.18, // left edge of slider track in normalized menu UV
+		menuSliderMaxU: 0.82, // right edge of slider track
+		menuSliderHalfHeight: 0.055, // vertical hit region half-height
+		maxMenuTextureHeight: 2304, // max canvas height for menu texture
+		presetPrevMinU: 0.08, // left arrow button region
 		presetPrevMaxU: 0.22,
-		presetNextMinU: 0.78,
+		presetNextMinU: 0.78, // right arrow button region
 		presetNextMaxU: 0.92,
 		initialJumpMode: "double",
 		initialFloorAlpha: 0.72,
@@ -90,6 +90,7 @@ const appConfig = {
 				collisionBool: true
 			}
 		],
+		// Box: {x,y,z, width,height,depth, color:[r,g,b,a]} — floating platforms in open space
 		levelBoxes: [
 			{x: 0, y: 0.6, z: -6, width: 2.4, height: 1.2, depth: 2.4, color: [0.2, 0.72, 1, 0.72]},
 			{x: -3.6, y: 0.9, z: -10.5, width: 2.6, height: 1.8, depth: 2.6, color: [1, 0.55, 0.2, 0.72]},
@@ -142,6 +143,7 @@ const createApp = function(projectConfig) {
 	const sessionBridge = createXrSessionBridge({
 		xrApi: navigator.xr || null,
 		xrWebGLLayer: window.XRWebGLLayer || null,
+		xrWebGLBinding: window.XRWebGLBinding || null,
 		xrRigidTransform: window.XRRigidTransform || null
 	});
 	const sceneRenderer = createSceneRenderer({

@@ -94,7 +94,7 @@ const appendSliderMenuControls = function(targetControls, sliderControls) {
 		targetControls.push(createSliderMenuControlState({
 			key: sliderControl.control.key,
 			label: sliderControl.control.label,
-			valueText: formatMenuPercentText(sliderControl.control.value),
+			valueText: sliderControl.control.valueText || formatMenuPercentText(sliderControl.control.value),
 			sliderU: sliderControl.sliderU || 0,
 			minLabel: sliderControl.control.minLabel,
 			maxLabel: sliderControl.control.maxLabel,

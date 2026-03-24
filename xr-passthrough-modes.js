@@ -1,7 +1,8 @@
 // Pure passthrough mode catalog and blend formulas.
 const passthroughBlendModeDefinitions = [
 	{key: "uniform", label: "Uniform"},
-	{key: "flashlight", label: "Flashlight"}
+	{key: "flashlight", label: "Flashlight"},
+	{key: "depthAware", label: "Depth-Aware"}
 ];
 
 const passthroughLightingModeDefinitions = [
@@ -50,6 +51,15 @@ const getPassthroughVisibleShare = function(state, audioDrive) {
 };
 
 const getPassthroughControlDefinitions = function(state) {
+	if (state.blendModeKey === "depthAware") {
+		return {
+			controls: [
+				{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 5, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(1) + "m"},
+				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(1) + "m"}
+			],
+			uniformBlendModeVisibleBool: false
+		};
+	}
 	if (state.blendModeKey === "flashlight") {
 		return {
 			controls: [
