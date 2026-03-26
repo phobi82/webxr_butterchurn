@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- When live passthrough is active, the background now defaults to `sound-reactive` at `100%`, and the passthrough `Depth` toggle now auto-enables itself as soon as usable depth data is actually available.
 - Renamed the shared passthrough effect semantics from `Tint` and `Reveal` to `Additive` and `Alpha Blend` across the controller, shader contract, TestLab UI, and documentation, so the project now matches standard WebXR blend terminology without changing the underlying behavior.
 - Removed the dedicated TestLab semantics cycler from the reduced review menu, so `Additive` and `Alpha Blend` sliders are now the only visible review controls for that comparison path.
 - Added an optional WebXR depth-sensing passthrough-light path that requests CPU depth data for immersive AR when available and uses it to rescale light masks against sensed real-world depth, while automatically falling back to the existing synthetic ceiling/wall/floor anchors when depth is unsupported or absent.

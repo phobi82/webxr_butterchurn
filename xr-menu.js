@@ -543,7 +543,7 @@ const createMenuController = function(options) {
 		eyeDistanceHoverBool: false,
 		floorAlphaHoverBool: false,
 		hoveredMenuSliderControlKeys: {},
-		hoveredPassthroughModeAction: "",
+		hoveredPassthroughToggle: "",
 		hoveredSceneLightingModeAction: "",
 		hoveredMixModeKey: "",
 		hoveredJumpMode: "",
@@ -592,8 +592,9 @@ const createMenuController = function(options) {
 			selectedMixModeKey: "manual",
 			mixModeVisibleBool: true,
 			backgroundControls: [],
-			passthroughModes: passthroughModeDefinitions,
-			selectedPassthroughModeKey: "off",
+			flashlightActiveBool: false,
+			depthActiveBool: false,
+			usableDepthAvailableBool: false,
 			passthroughControls: [],
 			lightingModes: passthroughLightingModeDefinitions,
 			selectedLightingModeKey: "uniform",
@@ -707,7 +708,7 @@ const createMenuController = function(options) {
 			backgroundControls: backgroundControls,
 			passthroughControls: passthroughControls,
 			hoveredMixModeKey: state.hoveredMixModeKey,
-			hoveredPassthroughModeAction: state.hoveredPassthroughModeAction,
+			hoveredPassthroughToggle: state.hoveredPassthroughToggle,
 			eyeDistanceMeters: state.eyeDistanceMeters,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
@@ -773,7 +774,7 @@ const createMenuController = function(options) {
 		state.eyeDistanceHoverBool = false;
 		state.floorAlphaHoverBool = false;
 		state.hoveredMenuSliderControlKeys = {};
-		state.hoveredPassthroughModeAction = "";
+		state.hoveredPassthroughToggle = "";
 		state.hoveredSceneLightingModeAction = "";
 		state.hoveredMixModeKey = "";
 		state.hoveredJumpMode = "";
@@ -832,7 +833,7 @@ const createMenuController = function(options) {
 			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
 			state.hoveredMenuSliderControlKeys = {};
 			setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
-			state.hoveredPassthroughModeAction = "";
+			state.hoveredPassthroughToggle = "";
 			state.hoveredSceneLightingModeAction = "";
 			state.hoveredMixModeKey = "";
 			state.hoveredJumpMode = "";
@@ -850,7 +851,7 @@ const createMenuController = function(options) {
 		state.hoveredMenuSliderControlKeys = {};
 		setMenuSliderHover(hit.moduleSliderControlKey);
 		setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
-		state.hoveredPassthroughModeAction = hit.moduleCycleControlKey === "passthroughMode" ? hit.moduleCycleAction : "";
+		state.hoveredPassthroughToggle = hit.moduleChoiceControlKey === "passthroughToggle" ? hit.moduleChoiceItemKey : "";
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
 		state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : "";
 		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
@@ -949,7 +950,7 @@ const createMenuController = function(options) {
 				state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.eyeDistanceHoverBool;
 				state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.floorAlphaHoverBool;
 				setMenuSliderHover(hit.moduleSliderControlKey);
-				state.hoveredPassthroughModeAction = hit.moduleCycleControlKey === "passthroughMode" ? hit.moduleCycleAction : state.hoveredPassthroughModeAction;
+				state.hoveredPassthroughToggle = hit.moduleChoiceControlKey === "passthroughToggle" ? hit.moduleChoiceItemKey : state.hoveredPassthroughToggle;
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
 				state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : state.hoveredMixModeKey;
 				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
@@ -1127,8 +1128,9 @@ const createMenuController = function(options) {
 			if (hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
 				callbacks.onPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
-			if (hit.moduleCycleControlKey === "passthroughMode" && passthroughController && passthroughController.cyclePassthroughMode) {
-				passthroughController.cyclePassthroughMode(hit.moduleCycleAction === "prev" ? -1 : 1);
+			if (hit.moduleChoiceControlKey === "passthroughToggle" && passthroughController) {
+				if (hit.moduleChoiceItemKey === "flashlight" && passthroughController.toggleFlashlight) { passthroughController.toggleFlashlight(); }
+				if (hit.moduleChoiceItemKey === "depth" && passthroughController.toggleDepth) { passthroughController.toggleDepth(); }
 			}
 			if (hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 				passthroughController.cycleLightingMode(hit.moduleCycleAction === "prev" ? -1 : 1);
@@ -1268,8 +1270,9 @@ const createMenuController = function(options) {
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
 					callbacks.onPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughMode" && passthroughController && passthroughController.cyclePassthroughMode) {
-					passthroughController.cyclePassthroughMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughToggle" && passthroughController) {
+					if (ray.hit.moduleChoiceItemKey === "flashlight" && passthroughController.toggleFlashlight) { passthroughController.toggleFlashlight(); }
+					if (ray.hit.moduleChoiceItemKey === "depth" && passthroughController.toggleDepth) { passthroughController.toggleDepth(); }
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 					passthroughController.cycleLightingMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);

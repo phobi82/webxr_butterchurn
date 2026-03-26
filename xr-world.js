@@ -1126,7 +1126,7 @@ const createSceneRenderer = function(options) {
 				controllerRays: controllerRays
 			}) : null;
 			if (punchState) {
-				punchRenderer.draw(punchState, args.passthroughDepthInfo, args.depthFrameKind || "", webgl2Bool, args.depthDataFormat || "");
+				punchRenderer.draw(punchState, args.passthroughDepthInfo, args.depthFrameKind || "", webgl2Bool, args.depthProfile);
 			}
 		}
 		// Post-scene (reserved, currently no-op)

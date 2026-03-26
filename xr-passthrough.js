@@ -491,7 +491,8 @@ const createPassthroughController = function(options) {
 		supportedBool: false,
 		statusText: "Passthrough unsupported, using black fallback",
 		mixModeKey: options.initialMixModeKey || "manual",
-		passthroughModeKey: options.initialPassthroughModeKey || "off",
+		flashlightActiveBool: false,
+		depthActiveBool: false,
 		lightingModeKey: options.initialLightingModeKey || "uniform",
 		lightingDarkness: options.initialLightingDarkness == null ? 0.05 : options.initialLightingDarkness,
 		effectSemanticModeKey: options.initialEffectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
@@ -501,15 +502,16 @@ const createPassthroughController = function(options) {
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
-		depthThreshold: 0.82,
-		depthFade: 0.0,
+		depthThreshold: 0.80,
+		depthFade: 0.20,
+		depthMrRetain: 0,
 		usableDepthAvailableBool: false,
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
 	};
 
 	const getFlashlightMasks = function(args) {
-		if (state.passthroughModeKey !== "flashlight") {
+		if (!state.flashlightActiveBool) {
 			return [];
 		}
 		const masks = [];
@@ -664,6 +666,10 @@ const createPassthroughController = function(options) {
 			state.availableBool = availabilityState.availableBool;
 			state.fallbackBool = availabilityState.fallbackBool;
 			state.statusText = availabilityState.statusText;
+			if (state.availableBool) {
+				state.mixModeKey = "audioReactive";
+				state.audioReactiveIntensity = 1;
+			}
 		},
 		updateFrame: function(args) {
 			args = args || {};
@@ -686,8 +692,9 @@ const createPassthroughController = function(options) {
 				selectedMixModeKey: state.mixModeKey,
 				mixModeVisibleBool: bgControlState.mixModeVisibleBool,
 				backgroundControls: bgControlState.controls || [],
-				passthroughModes: passthroughModeDefinitions.filter(function(m) { return m.key !== "depth" || state.usableDepthAvailableBool; }),
-				selectedPassthroughModeKey: state.passthroughModeKey,
+				flashlightActiveBool: state.flashlightActiveBool,
+				depthActiveBool: state.depthActiveBool,
+				usableDepthAvailableBool: state.usableDepthAvailableBool,
 				passthroughControls: ptControlState.controls || [],
 				lightingModes: passthroughLightingModeDefinitions,
 				selectedLightingModeKey: state.lightingModeKey,
@@ -699,10 +706,8 @@ const createPassthroughController = function(options) {
 				effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
 			};
 		},
-		cyclePassthroughMode: function(direction) {
-			const availableModes = passthroughModeDefinitions.filter(function(m) { return m.key !== "depth" || state.usableDepthAvailableBool; });
-			state.passthroughModeKey = cycleModeKey(availableModes, state.passthroughModeKey, direction < 0 ? -1 : 1);
-		},
+		toggleFlashlight: function() { state.flashlightActiveBool = !state.flashlightActiveBool; },
+		toggleDepth: function() { state.depthActiveBool = !state.depthActiveBool; },
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);
 		},
@@ -759,24 +764,33 @@ const createPassthroughController = function(options) {
 				state.effectAlphaBlendShare = clampNumber(value, 0, 1);
 			}
 			if (key === "depthThreshold") {
-				state.depthThreshold = clampNumber(value, 0, 5);
+				state.depthThreshold = clampNumber(value, 0, 8);
 			}
 			if (key === "depthFade") {
 				state.depthFade = clampNumber(value, 0, 2);
 			}
+			if (key === "depthMrRetain") {
+				state.depthMrRetain = clampNumber(value, 0, 1);
+			}
 		},
 		setDepthAvailability: function(availableBool) {
+			if (!!availableBool && !state.usableDepthAvailableBool) {
+				state.depthActiveBool = true;
+			}
 			state.usableDepthAvailableBool = !!availableBool;
 		},
 		getPunchRenderState: function(args) {
-			if (state.passthroughModeKey === "depth") {
-				return {mode: "depth", depthThreshold: state.depthThreshold, depthFade: state.depthFade};
+			var depth = null;
+			var flashlight = null;
+			if (state.depthActiveBool) {
+				depth = {depthThreshold: state.depthThreshold, depthFade: state.depthFade, depthMrRetain: state.depthMrRetain};
 			}
-			if (state.passthroughModeKey === "flashlight") {
+			if (state.flashlightActiveBool) {
 				var masks = getFlashlightMasks(args || {});
-				return masks.length ? {mode: "flashlight", masks: masks} : null;
+				if (masks.length) { flashlight = {masks: masks}; }
 			}
-			return null;
+			if (!depth && !flashlight) { return null; }
+			return {depth: depth, flashlight: flashlight};
 		},
 		getBackgroundCompositeState: function() {
 			return {
@@ -1040,16 +1054,19 @@ const createPunchRenderer = function() {
 		"uniform sampler2D depthTexture;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture2D(depthTexture,depthUv).r;",
-		"float depthMeters=rawDepth*rawValueToMeters;",
+		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
 		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
-		"gl_FragColor=vec4(0.0,0.0,0.0,mix(1.0,mask,valid));",
+		"float punchMask=mix(1.0,mask,valid);",
+		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
 	].join("");
 
@@ -1071,17 +1088,20 @@ const createPunchRenderer = function() {
 		"uniform int depthTextureLayer;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
 		"uniform mat4 depthUvTransform;",
 		"in vec2 vScreenUv;",
 		"out vec4 fragColor;",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
-		"float depthMeters=rawDepth*rawValueToMeters;",
+		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
 		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
-		"fragColor=vec4(0.0,0.0,0.0,mix(1.0,mask,valid));",
+		"float punchMask=mix(1.0,mask,valid);",
+		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
 	].join("");
 
@@ -1111,7 +1131,9 @@ const createPunchRenderer = function() {
 			depthTextureLayer: gl.getUniformLocation(prog, "depthTextureLayer"),
 			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
 			depthFade: gl.getUniformLocation(prog, "depthFade"),
+			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
 			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
 		};
 	};
@@ -1153,17 +1175,10 @@ const createPunchRenderer = function() {
 		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 	};
 
-	const drawDepthPunch = function(depthInfo, depthFrameKind, punchState, webgl2Bool, depthDataFormat) {
+	const drawDepthPunch = function(depthInfo, depthFrameKind, punchState, webgl2Bool, depthProfile) {
 		if (!depthInfo) { return; }
 		let cpuTextureBound = false;
-		let effectiveRawValueToMeters = depthInfo.rawValueToMeters || 0.001;
-		if (depthFrameKind !== "cpu" && depthDataFormat === "unsigned-short" && effectiveRawValueToMeters < 1) {
-			effectiveRawValueToMeters = effectiveRawValueToMeters * 65535;
-		}
-		if (!depthDiagLoggedBool) {
-			depthDiagLoggedBool = true;
-			console.log("[DepthPunch] kind=" + depthFrameKind + " format=" + depthDataFormat + " rawValueToMeters=" + depthInfo.rawValueToMeters + " effective=" + effectiveRawValueToMeters);
-		}
+		var profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
 		if (depthFrameKind === "cpu") {
 			if (!depthInfo.data || !depthInfo.width || !depthInfo.height) { return; }
 			if (!cpuDepthTexture) {
@@ -1225,7 +1240,9 @@ const createPunchRenderer = function() {
 		gl.uniform1i(locs.depthTexture, 0);
 		gl.uniform1f(locs.depthThreshold, punchState.depthThreshold);
 		gl.uniform1f(locs.depthFade, punchState.depthFade);
-		gl.uniform1f(locs.rawValueToMeters, effectiveRawValueToMeters);
+		gl.uniform1f(locs.depthMrRetain, punchState.depthMrRetain || 0);
+		gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
+		gl.uniform1f(locs.depthNearZ, profile.nearZ);
 		if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
 			depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
 		} else if (depthInfo.normDepthBufferFromNormView) {
@@ -1251,14 +1268,13 @@ const createPunchRenderer = function() {
 			gl = glContext;
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
-		draw: function(punchState, depthInfo, depthFrameKind, webgl2Bool, depthDataFormat) {
+		draw: function(punchState, depthInfo, depthFrameKind, webgl2Bool, depthProfile) {
 			if (!punchState) { return; }
-			if (punchState.mode === "flashlight") {
-				drawFlashlightPunch(punchState);
-				return;
+			if (punchState.depth) {
+				drawDepthPunch(depthInfo, depthFrameKind, punchState.depth, webgl2Bool, depthProfile);
 			}
-			if (punchState.mode === "depth") {
-				drawDepthPunch(depthInfo, depthFrameKind, punchState, webgl2Bool, depthDataFormat);
+			if (punchState.flashlight) {
+				drawFlashlightPunch(punchState.flashlight);
 			}
 		}
 	};

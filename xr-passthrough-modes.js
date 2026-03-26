@@ -4,12 +4,6 @@ const backgroundMixModeDefinitions = [
 	{key: "audioReactive", label: "sound-reactive"}
 ];
 
-const passthroughModeDefinitions = [
-	{key: "off", label: "Off"},
-	{key: "flashlight", label: "Flashlight"},
-	{key: "depth", label: "Depth"}
-];
-
 const passthroughLightingModeDefinitions = [
 	{key: "none", label: "None"},
 	{key: "uniform", label: "Uniform"},
@@ -81,39 +75,21 @@ const getBackgroundControlDefinitions = function(state) {
 };
 
 const getPassthroughControlDefinitions = function(state) {
-	if (state.passthroughModeKey === "depth") {
-		return {
-			controls: [
-				{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 5, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(1) + "m"},
-				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(1) + "m"}
-			]
-		};
+	var controls = [];
+	if (state.flashlightActiveBool) {
+		controls.push(
+			{key: "flashlightRadius", label: "Radius", value: state.flashlightRadius, min: 0.05, max: 0.45, minLabel: "Tight", maxLabel: "Wide"},
+			{key: "flashlightSoftness", label: "Softness", value: state.flashlightSoftness, min: 0.01, max: 0.35, minLabel: "Hard", maxLabel: "Soft"}
+		);
 	}
-	if (state.passthroughModeKey === "flashlight") {
-		return {
-			controls: [
-				{
-					key: "flashlightRadius",
-					label: "Radius",
-					value: state.flashlightRadius,
-					min: 0.05,
-					max: 0.45,
-					minLabel: "Tight",
-					maxLabel: "Wide"
-				},
-				{
-					key: "flashlightSoftness",
-					label: "Softness",
-					value: state.flashlightSoftness,
-					min: 0.01,
-					max: 0.35,
-					minLabel: "Hard",
-					maxLabel: "Soft"
-				}
-			]
-		};
+	if (state.depthActiveBool) {
+		controls.push(
+			{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 8, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(2) + "m"},
+			{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"},
+			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
+		);
 	}
-	return {controls: []};
+	return {controls: controls};
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {

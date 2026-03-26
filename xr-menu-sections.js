@@ -239,22 +239,14 @@ const createPassthroughMenuSectionState = function(args) {
 	args = args || {};
 	const uiState = args.uiState || {};
 	const controls = [];
-	controls.push(createCyclerMenuControlState({
-		key: "passthroughMode",
-		label: "Passthrough",
-		valueText: getMenuModeLabelByKey(uiState.passthroughModes, uiState.selectedPassthroughModeKey, "Off"),
-		hoveredAction: args.hoveredPassthroughModeAction || ""
-	}));
-	appendSliderMenuControls(controls, args.sliderControls);
-	if (!controls.length || (controls.length === 1 && uiState.selectedPassthroughModeKey === "off")) {
-		return createMenuSectionState({
-			key: "passthrough",
-			title: "Passthrough",
-			statusText: uiState.statusText || "",
-			statusTone: uiState.availableBool ? "muted" : "warning",
-			controls: controls
-		});
+	const toggleItems = [
+		{key: "flashlight", label: "Flashlight", selectedBool: !!uiState.flashlightActiveBool, hoveredBool: args.hoveredPassthroughToggle === "flashlight"}
+	];
+	if (uiState.usableDepthAvailableBool) {
+		toggleItems.push({key: "depth", label: "Depth", selectedBool: !!uiState.depthActiveBool, hoveredBool: args.hoveredPassthroughToggle === "depth"});
 	}
+	controls.push(createChoiceRowMenuControlState({key: "passthroughToggle", label: "", items: toggleItems}));
+	appendSliderMenuControls(controls, args.sliderControls);
 	return createMenuSectionState({
 		key: "passthrough",
 		title: "Passthrough",
@@ -318,7 +310,7 @@ const createLowerMenuSections = function(args) {
 		}),
 		createPassthroughMenuSectionState({
 			uiState: args.passthroughUiState,
-			hoveredPassthroughModeAction: args.hoveredPassthroughModeAction,
+			hoveredPassthroughToggle: args.hoveredPassthroughToggle,
 			sliderControls: args.passthroughControls
 		}),
 		createSceneLightingMenuSectionState({

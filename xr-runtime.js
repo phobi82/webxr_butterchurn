@@ -64,6 +64,18 @@ const createRuntime = function(options) {
 	const runtimeEventRegistry = createEventListenerRegistry();
 	const xrMovementState = locomotion.createXrState();
 	const desktopMovementState = locomotion.createDesktopState();
+	const computeDepthProfile = function(depthFrameKind, depthDataFormat, rawValueToMeters) {
+		if (depthFrameKind === "cpu") {
+			return {linearScale: rawValueToMeters || 0.001, nearZ: 0, label: "cpu-linear"};
+		}
+		if (rawValueToMeters >= 1) {
+			return {linearScale: 0, nearZ: 0.1, label: "gpu-hyperbolic"};
+		}
+		if (depthDataFormat === "unsigned-short") {
+			return {linearScale: (rawValueToMeters || 0.001) * 65535, nearZ: 0, label: "gpu-linear-u16"};
+		}
+		return {linearScale: rawValueToMeters || 0.001, nearZ: 0, label: "gpu-linear"};
+	};
 	const state = {
 		gl: null,
 		xrSession: null,
@@ -75,6 +87,7 @@ const createRuntime = function(options) {
 		glBinding: null,
 		usableDepthAvailableBool: false,
 		depthFrameKind: "",
+		depthProfile: null,
 		passthroughAvailableBool: false,
 		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
 		baseRefSpace: null,
@@ -379,6 +392,8 @@ const createRuntime = function(options) {
 				}
 				if (state.depthFrameKind) {
 					state.usableDepthAvailableBool = true;
+					state.depthProfile = computeDepthProfile(state.depthFrameKind, state.xrDepthDataFormat, di.rawValueToMeters);
+					console.log("[DepthProfile] " + state.depthProfile.label + " linearScale=" + state.depthProfile.linearScale + " nearZ=" + state.depthProfile.nearZ);
 					break;
 				}
 			}
@@ -397,7 +412,7 @@ const createRuntime = function(options) {
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, depthFrameKind: state.depthFrameKind || "", depthDataFormat: state.xrDepthDataFormat || "", pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, depthFrameKind: state.depthFrameKind || "", depthProfile: state.depthProfile, pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
 		const frameElapsedMs = performance.now() - frameStartMs;
 		frameBudgetFrameCount += 1;
 		if (frameElapsedMs > 13.9) { frameBudgetOverCount += 1; }
@@ -438,6 +453,7 @@ const createRuntime = function(options) {
 		state.glBinding = null;
 		state.usableDepthAvailableBool = false;
 		state.depthFrameKind = "";
+		state.depthProfile = null;
 		state.passthroughAvailableBool = false;
 		state.baseRefSpace = null;
 		state.xrRefSpace = null;
