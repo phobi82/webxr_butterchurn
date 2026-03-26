@@ -490,8 +490,8 @@ const createPassthroughController = function(options) {
 		fallbackBool: true,
 		supportedBool: false,
 		statusText: "Passthrough unsupported, using black fallback",
-		blendModeKey: options.initialBlendModeKey || "uniform",
-		uniformBlendModeKey: options.initialUniformBlendModeKey || "manual",
+		mixModeKey: options.initialMixModeKey || "manual",
+		passthroughModeKey: options.initialPassthroughModeKey || "off",
 		lightingModeKey: options.initialLightingModeKey || "uniform",
 		lightingDarkness: options.initialLightingDarkness == null ? 0.05 : options.initialLightingDarkness,
 		effectSemanticModeKey: options.initialEffectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
@@ -509,7 +509,7 @@ const createPassthroughController = function(options) {
 	};
 
 	const getFlashlightMasks = function(args) {
-		if (state.blendModeKey !== "flashlight") {
+		if (state.passthroughModeKey !== "flashlight") {
 			return [];
 		}
 		const masks = [];
@@ -675,31 +675,33 @@ const createPassthroughController = function(options) {
 			state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
 		},
 		getUiState: function() {
-			const controlState = getPassthroughControlDefinitions(state);
+			const bgControlState = getBackgroundControlDefinitions(state);
+			const ptControlState = getPassthroughControlDefinitions(state);
 			const lightingControlState = getPassthroughLightingControlDefinitions(state);
 			return {
 				availableBool: state.availableBool,
 				fallbackBool: state.fallbackBool,
 				statusText: state.statusText,
-				blendModes: passthroughBlendModeDefinitions.filter(function(m) { return m.key !== "depthAware" || state.usableDepthAvailableBool; }),
+				mixModes: backgroundMixModeDefinitions,
+				selectedMixModeKey: state.mixModeKey,
+				mixModeVisibleBool: bgControlState.mixModeVisibleBool,
+				backgroundControls: bgControlState.controls || [],
+				passthroughModes: passthroughModeDefinitions.filter(function(m) { return m.key !== "depth" || state.usableDepthAvailableBool; }),
+				selectedPassthroughModeKey: state.passthroughModeKey,
+				passthroughControls: ptControlState.controls || [],
 				lightingModes: passthroughLightingModeDefinitions,
-				selectedBlendModeKey: state.blendModeKey,
-				selectedUniformBlendModeKey: state.uniformBlendModeKey,
 				selectedLightingModeKey: state.lightingModeKey,
-				uniformBlendModes: passthroughUniformBlendModeDefinitions,
-				controls: controlState.controls || [],
 				lightingControls: lightingControlState.controls || [],
 				effectSemanticControls: lightingControlState.effectSemanticControls || [],
-				uniformBlendModeVisibleBool: controlState.uniformBlendModeVisibleBool,
 				audioDrive: state.smoothedBlendDrive,
 				visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive),
 				effectSemanticModeKey: state.effectSemanticModeKey,
 				effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
 			};
 		},
-		cycleBlendMode: function(direction) {
-			const availableModes = passthroughBlendModeDefinitions.filter(function(m) { return m.key !== "depthAware" || state.usableDepthAvailableBool; });
-			state.blendModeKey = cycleModeKey(availableModes, state.blendModeKey, direction < 0 ? -1 : 1);
+		cyclePassthroughMode: function(direction) {
+			const availableModes = passthroughModeDefinitions.filter(function(m) { return m.key !== "depth" || state.usableDepthAvailableBool; });
+			state.passthroughModeKey = cycleModeKey(availableModes, state.passthroughModeKey, direction < 0 ? -1 : 1);
 		},
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);
@@ -712,10 +714,10 @@ const createPassthroughController = function(options) {
 				}
 			}
 		},
-		selectUniformBlendMode: function(key) {
-			for (let i = 0; i < passthroughUniformBlendModeDefinitions.length; i += 1) {
-				if (passthroughUniformBlendModeDefinitions[i].key === key) {
-					state.uniformBlendModeKey = key;
+		selectMixMode: function(key) {
+			for (let i = 0; i < backgroundMixModeDefinitions.length; i += 1) {
+				if (backgroundMixModeDefinitions[i].key === key) {
+					state.mixModeKey = key;
 					return;
 				}
 			}
@@ -766,23 +768,26 @@ const createPassthroughController = function(options) {
 		setDepthAvailability: function(availableBool) {
 			state.usableDepthAvailableBool = !!availableBool;
 		},
-		getDepthMaskRenderState: function() {
-			if (state.blendModeKey !== "depthAware") { return null; }
-			return {depthThreshold: state.depthThreshold, depthFade: state.depthFade};
+		getPunchRenderState: function(args) {
+			if (state.passthroughModeKey === "depth") {
+				return {mode: "depth", depthThreshold: state.depthThreshold, depthFade: state.depthFade};
+			}
+			if (state.passthroughModeKey === "flashlight") {
+				var masks = getFlashlightMasks(args || {});
+				return masks.length ? {mode: "flashlight", masks: masks} : null;
+			}
+			return null;
 		},
-		getBackgroundCompositeState: function(args) {
-			args = args || {};
-			const flashlightMasks = getFlashlightMasks(args);
+		getBackgroundCompositeState: function() {
 			return {
-				alpha: state.blendModeKey === "flashlight" || state.blendModeKey === "depthAware" ? 1 : clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
-				maskCount: flashlightMasks.length,
-				masks: flashlightMasks
+				alpha: clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
+				maskCount: 0,
+				masks: []
 			};
 		},
 		getOverlayRenderState: function(args) {
 			args = args || {};
-			const flashlightMasks = getFlashlightMasks(args);
-			const visibleShare = state.blendModeKey === "flashlight" ? 0 : getPassthroughVisibleShare(state, state.smoothedBlendDrive);
+			const visibleShare = getPassthroughVisibleShare(state, state.smoothedBlendDrive);
 			const lightingState = args.sceneLightingState || null;
 			const lightingColor = getAveragedLightingColor(lightingState);
 			const additiveStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
@@ -791,8 +796,8 @@ const createPassthroughController = function(options) {
 			const spotAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : clampNumber(state.effectAlphaBlendShare, 0, 1);
 			return {
 				visibleShare: visibleShare,
-				maskCount: flashlightMasks.length,
-				masks: flashlightMasks,
+				maskCount: 0,
+				masks: [],
 				darkAlpha: 1 - darkness,
 				additiveColor: lightingColor,
 				additiveStrength: additiveStrength,
@@ -1013,7 +1018,7 @@ const createPassthroughOverlayRenderer = function() {
 	};
 };
 
-const createDepthMaskRenderer = function() {
+const createPunchRenderer = function() {
 	let gl = null;
 	let buffer = null;
 	let gpuArrayProgram = null;
@@ -1024,6 +1029,10 @@ const createDepthMaskRenderer = function() {
 	let cpuUploadBuffer = null;
 	let depthDiagLoggedBool = false;
 	const depthUvTransform = new Float32Array(16);
+	let flashlightProgram = null;
+	let flashlightLocs = null;
+	const flashlightMaskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
+	const flashlightMaskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 
 	// WebGL1 (CPU/gpu-texture) fragment shader
 	const texture2dFragSource = [
@@ -1076,7 +1085,26 @@ const createDepthMaskRenderer = function() {
 		"}"
 	].join("");
 
-	const buildLocs = function(prog) {
+	const flashlightFragSource = [
+		"precision mediump float;",
+		"uniform float maskCount;",
+		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"varying vec2 vScreenUv;",
+		"void main(){",
+		"float alpha=1.0;",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
+		"if(float(i)>=maskCount){break;}",
+		"float radius=max(maskParams[i].x,0.0001);",
+		"float softness=max(maskParams[i].y,0.0001);",
+		"float inner=max(0.0,radius-softness);",
+		"alpha*=smoothstep(inner,radius,distance(vScreenUv,maskCenters[i]));",
+		"}",
+		"gl_FragColor=vec4(0.0,0.0,0.0,alpha);",
+		"}"
+	].join("");
+
+	const buildDepthLocs = function(prog) {
 		return {
 			position: gl.getAttribLocation(prog, "position"),
 			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
@@ -1088,117 +1116,150 @@ const createDepthMaskRenderer = function() {
 		};
 	};
 
+	const drawFlashlightPunch = function(punchState) {
+		if (!punchState.masks || punchState.masks.length === 0) { return; }
+		if (!flashlightProgram) {
+			flashlightProgram = createProgram(gl, fullscreenVertexSource, flashlightFragSource, "Punch flashlight");
+			flashlightLocs = {
+				position: gl.getAttribLocation(flashlightProgram, "position"),
+				maskCount: gl.getUniformLocation(flashlightProgram, "maskCount"),
+				maskCenters: gl.getUniformLocation(flashlightProgram, "maskCenters"),
+				maskParams: gl.getUniformLocation(flashlightProgram, "maskParams")
+			};
+		}
+		for (let i = 0; i < flashlightMaskCenters.length; i += 1) {
+			flashlightMaskCenters[i] = 0;
+			flashlightMaskParams[i] = 0;
+		}
+		for (let i = 0; i < punchState.masks.length && i < PASSTHROUGH_MAX_FLASHLIGHTS; i += 1) {
+			flashlightMaskCenters[i * 2] = punchState.masks[i].x;
+			flashlightMaskCenters[i * 2 + 1] = punchState.masks[i].y;
+			flashlightMaskParams[i * 2] = punchState.masks[i].radius;
+			flashlightMaskParams[i * 2 + 1] = punchState.masks[i].softness;
+		}
+		gl.useProgram(flashlightProgram);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.CULL_FACE);
+		gl.blendFuncSeparate(gl.ZERO, gl.SRC_ALPHA, gl.ZERO, gl.SRC_ALPHA);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.enableVertexAttribArray(flashlightLocs.position);
+		gl.vertexAttribPointer(flashlightLocs.position, 2, gl.FLOAT, false, 0, 0);
+		gl.uniform1f(flashlightLocs.maskCount, punchState.masks.length);
+		gl.uniform2fv(flashlightLocs.maskCenters, flashlightMaskCenters);
+		gl.uniform2fv(flashlightLocs.maskParams, flashlightMaskParams);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+	};
+
+	const drawDepthPunch = function(depthInfo, depthFrameKind, punchState, webgl2Bool, depthDataFormat) {
+		if (!depthInfo) { return; }
+		let cpuTextureBound = false;
+		let effectiveRawValueToMeters = depthInfo.rawValueToMeters || 0.001;
+		if (depthFrameKind !== "cpu" && depthDataFormat === "unsigned-short" && effectiveRawValueToMeters < 1) {
+			effectiveRawValueToMeters = effectiveRawValueToMeters * 65535;
+		}
+		if (!depthDiagLoggedBool) {
+			depthDiagLoggedBool = true;
+			console.log("[DepthPunch] kind=" + depthFrameKind + " format=" + depthDataFormat + " rawValueToMeters=" + depthInfo.rawValueToMeters + " effective=" + effectiveRawValueToMeters);
+		}
+		if (depthFrameKind === "cpu") {
+			if (!depthInfo.data || !depthInfo.width || !depthInfo.height) { return; }
+			if (!cpuDepthTexture) {
+				cpuDepthTexture = gl.createTexture();
+			}
+			var pixelCount = depthInfo.width * depthInfo.height;
+			if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
+				cpuUploadBuffer = new Float32Array(pixelCount);
+			}
+			var src = new Uint16Array(depthInfo.data);
+			for (var p = 0; p < pixelCount; p += 1) {
+				cpuUploadBuffer[p] = src[p];
+			}
+			gl.activeTexture(gl.TEXTURE0);
+			gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
+			if (webgl2Bool) {
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+			} else {
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+			}
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			cpuTextureBound = true;
+		} else if (!depthInfo.texture) {
+			return;
+		}
+		var program = null;
+		var locs = null;
+		if (depthFrameKind === "gpu-array" && webgl2Bool) {
+			if (!gpuArrayProgram) {
+				gpuArrayProgram = createProgram(gl, gpuArrayVertSource, gpuArrayFragSource, "Depth punch gpu-array");
+				gpuArrayLocs = buildDepthLocs(gpuArrayProgram);
+			}
+			program = gpuArrayProgram;
+			locs = gpuArrayLocs;
+		} else {
+			if (!texture2dProgram) {
+				texture2dProgram = createProgram(gl, fullscreenVertexSource, texture2dFragSource, "Depth punch texture2d");
+				texture2dLocs = buildDepthLocs(texture2dProgram);
+			}
+			program = texture2dProgram;
+			locs = texture2dLocs;
+		}
+		gl.useProgram(program);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.CULL_FACE);
+		gl.blendFuncSeparate(gl.ZERO, gl.SRC_ALPHA, gl.ZERO, gl.SRC_ALPHA);
+		gl.activeTexture(gl.TEXTURE0);
+		if (cpuTextureBound) {
+			// already bound above
+		} else if (depthFrameKind === "gpu-array" && webgl2Bool) {
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
+			gl.uniform1i(locs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
+		} else {
+			gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+		}
+		gl.uniform1i(locs.depthTexture, 0);
+		gl.uniform1f(locs.depthThreshold, punchState.depthThreshold);
+		gl.uniform1f(locs.depthFade, punchState.depthFade);
+		gl.uniform1f(locs.rawValueToMeters, effectiveRawValueToMeters);
+		if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
+			depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
+		} else if (depthInfo.normDepthBufferFromNormView) {
+			depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
+		} else {
+			depthUvTransform[0] = 1; depthUvTransform[1] = 0; depthUvTransform[2] = 0; depthUvTransform[3] = 0;
+			depthUvTransform[4] = 0; depthUvTransform[5] = 1; depthUvTransform[6] = 0; depthUvTransform[7] = 0;
+			depthUvTransform[8] = 0; depthUvTransform[9] = 0; depthUvTransform[10] = 1; depthUvTransform[11] = 0;
+			depthUvTransform[12] = 0; depthUvTransform[13] = 0; depthUvTransform[14] = 0; depthUvTransform[15] = 1;
+		}
+		gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.enableVertexAttribArray(locs.position);
+		gl.vertexAttribPointer(locs.position, 2, gl.FLOAT, false, 0, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+	};
+
 	return {
 		init: function(glContext) {
 			gl = glContext;
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
-		draw: function(depthInfo, depthFrameKind, depthMaskState, webgl2Bool, depthDataFormat) {
-			if (!depthMaskState || !depthInfo) { return; }
-
-			// For CPU depth, upload data to a GL texture each frame
-			let cpuTextureBound = false;
-			let effectiveRawValueToMeters = depthInfo.rawValueToMeters || 0.001;
-			// GPU textures with unsigned-short format return normalized values (0-1)
-			// instead of raw integers (0-65535), so we must rescale.
-			if (depthFrameKind !== "cpu" && depthDataFormat === "unsigned-short" && effectiveRawValueToMeters < 1) {
-				effectiveRawValueToMeters = effectiveRawValueToMeters * 65535;
-			}
-			if (!depthDiagLoggedBool) {
-				depthDiagLoggedBool = true;
-				console.log("[DepthMask] kind=" + depthFrameKind + " format=" + depthDataFormat + " rawValueToMeters=" + depthInfo.rawValueToMeters + " effective=" + effectiveRawValueToMeters);
-			}
-			if (depthFrameKind === "cpu") {
-				if (!depthInfo.data || !depthInfo.width || !depthInfo.height) { return; }
-				if (!cpuDepthTexture) {
-					cpuDepthTexture = gl.createTexture();
-				}
-				var pixelCount = depthInfo.width * depthInfo.height;
-				if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
-					cpuUploadBuffer = new Float32Array(pixelCount);
-				}
-				var src = new Uint16Array(depthInfo.data);
-				for (var p = 0; p < pixelCount; p += 1) {
-					cpuUploadBuffer[p] = src[p];
-				}
-				gl.activeTexture(gl.TEXTURE0);
-				gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
-				if (webgl2Bool) {
-					gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-				} else {
-					gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-				}
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-				cpuTextureBound = true;
-			} else if (!depthInfo.texture) {
+		draw: function(punchState, depthInfo, depthFrameKind, webgl2Bool, depthDataFormat) {
+			if (!punchState) { return; }
+			if (punchState.mode === "flashlight") {
+				drawFlashlightPunch(punchState);
 				return;
 			}
-
-			// Select or lazily compile the correct shader variant
-			var program = null;
-			var locs = null;
-			if (depthFrameKind === "gpu-array" && webgl2Bool) {
-				if (!gpuArrayProgram) {
-					gpuArrayProgram = createProgram(gl, gpuArrayVertSource, gpuArrayFragSource, "Depth mask gpu-array");
-					gpuArrayLocs = buildLocs(gpuArrayProgram);
-				}
-				program = gpuArrayProgram;
-				locs = gpuArrayLocs;
-			} else {
-				if (!texture2dProgram) {
-					texture2dProgram = createProgram(gl, fullscreenVertexSource, texture2dFragSource, "Depth mask texture2d");
-					texture2dLocs = buildLocs(texture2dProgram);
-				}
-				program = texture2dProgram;
-				locs = texture2dLocs;
+			if (punchState.mode === "depth") {
+				drawDepthPunch(depthInfo, depthFrameKind, punchState, webgl2Bool, depthDataFormat);
 			}
-
-			gl.useProgram(program);
-			gl.disable(gl.DEPTH_TEST);
-			gl.disable(gl.CULL_FACE);
-			gl.blendFuncSeparate(gl.ZERO, gl.ONE, gl.ZERO, gl.SRC_ALPHA);
-
-			// Bind depth texture
-			gl.activeTexture(gl.TEXTURE0);
-			if (cpuTextureBound) {
-				// already bound above
-			} else if (depthFrameKind === "gpu-array" && webgl2Bool) {
-				gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
-				// WebXR depth arrays expose the active slice as imageIndex per eye.
-				gl.uniform1i(locs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
-			} else {
-				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-			}
-			gl.uniform1i(locs.depthTexture, 0);
-
-			gl.uniform1f(locs.depthThreshold, depthMaskState.depthThreshold);
-			gl.uniform1f(locs.depthFade, depthMaskState.depthFade);
-			gl.uniform1f(locs.rawValueToMeters, effectiveRawValueToMeters);
-
-			// Depth UV transform matrix
-			if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
-				depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
-			} else if (depthInfo.normDepthBufferFromNormView) {
-				depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
-			} else {
-				depthUvTransform[0] = 1; depthUvTransform[1] = 0; depthUvTransform[2] = 0; depthUvTransform[3] = 0;
-				depthUvTransform[4] = 0; depthUvTransform[5] = 1; depthUvTransform[6] = 0; depthUvTransform[7] = 0;
-				depthUvTransform[8] = 0; depthUvTransform[9] = 0; depthUvTransform[10] = 1; depthUvTransform[11] = 0;
-				depthUvTransform[12] = 0; depthUvTransform[13] = 0; depthUvTransform[14] = 0; depthUvTransform[15] = 1;
-			}
-			gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
-
-			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-			gl.enableVertexAttribArray(locs.position);
-			gl.vertexAttribPointer(locs.position, 2, gl.FLOAT, false, 0, 0);
-			gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-			gl.enable(gl.CULL_FACE);
-			gl.enable(gl.DEPTH_TEST);
-			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		}
 	};
 };

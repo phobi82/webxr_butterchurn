@@ -1,8 +1,13 @@
-// Pure passthrough mode catalog and blend formulas.
-const passthroughBlendModeDefinitions = [
-	{key: "uniform", label: "Uniform"},
+// Mode catalogs and control definitions for Background, Passthrough and Lighting axes.
+const backgroundMixModeDefinitions = [
+	{key: "manual", label: "manual"},
+	{key: "audioReactive", label: "sound-reactive"}
+];
+
+const passthroughModeDefinitions = [
+	{key: "off", label: "Off"},
 	{key: "flashlight", label: "Flashlight"},
-	{key: "depthAware", label: "Depth-Aware"}
+	{key: "depth", label: "Depth"}
 ];
 
 const passthroughLightingModeDefinitions = [
@@ -10,11 +15,6 @@ const passthroughLightingModeDefinitions = [
 	{key: "uniform", label: "Uniform"},
 	{key: "spots", label: "Spots"},
 	{key: "club", label: "Club"}
-];
-
-const passthroughUniformBlendModeDefinitions = [
-	{key: "manual", label: "Manual"},
-	{key: "audioReactive", label: "Music"}
 ];
 
 const findModeIndexByKey = function(definitions, key) {
@@ -38,10 +38,7 @@ const getReactivePassthroughDrive = function(audioDrive) {
 };
 
 const getPassthroughVisibleShare = function(state, audioDrive) {
-	if (state.blendModeKey !== "uniform") {
-		return 0;
-	}
-	if (state.uniformBlendModeKey === "audioReactive") {
+	if (state.mixModeKey === "audioReactive") {
 		const directionMix = clampNumber(Math.abs(state.audioReactiveIntensity), 0, 1);
 		const reactiveDrive = getReactivePassthroughDrive(audioDrive);
 		const targetShare = state.audioReactiveIntensity >= 0 ? reactiveDrive : 1 - reactiveDrive;
@@ -50,17 +47,49 @@ const getPassthroughVisibleShare = function(state, audioDrive) {
 	return clampNumber(state.manualMix, 0, 1);
 };
 
+const getBackgroundControlDefinitions = function(state) {
+	if (state.mixModeKey === "audioReactive") {
+		return {
+			controls: [
+				{
+					key: "audioReactiveIntensity",
+					label: "Intensity",
+					value: state.audioReactiveIntensity,
+					min: -1,
+					max: 1,
+					minLabel: "Vis -> Mod. Reality",
+					maxLabel: "Mod. Reality -> Vis"
+				}
+			],
+			mixModeVisibleBool: true
+		};
+	}
+	return {
+		controls: [
+			{
+				key: "manualMix",
+				label: "Mix",
+				value: state.manualMix,
+				min: 0,
+				max: 1,
+				minLabel: "Visualizer",
+				maxLabel: "Modified Reality"
+			}
+		],
+		mixModeVisibleBool: true
+	};
+};
+
 const getPassthroughControlDefinitions = function(state) {
-	if (state.blendModeKey === "depthAware") {
+	if (state.passthroughModeKey === "depth") {
 		return {
 			controls: [
 				{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 5, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(1) + "m"},
 				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(1) + "m"}
-			],
-			uniformBlendModeVisibleBool: false
+			]
 		};
 	}
-	if (state.blendModeKey === "flashlight") {
+	if (state.passthroughModeKey === "flashlight") {
 		return {
 			controls: [
 				{
@@ -81,40 +110,10 @@ const getPassthroughControlDefinitions = function(state) {
 					minLabel: "Hard",
 					maxLabel: "Soft"
 				}
-			],
-			uniformBlendModeVisibleBool: false
+			]
 		};
 	}
-	if (state.uniformBlendModeKey === "audioReactive") {
-		return {
-			controls: [
-				{
-					key: "audioReactiveIntensity",
-					label: "Intensity",
-					value: state.audioReactiveIntensity,
-					min: -1,
-					max: 1,
-					minLabel: "Vis -> Passthrough",
-					maxLabel: "Passthrough -> Vis"
-				}
-			],
-			uniformBlendModeVisibleBool: true
-		};
-	}
-	return {
-		controls: [
-			{
-				key: "manualMix",
-				label: "Mix",
-				value: state.manualMix,
-				min: 0,
-				max: 1,
-				minLabel: "Butterchurn",
-				maxLabel: "Passthrough"
-			}
-		],
-		uniformBlendModeVisibleBool: true
-	};
+	return {controls: []};
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {

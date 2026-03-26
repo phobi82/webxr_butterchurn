@@ -210,35 +210,54 @@ const createButterchurnPresetMenuSectionState = function(args) {
 	});
 };
 
+const createBackgroundMenuSectionState = function(args) {
+	args = args || {};
+	const uiState = args.uiState || {};
+	const controls = [];
+	controls.push(createChoiceRowMenuControlState({
+		key: "backgroundMixMode",
+		label: "Mix Mode",
+		items: (uiState.mixModes || []).map(function(item) {
+			return {
+				key: item.key,
+				label: item.label,
+				selectedBool: item.key === uiState.selectedMixModeKey,
+				hoveredBool: item.key === args.hoveredMixModeKey
+			};
+		})
+	}));
+	appendSliderMenuControls(controls, args.sliderControls);
+	return createMenuSectionState({
+		key: "background",
+		title: "Background",
+		badgeText: formatMenuPercentText(uiState.visibleShare || 0),
+		controls: controls
+	});
+};
+
 const createPassthroughMenuSectionState = function(args) {
 	args = args || {};
 	const uiState = args.uiState || {};
 	const controls = [];
 	controls.push(createCyclerMenuControlState({
-		key: "passthroughBlendMode",
-		label: "Blend Mode",
-		valueText: getMenuModeLabelByKey(uiState.blendModes, uiState.selectedBlendModeKey, "Uniform"),
-		hoveredAction: args.hoveredBlendModeAction || ""
+		key: "passthroughMode",
+		label: "Passthrough",
+		valueText: getMenuModeLabelByKey(uiState.passthroughModes, uiState.selectedPassthroughModeKey, "Off"),
+		hoveredAction: args.hoveredPassthroughModeAction || ""
 	}));
-	if (uiState.uniformBlendModeVisibleBool) {
-		controls.push(createChoiceRowMenuControlState({
-			key: "passthroughUniformBlendMode",
-			label: "Uniform Blend",
-			items: (uiState.uniformBlendModes || []).map(function(item) {
-				return {
-					key: item.key,
-					label: item.label,
-					selectedBool: item.key === uiState.selectedUniformBlendModeKey,
-					hoveredBool: item.key === args.hoveredUniformBlendModeKey
-				};
-			})
-		}));
-	}
 	appendSliderMenuControls(controls, args.sliderControls);
+	if (!controls.length || (controls.length === 1 && uiState.selectedPassthroughModeKey === "off")) {
+		return createMenuSectionState({
+			key: "passthrough",
+			title: "Passthrough",
+			statusText: uiState.statusText || "",
+			statusTone: uiState.availableBool ? "muted" : "warning",
+			controls: controls
+		});
+	}
 	return createMenuSectionState({
 		key: "passthrough",
 		title: "Passthrough",
-		badgeText: formatMenuPercentText(uiState.visibleShare || 0),
 		statusText: uiState.statusText || "",
 		statusTone: uiState.availableBool ? "muted" : "warning",
 		controls: controls
@@ -278,18 +297,6 @@ const createLowerMenuSections = function(args) {
 			selectedJumpMode: args.selectedJumpMode,
 			hoveredJumpMode: args.hoveredJumpMode
 		}),
-		createWorldOpacityMenuSectionState({
-			value: args.floorAlpha,
-			sliderU: args.floorAlphaSliderU,
-			hoveredBool: args.floorAlphaHoverBool,
-			activeBool: args.floorAlphaActiveBool
-		}),
-		createPassthroughMenuSectionState({
-			uiState: args.passthroughUiState,
-			hoveredBlendModeAction: args.hoveredPassthroughBlendModeAction,
-			hoveredUniformBlendModeKey: args.hoveredPassthroughUniformBlendModeKey,
-			sliderControls: args.passthroughControls
-		}),
 		createEyeDistanceMenuSectionState({
 			value: args.eyeDistanceMeters,
 			min: args.eyeDistanceMin,
@@ -298,10 +305,21 @@ const createLowerMenuSections = function(args) {
 			hoveredBool: args.eyeDistanceHoverBool,
 			activeBool: args.eyeDistanceActiveBool
 		}),
-		createVisualizerModeMenuSectionState({
-			valueText: args.currentShaderModeName,
-			metaText: args.shaderModeMetaText,
-			hoveredAction: args.hoveredShaderModeAction
+		createWorldOpacityMenuSectionState({
+			value: args.floorAlpha,
+			sliderU: args.floorAlphaSliderU,
+			hoveredBool: args.floorAlphaHoverBool,
+			activeBool: args.floorAlphaActiveBool
+		}),
+		createBackgroundMenuSectionState({
+			uiState: args.passthroughUiState,
+			hoveredMixModeKey: args.hoveredMixModeKey,
+			sliderControls: args.backgroundControls
+		}),
+		createPassthroughMenuSectionState({
+			uiState: args.passthroughUiState,
+			hoveredPassthroughModeAction: args.hoveredPassthroughModeAction,
+			sliderControls: args.passthroughControls
 		}),
 		createSceneLightingMenuSectionState({
 			lightingModes: args.lightingModes,
@@ -311,6 +329,11 @@ const createLowerMenuSections = function(args) {
 			currentLightPresetDescription: args.currentLightPresetDescription,
 			hoveredLightPresetAction: args.hoveredLightPresetAction,
 			sliderControls: args.sceneLightingControls
+		}),
+		createVisualizerModeMenuSectionState({
+			valueText: args.currentShaderModeName,
+			metaText: args.shaderModeMetaText,
+			hoveredAction: args.hoveredShaderModeAction
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,

@@ -675,9 +675,7 @@ const createGlbAssetStore = function(deps) {
 			litProjLoc = gl.getUniformLocation(litProgram, "proj");
 			litSamplerLoc = gl.getUniformLocation(litProgram, "tex");
 			litLightingUniforms = getLightingUniformLocations ? getLightingUniformLocations(gl, litProgram) : null;
-			if (!gl.getExtension("OES_element_index_uint")) {
-				throw new Error("WebGL uint32 index extension missing.");
-			}
+			gl.getExtension("OES_element_index_uint");
 		},
 		loadAsset: async function(config) {
 			const response = await fetchFn(config.url, {mode: "cors"});
@@ -746,6 +744,7 @@ const createGlbAssetStore = function(deps) {
 				try {
 					await this.loadAsset(configs[i]);
 				} catch (error) {
+					console.warn("[GLB] Failed to load asset: " + (configs[i].url || "unknown") + " — " + (error.message || "unknown error"));
 					setStatus(error.message || "glb load failed");
 				}
 			}
@@ -755,6 +754,10 @@ const createGlbAssetStore = function(deps) {
 				return;
 			}
 			gl.useProgram(litProgram);
+			gl.enable(gl.DEPTH_TEST);
+			gl.enable(gl.CULL_FACE);
+			gl.enable(gl.BLEND);
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 			if (applyLightingUniforms && litLightingUniforms) {
 				applyLightingUniforms(gl, litLightingUniforms, getLightingState());
 			}
@@ -872,7 +875,7 @@ const createSceneRenderer = function(options) {
 	let texSamplerLoc = null;
 	let menuTexture = null;
 	let passthroughOverlayRenderer = null;
-	let depthMaskRenderer = null;
+	let punchRenderer = null;
 	let geometry = null;
 	let webgl2Bool = false;
 	const currentView = new Float32Array(16);
@@ -1088,16 +1091,14 @@ const createSceneRenderer = function(options) {
 		const sceneLightingState = args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null;
 		const passthroughViewMatrix = args.passthroughViewMatrix || currentView;
 		const passthroughProjMatrix = args.passthroughProjMatrix || currentProj;
+		// Layer 1: Visualizer Background
 		if (args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
-			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState({
-				viewMatrix: currentView,
-				projMatrix: currentProj,
-				controllerRays: controllerRays
-			}));
+			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState());
 		}
 		if (args.visualizerEngine) {
 			args.visualizerEngine.drawPreScene();
 		}
+		// Layer 2: Modified Reality Overlay
 		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
 			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
 				viewMatrix: passthroughViewMatrix,
@@ -1107,6 +1108,7 @@ const createSceneRenderer = function(options) {
 				depthInfo: args.passthroughDepthInfo || null
 			}) : null);
 		}
+		// Layer 3: VR World
 		if (menuState.floorAlpha > 0.001) {
 			drawFloor(args.sceneLighting, args.getReactiveFloorColors());
 		}
@@ -1116,6 +1118,22 @@ const createSceneRenderer = function(options) {
 		if (args.visualizerEngine) {
 			args.visualizerEngine.drawWorld();
 		}
+		// Layer 4: Punch (Flashlight or Depth — before menu/rays)
+		if (punchRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
+			const punchState = passthroughController && passthroughController.getPunchRenderState ? passthroughController.getPunchRenderState({
+				viewMatrix: currentView,
+				projMatrix: currentProj,
+				controllerRays: controllerRays
+			}) : null;
+			if (punchState) {
+				punchRenderer.draw(punchState, args.passthroughDepthInfo, args.depthFrameKind || "", webgl2Bool, args.depthDataFormat || "");
+			}
+		}
+		// Post-scene (reserved, currently no-op)
+		if (args.visualizerEngine) {
+			args.visualizerEngine.drawPostScene();
+		}
+		// Always visible: Menu
 		if (menuState.menuOpenBool) {
 			menuController.renderTexture(gl, menuTexture, args.menuContentState);
 			gl.disable(gl.DEPTH_TEST);
@@ -1124,6 +1142,7 @@ const createSceneRenderer = function(options) {
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);
 		}
+		// Always visible: Controller Rays
 		for (let i = 0; i < controllerRays.length; i += 1) {
 			const ray = controllerRays[i];
 			reusableRayEnd.x = ray.origin.x + ray.dir.x * ray.length;
@@ -1133,12 +1152,6 @@ const createSceneRenderer = function(options) {
 			if (ray.hitPoint) {
 				drawOverlayLine(ray.hitPoint, null, true, [0.2, 1, 0.2, 1]);
 			}
-		}
-		if (args.visualizerEngine) {
-			args.visualizerEngine.drawPostScene();
-		}
-		if (depthMaskRenderer && args.depthMaskState && args.passthroughDepthInfo) {
-			depthMaskRenderer.draw(args.passthroughDepthInfo, args.depthFrameKind || "", args.depthMaskState, webgl2Bool, args.depthDataFormat || "");
 		}
 	};
 
@@ -1183,8 +1196,8 @@ const createSceneRenderer = function(options) {
 			texSamplerLoc = gl.getUniformLocation(texProgram, "tex");
 			passthroughOverlayRenderer = createPassthroughOverlayRenderer();
 			passthroughOverlayRenderer.init(gl);
-			depthMaskRenderer = createDepthMaskRenderer();
-			depthMaskRenderer.init(gl);
+			punchRenderer = createPunchRenderer();
+			punchRenderer.init(gl);
 			geometry = createSceneGeometry(gl);
 			menuTexture = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D, menuTexture);
@@ -1223,7 +1236,6 @@ const createSceneRenderer = function(options) {
 				gl.clearColor(args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.01, args.passthroughFallbackBool ? 0 : 0.08, 1);
 			}
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			args.depthMaskState = args.passthroughController && args.passthroughController.getDepthMaskRenderState ? args.passthroughController.getDepthMaskRenderState() : null;
 			for (let i = 0; i < args.pose.views.length; i += 1) {
 				const view = args.pose.views[i];
 				const viewport = args.baseLayer.getViewport(view);

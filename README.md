@@ -2,6 +2,24 @@
 
 Local WebXR prototype built with plain HTML and vanilla JavaScript. The project currently focuses on a stable XR baseline for an audiovisualizer: reliable movement, a usable in-headset menu, shared audio-reactive scene lighting, and Butterchurn-driven visuals that already run before a live audio source is selected.
 
+## Disclaimer
+
+> [!WARNING]
+> ### Photosensitivity / Epilepsy Warning
+> This project contains flashing lights, rapid visual changes, and intense motion that may trigger seizures or cause discomfort in people with photosensitive epilepsy or related conditions.
+>
+> Please use caution and stop immediately if you experience any discomfort.
+
+> [!CAUTION]
+> ### Motion Sickness Warning
+> This project may cause motion sickness, dizziness, nausea, and disorientation, especially in VR.
+>
+> It intentionally includes no comfort features whatsoever.  
+> No teleport. No tunnel vision. No training wheels.  
+> The experience is designed to be intense, because VR should sometimes feel a little overwhelming.
+>
+> Proceed at your own risk — and maybe not right after lunch.
+
 ## Current Feature Set
 
 - immersive XR startup with `local-floor`, preferring `immersive-ar` and falling back to `immersive-vr`

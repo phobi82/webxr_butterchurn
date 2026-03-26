@@ -603,6 +603,7 @@ const createRuntime = function(options) {
 					state.glbAssetStore.init();
 					await state.glbAssetStore.loadAssets(sceneGlbAssets);
 				} catch (error) {
+					console.warn("[GLB] init/load error:", error);
 					shell.setStatus(error.message || "glb init failed");
 				}
 			}
