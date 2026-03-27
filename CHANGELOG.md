@@ -7,16 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-27
+
 ### Changed
-- When live passthrough is active, the background now defaults to `sound-reactive` at `100%`, and the passthrough `Depth` toggle now auto-enables itself as soon as usable depth data is actually available.
-- Renamed the shared passthrough effect semantics from `Tint` and `Reveal` to `Additive` and `Alpha Blend` across the controller, shader contract, TestLab UI, and documentation, so the project now matches standard WebXR blend terminology without changing the underlying behavior.
-- Removed the dedicated TestLab semantics cycler from the reduced review menu, so `Additive` and `Alpha Blend` sliders are now the only visible review controls for that comparison path.
-- Added an optional WebXR depth-sensing passthrough-light path that requests CPU depth data for immersive AR when available and uses it to rescale light masks against sensed real-world depth, while automatically falling back to the existing synthetic ceiling/wall/floor anchors when depth is unsupported or absent.
+- Added optional WebXR depth sensing for immersive AR with a proper fallback ladder: request GPU depth first when supported, fall back to CPU depth when necessary, and fall back again to plain AR when depth is unavailable.
+- Depth-aware passthrough now uses sensed real-world depth in two places: passthrough light masks rescale against real depth, and the passthrough `Depth` punch path exposes `Distance`, `Fade`, and `MR Blend` controls when usable depth data exists.
+- When live passthrough is active, the background now defaults to `sound-reactive` at `100%`, and the `Depth` toggle auto-enables itself as soon as usable depth data actually arrives.
+- Renamed the shared passthrough effect semantics from `Tint` and `Reveal` to `Additive` and `Alpha Blend` across the controller, shader contract, and TestLab review flow.
 
 ### Fixed
 - Fixed the XR menu slider interaction regression from the generic slider refactor by separating raw hover hits from captured slider drags again, so in-headset slider hover and trigger-drag both keep working without falling back to slider-specific state paths.
-- Made the shared menu slider hitbox vertically symmetric around the visible track again, so VR and desktop slider hover no longer feel biased downward.
-- Increased the shared top spacing before slider rows slightly, so stacked menu controls no longer feel cramped above the slider track.
 
 ## [0.7.1] - 2026-03-22
 

@@ -33,6 +33,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - passthrough blend modes: `Uniform`, `Flashlight`
 - uniform passthrough submodes: `Manual`, `Music`
+- optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, `YT Synth`, `YT House/Disco`, Suno Live Radio, or synthetic `Debug Audio`
@@ -159,6 +160,7 @@ The current menu exposes:
   - `Uniform` + `Manual`: `Mix`
   - `Uniform` + `Music`: bipolar `Intensity` with end labels `Vis -> Passthrough` and `Passthrough -> Vis`
   - `Flashlight`: `Radius` and `Softness`
+  - when usable depth data exists: `Depth` toggle plus `Distance`, `Fade`, and `MR Blend`
 - scene lighting group:
   - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club` with `Spots` as the default
   - `Light Preset` cycler
@@ -180,39 +182,15 @@ The current menu exposes:
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
-- Passthrough now runs through a dedicated controller/orchestrator plus a separate pure mode-definition module instead of mixing mode logic into the visualizer or menu.
-- `Uniform` keeps one shared full-screen blend path, while `Flashlight` reveals passthrough through two soft hand-controlled masks.
-- `Uniform` splits into `Manual` and `Music`; the bipolar `Intensity` slider now spans a stronger full-range audio blend, clearly separates positive from negative direction, and labels the two directions as `Vis -> Passthrough` and `Passthrough -> Vis`.
-- The audio-reactive `Uniform -> Music` blend now follows `beatPulse` specifically, while the other passthrough lighting behavior still uses broader audio-derived lighting metrics.
-- `Left Hit` and `Right Hit` now drive stronger stereo-biased Club beam accents, with more obvious left/right intensity separation and a small additional lateral placement shift on stereo-heavy material.
-- Stereo-biased Club wall fixtures now follow explicit left/right ceiling-height wall tracks instead of the generic room perimeter, so side accents read more like dedicated wall runners.
-- Those side-wall runners now bias away from the room center into clearer front/back lanes, and the wall beam masks are stretched further so the side accents read more like directed beams than short blobs.
-- Ceiling washes are now broader and softer, while floor spill uses larger, softer, more numerous low-position masks so overhead fill and underglow read as distinct surface behaviors.
-- `Aurora Drift` now leans into aurora-style overhead light bands instead of a generic soft wash, giving that preset a more specific atmospheric identity.
-- `Aurora Drift` ceiling washes are now also geometrically narrowed and striped more aggressively in the passthrough shader, so they should read more like long light bands than large ceiling blobs.
-- Passthrough-specific alpha-blend opening behavior is now differentiated by fixture type: washes open the room softly, beams reveal more aggressively, and strobes cut sharper windows into the real environment instead of behaving only like additive color.
-- Fixture effect families are now defined in one shared lighting module, so presets choose shuttered washes, edge-running beams, silhouette cuts, or room-window beats without duplicating the effect rules inside the passthrough renderer.
-- Those passthrough-native effect families now also include aurora-curtain ceiling bands and floor-halo underglow, so `Aurora Drift` reads more like a moving northern-light canopy and the room-fill presets get a more deliberate floor spill instead of only soft blobs.
-- The remaining Club presets are now pulled further apart as well: `Disco Storm` is busier and more cutout-heavy, `Neon Wash` pushes stronger ceiling-plus-wall color fill, `Stereo Chase` emphasizes mirrored side runners and split floor color, and `Pulse Strobe` keeps a darker base with sharper ceiling and wall hits.
-- A separate `TestLab.html` page now isolates one effect at a time through the normal Club/passthrough pipeline, so effects can be judged on their own before being recomposed into presets.
-- The app shell is now passed into `createApp(...)` explicitly instead of being read from an implicit global, and the shared runtime lives in `xr-runtime.js`, so alternative entry pages can reuse the same engine stack without baking test-specific hooks into the main app module.
-- The lower interactive menu area now flows from generic section/control descriptors, so passthrough, scene lighting, world opacity, eye distance, jump mode, visualizer mode, and presets all share the same generic layout, rendering, and hit-test path.
-- The passthrough controls stay grouped together, while `Scene Lighting` is separated into its own section with `Lighting Mode` and `Light Preset`; `Spots` is now the default lighting mode.
-- When live passthrough is available, startup now switches `Background` to `sound-reactive` at `100%`; when usable depth data becomes available, the `Depth` passthrough toggle also enables itself automatically.
-- Lighting can now be disabled, applied as one music-reactive uniform additive wash, or rendered as soft colored spots derived from the active lighting preset.
-- The `Spots` overlay now approximates fixed room lighting in `local-floor` space with anchors on the ceiling, floor, and side walls, so real headset movement changes the passthrough spots as if the lights were in the room, while stick locomotion no longer drags those spots through passthrough.
-- `Club` extends the passthrough lighting path with fixture-rig-driven washes, wall beams, and controlled strobe accents derived from the active light preset and new audio-reactive metrics such as `kickGate`, `bassHit`, `transientGate`, `strobeGate`, `roomFill`, and stereo impact values.
-- `Club` now renders those passthrough fixtures as oriented elliptical masks instead of only round blobs, so washes read broader and beams read more directional in the room.
-- `Club` now applies explicit ceiling, wall, and floor surface budgets in the passthrough renderer, with a floor-biased visibility lift and stronger surface-specific shaping so floor spill stays present more reliably and walls versus ceiling read less alike.
-- When the browser exposes optional WebXR depth sensing, passthrough light masks now also rescale against sensed real-world depth per eye view; when depth is missing or unsupported, the previous synthetic ceiling/wall/floor anchor behavior remains in place.
-- The former Club macro sliders were removed again, so Club intensity, fill, and strobe behavior now come from the active preset and audio response; one shared `Darkness` slider controls how much the passthrough environment is darkened behind `Uniform`, `Spots`, and `Club`, with `5%` as the default.
-- Lit passthrough masks now also reduce the local darkening alpha instead of only adding color, so at low `Darkness` values the real passthrough image can show through inside the light hits rather than appearing as flat colored blobs on black.
-- The moving Club wall lights now run on the same ceiling-height anchor as the passthrough spots instead of tracking lower down the wall.
-- Desktop preview, opaque VR, and unsupported AR still use the same blend modes against a black fallback instead of live passthrough.
-- Translucent world and menu draws now preserve the correct XR framebuffer alpha, so grid lines and semi-transparent blocks do not leak passthrough when the configured background behind them is meant to stay opaque.
-- The XR menu hit path no longer crashes when pointing at the menu after the generic section refactor; the earlier `undefined.length` hit-test regression is fixed.
-- XR menu controller state now drops stale hand ownership when a tracked-pointer hand disappears for a frame, so left/right controller buttons no longer stay blocked by a stuck menu hand state.
-- The goat GLB is loaded from a remote URL, so that asset depends on network availability even when `index.html` is opened locally.
+- Live passthrough uses the same background and overlay pipeline in AR, while desktop preview, opaque AR, and VR fall back to a black background instead of real passthrough.
+- When live passthrough is available, startup switches `Background` to `sound-reactive` at `100%`.
+- The runtime requests optional WebXR depth sensing for immersive AR with a depth ladder: GPU depth first when available, CPU depth as fallback, then plain AR if depth is unsupported.
+- When usable depth data is present, the `Depth` toggle becomes available and auto-enables itself; depth is then used both for the passthrough punch path and for scaling passthrough light masks against sensed real-world distance.
+- If depth is missing or unsupported, passthrough lighting falls back to synthetic ceiling, wall, and floor anchors instead of failing.
+- `Uniform` handles full-screen passthrough blending, `Flashlight` reveals passthrough through hand-driven masks, and scene lighting can run as `None`, `Uniform`, `Spots`, or `Club`.
+- `Club` is the richer passthrough-lighting path: preset-driven washes, wall beams, floor spill, and strobe accents are derived from the active lighting preset and audio metrics rather than from separate macro sliders.
+- The lower menu is one generic state-driven system shared across passthrough, scene lighting, world opacity, eye distance, visualizer mode, and preset selection; `TestLab.html` reuses the same runtime for isolated effect review.
+- Translucent world and menu rendering preserve the intended XR framebuffer alpha, so semi-transparent geometry no longer punches unintended passthrough holes.
 
 ## GitHub Pages
 
