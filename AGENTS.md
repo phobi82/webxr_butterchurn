@@ -99,6 +99,12 @@ Recommended structure order:
 ## Behavior and Logic
 
 - Follow the user's description **literally and precisely**.
+- Before starting implementation, ask targeted clarifying questions to confirm exactly what the user wants.
+- Follow-up questions must take previous answers into account so the clarification adapts to the current result instead of repeating a fixed checklist.
+- Use clarification not only to confirm the request, but also to reveal better, simpler, or safer implementation options when relevant.
+- Prefer at most 1 to 3 focused clarification questions per round.
+- After each answer, reassess what is still unknown before asking the next question.
+- Stop asking once the remaining uncertainty no longer affects implementation or verification.
 - When working on WebXR movement, prefer small, testable iterations over large rewrites so walking/jumping behavior stays easy to verify against the current baseline.
 - If the user wants expressions evaluated (e.g. `setVolt(3+3)` or `setVolt((2+1)*8)`), implement this behavior:
   - Use the simplest robust approach that matches the request (for example, JavaScript expression evaluation when acceptable).
