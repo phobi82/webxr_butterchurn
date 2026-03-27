@@ -18,25 +18,24 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 > No teleport. No tunnel vision. No training wheels.  
 > The experience is designed to be intense, because VR should sometimes feel a little overwhelming.
 >
-> Proceed at your own risk — and maybe not right after lunch.
+> Proceed at your own risk - and maybe not right after lunch.
 
 ## Current Feature Set
 
 - immersive XR startup with `local-floor`, preferring `immersive-ar` and falling back to `immersive-vr`
-- desktop preview when no XR session is active
+- desktop preview plus shared desktop/XR locomotion with jumping, sprinting, crouching, tiptoe head-height control, and airborne boost
 - immediate Butterchurn startup on page load
-- XR and desktop locomotion with jumping, sprinting, crouching, tiptoe head-height control, and airborne boost
-- collision world with floor, platforms, walls, and a remote goat GLB prop
-- in-headset menu plus mirrored desktop preview for debugging the same menu
-- separate [`TestLab.html`](./TestLab.html) page for isolated single-effect lighting tests on desktop and in VR
+- collision world with floating platforms, side structures, and a remote goat GLB prop
+- in-headset menu plus mirrored desktop preview using the same menu system
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
-- passthrough blend modes: `Uniform`, `Flashlight`
-- uniform passthrough submodes: `Manual`, `Music`
-- optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR
+- background mix modes: `manual`, `sound-reactive`
+- passthrough controls: `Flashlight` plus optional `Depth` in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
+- optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR (only Quest 3 in Quest-Browser for now)
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, `YT Synth`, `YT House/Disco`, Suno Live Radio, or synthetic `Debug Audio`
+- separate [`TestLab.html`](./TestLab.html) page for isolated single-effect lighting tests on desktop and in VR
 
 ## Project Structure
 
@@ -48,7 +47,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-light-presets.js`: lighting preset catalog, fixture-rig builders, and scene-light derivation
 - `xr-visualizer.js`: visualizer engine, Butterchurn integration, and preset lifecycle
 - `xr-visualizer-modes.js`: visualizer mode catalog
-- `xr-passthrough-modes.js`: pure passthrough mode catalog and blend formulas
+- `xr-passthrough-modes.js`: background mix, passthrough, and lighting control definitions
 - `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
@@ -60,10 +59,10 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 ## Requirements
 
 - a modern desktop browser with WebGL support
-- a browser/runtime combination with WebXR support for immersive mode
-- a VR headset supported by that browser for actual headset sessions
-- a passthrough-capable headset/browser combination if the AR passthrough blend modes should reveal the real environment instead of the black fallback
-- depth-sensing-capable AR browser/runtime support if passthrough light effects should size themselves against sensed real-world depth instead of the built-in ceiling/wall/floor fallback anchors
+- a browser/runtime combination with WebXR support if immersive mode should be available
+- a supported headset/browser combination for actual VR or AR sessions
+- a passthrough-capable headset/browser combination if immersive AR should reveal the real environment instead of the black fallback
+- depth-sensing-capable AR browser/runtime support if depth-aware passthrough controls and light scaling should use sensed real-world depth instead of the built-in ceiling/wall/floor fallback anchors
 - microphone or screen/tab-capture permission if live audio input should drive the scene
 - popup permission if `YT Synth`, `YT House/Disco`, or `Suno Live Radio` should open their source tabs automatically
 
@@ -76,10 +75,10 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 There is no build step and no backend.
 
 1. Clone or download the repository.
-2. Open [`index.html`](./index.html) in a WebXR-capable browser.
+2. Open [`index.html`](./index.html) in a modern browser.
 3. Wait for the XR status line to report readiness.
 4. Use the desktop shell to test audio input, menu options, and preview movement.
-5. Enter VR when the browser reports headset support.
+5. Enter immersive mode when the browser and headset report support.
 
 ### Local HTTPS For Quest
 
@@ -98,7 +97,7 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 
 ## Audio Sources
 
-- `Share Audio`: capture audio from a shared display, window, or tab
+- `Select Audio-Source`: capture audio from a shared display, window, or tab
 - `Use Microphone`: capture microphone input
 - `Debug Audio`: synthetic source for visualizer and lighting debugging
 - `YT Synth`: opens the configured synth-oriented YouTube playlist tab and expects tab-audio sharing
@@ -109,18 +108,10 @@ If the Quest Browser shows a certificate warning, continue manually once for loc
 ## Effect Test Lab
 
 - Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect at a time instead of testing full presets.
-- The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, so Butterchurn is suppressed and the effect overlay stays isolated against the fallback/room test setup.
-- Its floor and grid are also kept neutral and non-audio-reactive in the lab path, using a darker gray floor and a slightly brighter gray grid so effect additive contribution and alpha-blend opening can be judged without a second moving color source.
-- Its desktop preview starts outside an open-front room shell with a clearer inner floor, thicker side/back surfaces, and a front frame, so ceiling, wall, and floor effects read more like a lighting diorama before entering VR.
-- Effect, variant, and semantics selection on desktop now goes through the mirrored menu, which is shown by default and can still be toggled with `M`, matching the in-headset control path instead of duplicating those controls as separate page buttons.
-- Effect descriptions now belong to the effect itself, while variants only change the staging/placement inside that effect instead of masquerading as separate effects.
-- The isolated effect list now also includes `Flashlight` as a normal fixture effect inside the shared Club/effect pipeline, instead of introducing a separate scene-lighting mode just for the lab.
-- `Current`, `Additive Only`, and `Alpha Blend Only` let the same isolated effect be compared under matched conditions, so passthrough color contribution and passthrough opening can be judged separately before deciding on the final semantics for that effect.
-- The mirrored TestLab menu now also exposes dedicated `Additive` and `Alpha Blend` sliders under `Scene Lighting`, so those shares can be tuned directly instead of only toggled by semantic mode.
-- The left desktop panel now stays minimal and leaves effect, variant, and semantics readout to the mirrored menu, while still keeping audio/XR controls and the shared isolation baseline visible.
-- The page keeps the normal XR enter path, so the same isolated effects can be inspected in headset instead of only on desktop.
-- Its in-headset menu is also reduced to separate `Active Effect` and `Variant` cyclers, the key lighting sliders, focused audio meters, and explicit variant/audio status instead of mirroring the full production menu.
-- While inside VR, the TestLab menu also includes an `Exit VR` button so the session can be ended without leaving the in-headset UI first.
+- The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, neutral floor/grid colors, and a room-style preview so the active effect stays easy to judge in isolation.
+- Desktop control goes through the mirrored menu, which is visible by default and still toggled with `M`, matching the in-headset interaction path.
+- Effects are organized as `effect -> variants`, and the catalog also includes `Flashlight` inside the shared Club/effect pipeline.
+- The page keeps the normal XR entry path and uses a reduced in-headset menu with `Active Effect`, `Variant`, `Darkness`, `Additive`, `Alpha Blend`, focused audio meters, and `Exit VR`.
 
 ## Desktop Preview Controls
 
@@ -153,19 +144,19 @@ XR stick movement and airborne boost now drive the same horizontal movement velo
 The current menu exposes:
 
 - jump mode: `Double`, `Multi`
+- eye distance slider
 - world opacity slider for floor, grid, and level blocks; GLB props stay opaque
-- passthrough group:
-  - blend mode cycler: `Uniform`, `Flashlight`
-  - `Uniform Blend`: `Manual`, `Music`
-  - `Uniform` + `Manual`: `Mix`
-  - `Uniform` + `Music`: bipolar `Intensity` with end labels `Vis -> Passthrough` and `Passthrough -> Vis`
-  - `Flashlight`: `Radius` and `Softness`
+- `Background` section:
+  - `Mix Mode`: `manual`, `sound-reactive`
+  - `manual`: `Mix`
+  - `sound-reactive`: bipolar `Intensity` with end labels `Vis -> Mod. Reality` and `Mod. Reality -> Vis`
+- `Passthrough` section:
+  - `Flashlight` toggle with `Radius` and `Softness`
   - when usable depth data exists: `Depth` toggle plus `Distance`, `Fade`, and `MR Blend`
-- scene lighting group:
-  - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club` with `Spots` as the default
+- `Scene Lighting` section:
+  - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club`
   - `Light Preset` cycler
   - all lighting modes except `None`: `Darkness`
-- eye distance slider
 - visualizer mode selector
 - Butterchurn preset selector
 - `Session` section with an `Exit VR` button while an immersive session is active
@@ -182,15 +173,12 @@ The current menu exposes:
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
-- Live passthrough uses the same background and overlay pipeline in AR, while desktop preview, opaque AR, and VR fall back to a black background instead of real passthrough.
-- When live passthrough is available, startup switches `Background` to `sound-reactive` at `100%`.
-- The runtime requests optional WebXR depth sensing for immersive AR with a depth ladder: GPU depth first when available, CPU depth as fallback, then plain AR if depth is unsupported.
-- When usable depth data is present, the `Depth` toggle becomes available and auto-enables itself; depth is then used both for the passthrough punch path and for scaling passthrough light masks against sensed real-world distance.
-- If depth is missing or unsupported, passthrough lighting falls back to synthetic ceiling, wall, and floor anchors instead of failing.
-- `Uniform` handles full-screen passthrough blending, `Flashlight` reveals passthrough through hand-driven masks, and scene lighting can run as `None`, `Uniform`, `Spots`, or `Club`.
-- `Club` is the richer passthrough-lighting path: preset-driven washes, wall beams, floor spill, and strobe accents are derived from the active lighting preset and audio metrics rather than from separate macro sliders.
-- The lower menu is one generic state-driven system shared across passthrough, scene lighting, world opacity, eye distance, visualizer mode, and preset selection; `TestLab.html` reuses the same runtime for isolated effect review.
-- Translucent world and menu rendering preserve the intended XR framebuffer alpha, so semi-transparent geometry no longer punches unintended passthrough holes.
+- Live passthrough uses the shared background and overlay pipeline in AR, while desktop preview, opaque AR, and VR fall back to a black background.
+- When live passthrough is available, startup switches `Background` to `sound-reactive` with full modified-reality bias.
+- The runtime requests optional WebXR depth sensing for immersive AR with a fallback ladder: GPU depth first, CPU depth second, plain AR last.
+- When usable depth data is present, the `Depth` toggle auto-enables and depth is used both for passthrough punch and for scaling passthrough light masks; without depth, lighting falls back to synthetic ceiling, wall, and floor anchors.
+- `Background` handles full-frame visualizer-to-modified-reality mixing, `Flashlight` and optional `Depth` open passthrough masks, and scene lighting runs as `None`, `Uniform`, `Spots`, or `Club`; `Club` is the richer preset- and audio-driven mode.
+- The lower menu is one shared state-driven system, `TestLab.html` reuses the same runtime with its own reduced menu/preset setup, and translucent world/menu rendering preserves XR framebuffer alpha.
 
 ## GitHub Pages
 
