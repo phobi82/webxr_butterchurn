@@ -133,7 +133,7 @@ The mirrored desktop menu is hidden on startup and uses the same canvas/menu sys
 - right stick Y: persistent crouch / temporary tiptoe head-height input
 - `A` on the right controller: jump, hold briefly for extra height
 - right trigger while airborne: directional air boost
-- `Y` on the left controller: open or close the in-headset menu
+- `Y` on the left controller or `B` on the right controller: open or close the in-headset menu
 - trigger on menu controls: press buttons and drag sliders
 - in-headset menu: `Exit VR` button to end the current immersive session
 

@@ -1221,8 +1221,9 @@ const createMenuController = function(options) {
 			const sources = args.xrSession ? args.xrSession.inputSources || [] : [];
 			let togglePressedBool = false;
 			for (let i = 0; i < sources.length; i += 1) {
-				const source = sources[i];
-				if (source.handedness === "left" && source.gamepad && source.gamepad.buttons[5] && source.gamepad.buttons[5].pressed) {
+				const gamepad = sources[i].gamepad;
+				// Quest maps button 5 to left Y and right B.
+				if (gamepad && gamepad.buttons && gamepad.buttons[5] && gamepad.buttons[5].pressed) {
 					togglePressedBool = true;
 				}
 			}

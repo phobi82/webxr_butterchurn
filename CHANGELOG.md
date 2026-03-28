@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Added `B` on the right controller as a second in-headset menu toggle, so the same menu can now be opened and closed from either controller face-button side instead of only `Y` on the left controller.
+
 ## [0.8.1] - 2026-03-28
 
 ### Changed
