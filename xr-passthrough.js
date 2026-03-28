@@ -782,15 +782,17 @@ const createPassthroughController = function(options) {
 		getPunchRenderState: function(args) {
 			var depth = null;
 			var flashlight = null;
+			var worldMask = null;
 			if (state.depthActiveBool) {
 				depth = {depthThreshold: state.depthThreshold, depthFade: state.depthFade, depthMrRetain: state.depthMrRetain};
+				worldMask = {depthThreshold: state.depthThreshold, depthFade: state.depthFade};
 			}
 			if (state.flashlightActiveBool) {
 				var masks = getFlashlightMasks(args || {});
 				if (masks.length) { flashlight = {masks: masks}; }
 			}
-			if (!depth && !flashlight) { return null; }
-			return {depth: depth, flashlight: flashlight};
+			if (!depth && !flashlight && !worldMask) { return null; }
+			return {depth: depth, flashlight: flashlight, worldMask: worldMask};
 		},
 		getBackgroundCompositeState: function() {
 			return {
@@ -812,6 +814,7 @@ const createPassthroughController = function(options) {
 				visibleShare: visibleShare,
 				maskCount: 0,
 				masks: [],
+				depth: state.depthActiveBool ? {depthThreshold: state.depthThreshold, depthFade: state.depthFade, depthMrRetain: state.depthMrRetain} : null,
 				darkAlpha: 1 - darkness,
 				additiveColor: lightingColor,
 				additiveStrength: additiveStrength,
@@ -841,6 +844,8 @@ const applyVisualizerBackgroundComposite = function(visualizerEngine, compositeS
 const createPassthroughOverlayRenderer = function() {
 	let gl = null;
 	let program = null;
+	let depthTexture2dProgram = null;
+	let depthGpuArrayProgram = null;
 	let positionLoc = null;
 	let darkAlphaLoc = null;
 	let visibleShareLoc = null;
@@ -858,6 +863,11 @@ const createPassthroughOverlayRenderer = function() {
 	let spotAdditiveScaleLoc = null;
 	let spotAlphaBlendScaleLoc = null;
 	let buffer = null;
+	let depthTexture2dLocs = null;
+	let depthGpuArrayLocs = null;
+	let cpuDepthTexture = null;
+	let cpuUploadBuffer = null;
+	const depthUvTransform = new Float32Array(16);
 	const maskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const spotCenters = new Float32Array(PASSTHROUGH_MAX_SPOTS * 2);
@@ -866,6 +876,14 @@ const createPassthroughOverlayRenderer = function() {
 	const spotAlphaBlendStrengths = new Float32Array(PASSTHROUGH_MAX_SPOTS);
 	const spotEffectParams = new Float32Array(PASSTHROUGH_MAX_SPOTS * 4);
 	const additiveColor = new Float32Array(3);
+	const overlayVertexSource = [
+		"attribute vec2 position;",
+		"varying vec2 vScreenUv;",
+		"void main(){",
+		"vScreenUv=position*0.5+0.5;",
+		"gl_Position=vec4(position,0.0,1.0);",
+		"}"
+	].join("");
 
 	const fragmentSource = [
 		"precision mediump float;",
@@ -926,6 +944,166 @@ const createPassthroughOverlayRenderer = function() {
 		"}"
 	].join("");
 
+	const depthOverlayShaderChunk = [
+		"float computeDepthRetainShare(float baseVisibleShare){",
+		"if(depthMrRetain<=0.0001){",
+		"return baseVisibleShare;",
+		"}",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
+		"float rawDepth=sampleDepth(depthUv);",
+		"float valid=step(0.001,rawDepth);",
+		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
+		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"float localRetain=depthMrRetain*(1.0-mask)*valid;",
+		"return max(baseVisibleShare,localRetain);",
+		"}"
+	].join("");
+	const depthTexture2dFragmentSource = [
+		"precision mediump float;",
+		"uniform float darkAlpha;",
+		"uniform float visibleShare;",
+		"uniform float maskCount;",
+		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"uniform vec3 additiveColor;",
+		"uniform float additiveStrength;",
+		"uniform float spotCount;",
+		"uniform vec4 spotColors[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec2 spotCenters[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotAlphaBlendStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotEffectParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotAdditiveScale;",
+		"uniform float spotAlphaBlendScale;",
+		"uniform sampler2D depthTexture;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float depthMrRetain;",
+		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
+		"uniform mat4 depthUvTransform;",
+		"varying vec2 vScreenUv;",
+		"float circleMask(vec2 uv, vec2 center, vec2 params){float radius=max(params.x,0.0001);float softness=max(params.y,0.0001);float inner=max(0.0,radius-softness);return 1.0-smoothstep(inner,radius,distance(uv,center));}",
+		"vec2 rotateUv(vec2 uv, float rotation){float c=cos(rotation);float s=sin(rotation);return vec2(uv.x*c-uv.y*s,uv.x*s+uv.y*c);}",
+		"float ellipseMask(vec2 uv, vec2 center, vec4 params){vec2 local=rotateUv(uv-center,-params.w);vec2 scaled=vec2(local.x/max(params.x,0.0001),local.y/max(params.y,0.0001));float dist=length(scaled);float softness=max(params.z,0.0001);float inner=max(0.0,1.0-softness);return 1.0-smoothstep(inner,1.0,dist);}",
+		"vec2 computeEffectMask(float effectType,float effectPhase,float effectDensity,float effectAmount,vec2 uv){float additiveMask=1.0;float alphaMask=1.0;if(effectType<0.5){return vec2(additiveMask,alphaMask);}float stripeAxis=uv.x*cos(effectPhase)+uv.y*sin(effectPhase);float stripe=0.5+0.5*sin(stripeAxis*mix(18.0,56.0,clamp(effectDensity,0.0,1.0))*6.2831853);float pulse=0.5+0.5*sin(effectPhase*6.2831853+stripeAxis*8.0);if(effectType<1.5){alphaMask=mix(1.0,step(0.5,stripe),effectAmount);}else if(effectType<2.5){alphaMask=mix(1.0,smoothstep(0.2,0.95,stripe),effectAmount);additiveMask=mix(1.0,0.55+0.45*pulse,effectAmount*0.85);}else if(effectType<3.5){float aurora=smoothstep(0.18,0.95,stripe)*mix(0.68,1.0,pulse);alphaMask=mix(1.0,aurora,effectAmount);additiveMask=mix(1.0,0.7+0.3*aurora,effectAmount*0.7);}else{float halo=1.0-smoothstep(0.0,0.85,length(uv));alphaMask=mix(1.0,halo,effectAmount);additiveMask=mix(1.0,0.6+0.4*halo,effectAmount);}return vec2(additiveMask,alphaMask);}",
+		"float sampleDepth(vec2 depthUv){return texture2D(depthTexture,depthUv).r;}",
+		depthOverlayShaderChunk,
+		"void main(){",
+		"float alphaBlendOpen=computeDepthRetainShare(visibleShare);",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
+		"if(float(i)>=maskCount){break;}",
+		"float localMask=circleMask(vScreenUv,maskCenters[i],maskParams[i]);",
+		"alphaBlendOpen=1.0-(1.0-alphaBlendOpen)*(1.0-localMask);",
+		"}",
+		"vec3 color=additiveColor*additiveStrength*alphaBlendOpen;",
+		"float localAlphaBlendOpen=0.0;",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
+		"if(float(i)>=spotCount){break;}",
+		"vec2 localUv=rotateUv(vScreenUv-spotCenters[i],-spotParams[i].w);",
+		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
+		"vec2 effectMask=computeEffectMask(spotEffectParams[i].x,spotEffectParams[i].y,spotEffectParams[i].z,spotEffectParams[i].w,vec2(localUv.x/max(spotParams[i].x,0.0001),localUv.y/max(spotParams[i].y,0.0001)));",
+		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*alphaBlendOpen*spotAdditiveScale;",
+		"color+=spotColors[i].rgb*spotStrength;",
+		"localAlphaBlendOpen=max(localAlphaBlendOpen,clamp(spotColors[i].a*spotMask*effectMask.y*spotAlphaBlendStrengths[i]*1.65*alphaBlendOpen*spotAlphaBlendScale,0.0,1.0));",
+		"}",
+		"gl_FragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
+		"}"
+	].join("");
+	const depthGpuArrayVertexSource = [
+		"#version 300 es\n",
+		"in vec2 position;",
+		"out vec2 vScreenUv;",
+		"void main(){",
+		"vScreenUv=position*0.5+0.5;",
+		"gl_Position=vec4(position,0.0,1.0);",
+		"}"
+	].join("");
+	const depthGpuArrayFragmentSource = [
+		"#version 300 es\n",
+		"precision mediump float;",
+		"precision mediump sampler2DArray;",
+		"uniform float darkAlpha;",
+		"uniform float visibleShare;",
+		"uniform float maskCount;",
+		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
+		"uniform vec3 additiveColor;",
+		"uniform float additiveStrength;",
+		"uniform float spotCount;",
+		"uniform vec4 spotColors[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec2 spotCenters[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotAlphaBlendStrengths[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform vec4 spotEffectParams[" + PASSTHROUGH_MAX_SPOTS + "];",
+		"uniform float spotAdditiveScale;",
+		"uniform float spotAlphaBlendScale;",
+		"uniform sampler2DArray depthTexture;",
+		"uniform int depthTextureLayer;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float depthMrRetain;",
+		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
+		"uniform mat4 depthUvTransform;",
+		"in vec2 vScreenUv;",
+		"out vec4 fragColor;",
+		"float circleMask(vec2 uv, vec2 center, vec2 params){float radius=max(params.x,0.0001);float softness=max(params.y,0.0001);float inner=max(0.0,radius-softness);return 1.0-smoothstep(inner,radius,distance(uv,center));}",
+		"vec2 rotateUv(vec2 uv, float rotation){float c=cos(rotation);float s=sin(rotation);return vec2(uv.x*c-uv.y*s,uv.x*s+uv.y*c);}",
+		"float ellipseMask(vec2 uv, vec2 center, vec4 params){vec2 local=rotateUv(uv-center,-params.w);vec2 scaled=vec2(local.x/max(params.x,0.0001),local.y/max(params.y,0.0001));float dist=length(scaled);float softness=max(params.z,0.0001);float inner=max(0.0,1.0-softness);return 1.0-smoothstep(inner,1.0,dist);}",
+		"vec2 computeEffectMask(float effectType,float effectPhase,float effectDensity,float effectAmount,vec2 uv){float additiveMask=1.0;float alphaMask=1.0;if(effectType<0.5){return vec2(additiveMask,alphaMask);}float stripeAxis=uv.x*cos(effectPhase)+uv.y*sin(effectPhase);float stripe=0.5+0.5*sin(stripeAxis*mix(18.0,56.0,clamp(effectDensity,0.0,1.0))*6.2831853);float pulse=0.5+0.5*sin(effectPhase*6.2831853+stripeAxis*8.0);if(effectType<1.5){alphaMask=mix(1.0,step(0.5,stripe),effectAmount);}else if(effectType<2.5){alphaMask=mix(1.0,smoothstep(0.2,0.95,stripe),effectAmount);additiveMask=mix(1.0,0.55+0.45*pulse,effectAmount*0.85);}else if(effectType<3.5){float aurora=smoothstep(0.18,0.95,stripe)*mix(0.68,1.0,pulse);alphaMask=mix(1.0,aurora,effectAmount);additiveMask=mix(1.0,0.7+0.3*aurora,effectAmount*0.7);}else{float halo=1.0-smoothstep(0.0,0.85,length(uv));alphaMask=mix(1.0,halo,effectAmount);additiveMask=mix(1.0,0.6+0.4*halo,effectAmount);}return vec2(additiveMask,alphaMask);}",
+		"float sampleDepth(vec2 depthUv){return texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;}",
+		depthOverlayShaderChunk,
+		"void main(){",
+		"float alphaBlendOpen=computeDepthRetainShare(visibleShare);",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
+		"if(float(i)>=maskCount){break;}",
+		"float localMask=circleMask(vScreenUv,maskCenters[i],maskParams[i]);",
+		"alphaBlendOpen=1.0-(1.0-alphaBlendOpen)*(1.0-localMask);",
+		"}",
+		"vec3 color=additiveColor*additiveStrength*alphaBlendOpen;",
+		"float localAlphaBlendOpen=0.0;",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_SPOTS + ";i+=1){",
+		"if(float(i)>=spotCount){break;}",
+		"vec2 localUv=rotateUv(vScreenUv-spotCenters[i],-spotParams[i].w);",
+		"float spotMask=ellipseMask(vScreenUv,spotCenters[i],spotParams[i]);",
+		"vec2 effectMask=computeEffectMask(spotEffectParams[i].x,spotEffectParams[i].y,spotEffectParams[i].z,spotEffectParams[i].w,vec2(localUv.x/max(spotParams[i].x,0.0001),localUv.y/max(spotParams[i].y,0.0001)));",
+		"float spotStrength=spotColors[i].a*spotMask*effectMask.x*alphaBlendOpen*spotAdditiveScale;",
+		"color+=spotColors[i].rgb*spotStrength;",
+		"localAlphaBlendOpen=max(localAlphaBlendOpen,clamp(spotColors[i].a*spotMask*effectMask.y*spotAlphaBlendStrengths[i]*1.65*alphaBlendOpen*spotAlphaBlendScale,0.0,1.0));",
+		"}",
+		"fragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
+		"}"
+	].join("");
+	const buildOverlayLocs = function(targetProgram) {
+		return {
+			position: gl.getAttribLocation(targetProgram, "position"),
+			darkAlpha: gl.getUniformLocation(targetProgram, "darkAlpha"),
+			visibleShare: gl.getUniformLocation(targetProgram, "visibleShare"),
+			maskCount: gl.getUniformLocation(targetProgram, "maskCount"),
+			maskCenters: gl.getUniformLocation(targetProgram, "maskCenters"),
+			maskParams: gl.getUniformLocation(targetProgram, "maskParams"),
+			additiveColor: gl.getUniformLocation(targetProgram, "additiveColor"),
+			additiveStrength: gl.getUniformLocation(targetProgram, "additiveStrength"),
+			spotCount: gl.getUniformLocation(targetProgram, "spotCount"),
+			spotCenters: gl.getUniformLocation(targetProgram, "spotCenters"),
+			spotColors: gl.getUniformLocation(targetProgram, "spotColors"),
+			spotParams: gl.getUniformLocation(targetProgram, "spotParams"),
+			spotAlphaBlendStrengths: gl.getUniformLocation(targetProgram, "spotAlphaBlendStrengths"),
+			spotEffectParams: gl.getUniformLocation(targetProgram, "spotEffectParams"),
+			spotAdditiveScale: gl.getUniformLocation(targetProgram, "spotAdditiveScale"),
+			spotAlphaBlendScale: gl.getUniformLocation(targetProgram, "spotAlphaBlendScale"),
+			depthTexture: gl.getUniformLocation(targetProgram, "depthTexture"),
+			depthTextureLayer: gl.getUniformLocation(targetProgram, "depthTextureLayer"),
+			depthThreshold: gl.getUniformLocation(targetProgram, "depthThreshold"),
+			depthFade: gl.getUniformLocation(targetProgram, "depthFade"),
+			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
+			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(targetProgram, "depthNearZ"),
+			depthUvTransform: gl.getUniformLocation(targetProgram, "depthUvTransform")
+		};
+	};
+
 	return {
 		init: function(glContext) {
 			gl = glContext;
@@ -946,13 +1124,19 @@ const createPassthroughOverlayRenderer = function() {
 			spotEffectParamsLoc = gl.getUniformLocation(program, "spotEffectParams");
 			spotAdditiveScaleLoc = gl.getUniformLocation(program, "spotAdditiveScale");
 			spotAlphaBlendScaleLoc = gl.getUniformLocation(program, "spotAlphaBlendScale");
+			depthTexture2dProgram = createProgram(gl, overlayVertexSource, depthTexture2dFragmentSource, "Passthrough overlay depth texture2d");
+			depthTexture2dLocs = buildOverlayLocs(depthTexture2dProgram);
+			if (typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext) {
+				depthGpuArrayProgram = createProgram(gl, depthGpuArrayVertexSource, depthGpuArrayFragmentSource, "Passthrough overlay depth gpu-array");
+				depthGpuArrayLocs = buildOverlayLocs(depthGpuArrayProgram);
+			}
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
-		draw: function(renderState) {
+		draw: function(renderState, depthInfo, depthFrameKind, webgl2Bool, depthProfile) {
 			if (!renderState) {
 				return;
 			}
-			const effectiveAlphaBlendOpen = renderState.visibleShare > 0.001 || renderState.maskCount > 0;
+			const effectiveAlphaBlendOpen = renderState.visibleShare > 0.001 || renderState.maskCount > 0 || !!(renderState.depth && renderState.depth.depthMrRetain > 0.001);
 			if (!effectiveAlphaBlendOpen) {
 				return;
 			}
@@ -1001,29 +1185,119 @@ const createPassthroughOverlayRenderer = function() {
 			additiveColor[0] = renderState.additiveColor[0];
 			additiveColor[1] = renderState.additiveColor[1];
 			additiveColor[2] = renderState.additiveColor[2];
+			let activeProgram = program;
+			let activeLocs = {
+				position: positionLoc,
+				darkAlpha: darkAlphaLoc,
+				visibleShare: visibleShareLoc,
+				maskCount: maskCountLoc,
+				maskCenters: maskCentersLoc,
+				maskParams: maskParamsLoc,
+				additiveColor: additiveColorLoc,
+				additiveStrength: additiveStrengthLoc,
+				spotCount: spotCountLoc,
+				spotCenters: spotCentersLoc,
+				spotColors: spotColorsLoc,
+				spotParams: spotParamsLoc,
+				spotAlphaBlendStrengths: spotAlphaBlendStrengthsLoc,
+				spotEffectParams: spotEffectParamsLoc,
+				spotAdditiveScale: spotAdditiveScaleLoc,
+				spotAlphaBlendScale: spotAlphaBlendScaleLoc
+			};
+			let cpuTextureBoundBool = false;
+			const useDepthOverlayBool = !!(renderState.depth && depthInfo);
+			if (useDepthOverlayBool) {
+				const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+				if (depthFrameKind === "cpu") {
+					if (!depthInfo.data || !depthInfo.width || !depthInfo.height) {
+						return;
+					}
+					if (!cpuDepthTexture) {
+						cpuDepthTexture = gl.createTexture();
+					}
+					const pixelCount = depthInfo.width * depthInfo.height;
+					if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
+						cpuUploadBuffer = new Float32Array(pixelCount);
+					}
+					const src = new Uint16Array(depthInfo.data);
+					for (let i = 0; i < pixelCount; i += 1) {
+						cpuUploadBuffer[i] = src[i];
+					}
+					gl.activeTexture(gl.TEXTURE1);
+					gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
+					if (webgl2Bool) {
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+					} else {
+						gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
+					}
+					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+					cpuTextureBoundBool = true;
+					activeProgram = depthTexture2dProgram;
+					activeLocs = depthTexture2dLocs;
+				} else if (depthFrameKind === "gpu-array" && webgl2Bool && depthGpuArrayProgram && depthInfo.texture) {
+					activeProgram = depthGpuArrayProgram;
+					activeLocs = depthGpuArrayLocs;
+				} else if (depthInfo.texture) {
+					activeProgram = depthTexture2dProgram;
+					activeLocs = depthTexture2dLocs;
+				} else {
+					activeProgram = program;
+				}
+			}
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
-			gl.useProgram(program);
+			gl.useProgram(activeProgram);
 			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-			gl.enableVertexAttribArray(positionLoc);
-			gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
-			gl.uniform1f(darkAlphaLoc, renderState.darkAlpha);
-			gl.uniform1f(visibleShareLoc, renderState.visibleShare);
-			gl.uniform1f(maskCountLoc, renderState.maskCount);
-			gl.uniform2fv(maskCentersLoc, maskCenters);
-			gl.uniform2fv(maskParamsLoc, maskParams);
-			gl.uniform3fv(additiveColorLoc, additiveColor);
-			gl.uniform1f(additiveStrengthLoc, renderState.additiveStrength);
-			gl.uniform1f(spotCountLoc, renderState.spots.length);
-			gl.uniform2fv(spotCentersLoc, spotCenters);
-			gl.uniform4fv(spotColorsLoc, spotColors);
-			gl.uniform4fv(spotParamsLoc, spotParams);
-			gl.uniform1fv(spotAlphaBlendStrengthsLoc, spotAlphaBlendStrengths);
-			gl.uniform4fv(spotEffectParamsLoc, spotEffectParams);
-			gl.uniform1f(spotAdditiveScaleLoc, renderState.spotAdditiveScale == null ? 1 : renderState.spotAdditiveScale);
-			gl.uniform1f(spotAlphaBlendScaleLoc, renderState.spotAlphaBlendScale == null ? 1 : renderState.spotAlphaBlendScale);
+			gl.enableVertexAttribArray(activeLocs.position);
+			gl.vertexAttribPointer(activeLocs.position, 2, gl.FLOAT, false, 0, 0);
+			gl.uniform1f(activeLocs.darkAlpha, renderState.darkAlpha);
+			gl.uniform1f(activeLocs.visibleShare, renderState.visibleShare);
+			gl.uniform1f(activeLocs.maskCount, renderState.maskCount);
+			gl.uniform2fv(activeLocs.maskCenters, maskCenters);
+			gl.uniform2fv(activeLocs.maskParams, maskParams);
+			gl.uniform3fv(activeLocs.additiveColor, additiveColor);
+			gl.uniform1f(activeLocs.additiveStrength, renderState.additiveStrength);
+			gl.uniform1f(activeLocs.spotCount, renderState.spots.length);
+			gl.uniform2fv(activeLocs.spotCenters, spotCenters);
+			gl.uniform4fv(activeLocs.spotColors, spotColors);
+			gl.uniform4fv(activeLocs.spotParams, spotParams);
+			gl.uniform1fv(activeLocs.spotAlphaBlendStrengths, spotAlphaBlendStrengths);
+			gl.uniform4fv(activeLocs.spotEffectParams, spotEffectParams);
+			gl.uniform1f(activeLocs.spotAdditiveScale, renderState.spotAdditiveScale == null ? 1 : renderState.spotAdditiveScale);
+			gl.uniform1f(activeLocs.spotAlphaBlendScale, renderState.spotAlphaBlendScale == null ? 1 : renderState.spotAlphaBlendScale);
+			if (useDepthOverlayBool && activeLocs.depthTexture) {
+				gl.uniform1f(activeLocs.depthThreshold, renderState.depth.depthThreshold);
+				gl.uniform1f(activeLocs.depthFade, renderState.depth.depthFade);
+				gl.uniform1f(activeLocs.depthMrRetain, renderState.depth.depthMrRetain || 0);
+				gl.uniform1f(activeLocs.rawValueToMeters, depthProfile && depthInfo ? (depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001)) : (depthInfo && depthInfo.rawValueToMeters || 0.001));
+				gl.uniform1f(activeLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
+				gl.activeTexture(gl.TEXTURE1);
+				if (cpuTextureBoundBool) {
+					// already bound above
+				} else if (depthFrameKind === "gpu-array" && webgl2Bool && depthGpuArrayProgram && depthInfo.texture && activeLocs.depthTextureLayer) {
+					gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
+					gl.uniform1i(activeLocs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
+				} else if (depthInfo && depthInfo.texture) {
+					gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+				}
+				gl.uniform1i(activeLocs.depthTexture, 1);
+				if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
+					depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
+				} else if (depthInfo.normDepthBufferFromNormView) {
+					depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
+				} else {
+					depthUvTransform[0] = 1; depthUvTransform[1] = 0; depthUvTransform[2] = 0; depthUvTransform[3] = 0;
+					depthUvTransform[4] = 0; depthUvTransform[5] = 1; depthUvTransform[6] = 0; depthUvTransform[7] = 0;
+					depthUvTransform[8] = 0; depthUvTransform[9] = 0; depthUvTransform[10] = 1; depthUvTransform[11] = 0;
+					depthUvTransform[12] = 0; depthUvTransform[13] = 0; depthUvTransform[14] = 0; depthUvTransform[15] = 1;
+				}
+				gl.uniformMatrix4fv(activeLocs.depthUvTransform, false, depthUvTransform);
+			}
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);

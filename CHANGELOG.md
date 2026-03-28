@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The depth-aware passthrough cutout now also suppresses the full VR world layer inside the near-object region, so darkened modified reality and passthrough light effects can show through there without floor, GLB, or other world geometry leaking into the same cutout.
+
 ## [0.8.0] - 2026-03-27
 
 ### Changed

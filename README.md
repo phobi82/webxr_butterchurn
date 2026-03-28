@@ -153,6 +153,7 @@ The current menu exposes:
 - `Passthrough` section:
   - `Flashlight` toggle with `Radius` and `Softness`
   - when usable depth data exists: `Depth` toggle plus `Distance`, `Fade`, and `MR Blend`
+  - the `Depth` cutout now suppresses the full world layer inside the near-object region while `MR Blend` still controls how much modified reality versus direct passthrough remains there
 - `Scene Lighting` section:
   - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club`
   - `Light Preset` cycler
