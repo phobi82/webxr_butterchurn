@@ -121,7 +121,7 @@ const createVisualizerEngine = function(options) {
 		timeSeconds: 0,
 		headYaw: 0,
 		headPitch: 0,
-		horizontalMirrorBool: false,
+		horizontalMirrorBool: true,
 		headHorizontalFov: Math.PI / 2,
 		headVerticalFov: Math.PI / 2,
 		backgroundAlpha: 1,

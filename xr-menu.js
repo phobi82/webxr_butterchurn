@@ -22,7 +22,6 @@ const createMenuView = function(options) {
 	const documentRef = options.documentRef || document;
 	const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
 	const menuLayoutWidth = options.canvasWidth || 1280;
-	const maxMenuTextureHeight = options.maxMenuTextureHeight || 2304;
 	const menuCanvas = documentRef.createElement("canvas");
 	menuCanvas.width = menuLayoutWidth;
 	menuCanvas.height = options.canvasHeight || 960;
@@ -189,7 +188,7 @@ const createMenuView = function(options) {
 		return cachedLayoutResult;
 	};
 	const syncCanvasSize = function(layout) {
-		const targetHeight = Math.min(layout.canvasHeight, maxMenuTextureHeight);
+		const targetHeight = layout.canvasHeight;
 		if (menuCanvas.height !== targetHeight) {
 			menuCanvas.height = targetHeight;
 		}
@@ -207,7 +206,7 @@ const createMenuView = function(options) {
 		const worldMenuWidth = options.menuWorldWidth || options.menuWidth || 0.74;
 		return {
 			width: worldMenuWidth,
-			height: worldMenuWidth * (Math.min(layout.canvasHeight, maxMenuTextureHeight) / menuLayoutWidth)
+			height: worldMenuWidth * (layout.canvasHeight / menuLayoutWidth)
 		};
 	};
 	const drawCenteredFittedText = function(text, centerX, topY, maxWidth, fontSize, minFontSize, color, weight) {
@@ -317,10 +316,9 @@ const createMenuView = function(options) {
 			const accentSoft = "rgba(" + Math.round(accentRgb[0] * 255) + "," + Math.round(accentRgb[1] * 255) + "," + Math.round(accentRgb[2] * 255) + ",0.18)";
 			const audioBarItems = buildAudioBarItems(audioMetrics);
 			syncCanvasSize(layout);
-			const logicalScaleY = menuCanvas.height / Math.max(1, layout.canvasHeight);
 			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
 			menuCtx.clearRect(0, 0, menuCanvas.width, menuCanvas.height);
-			menuCtx.setTransform(1, 0, 0, logicalScaleY, 0, 0);
+			menuCtx.setTransform(1, 0, 0, 1, 0, 0);
 			const headerGradient = menuCtx.createLinearGradient(0, 0, menuLayoutWidth, layout.canvasHeight);
 			headerGradient.addColorStop(0, "#04111f");
 			headerGradient.addColorStop(0.55, "#071d33");

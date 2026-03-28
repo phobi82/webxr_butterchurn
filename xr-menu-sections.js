@@ -204,7 +204,7 @@ const createVisualizerModeMenuSectionState = function(args) {
 			}),
 			createCheckboxMenuControlState({
 				key: "visualizerHorizontalMirror",
-				label: "Mirror Horizontal",
+				label: "Horiz. Mirror (Kaleidoscope-Mode)",
 				valueText: args.checkboxValueText || "",
 				checkedBool: !!args.horizontalMirrorBool,
 				hoveredBool: !!args.hoveredHorizontalMirrorBool

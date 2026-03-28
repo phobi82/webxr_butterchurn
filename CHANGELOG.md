@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-03-28
+
 ### Changed
 - Added `B` on the right controller as a second in-headset menu toggle, so the same menu can now be opened and closed from either controller face-button side instead of only `Y` on the left controller.
 - Changed `Skysphere` to use a fixed `4x` horizontal wrap over `360` degrees and a mode-specific source-canvas width derived from target height plus vertical FOV, so the sky closes consistently after full turns without skewing the calibrated source aspect.
