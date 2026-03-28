@@ -81,6 +81,7 @@ const getBackgroundControlDefinitions = function(state) {
 
 const getPassthroughControlDefinitions = function(state) {
 	var controls = [];
+	var echoReactiveControls = [];
 	if (state.flashlightActiveBool) {
 		controls.push(
 			{key: "flashlightRadius", label: "Radius", value: state.flashlightRadius, min: 0.05, max: 0.45, minLabel: "Tight", maxLabel: "Wide"},
@@ -90,10 +91,15 @@ const getPassthroughControlDefinitions = function(state) {
 	if (state.depthActiveBool) {
 		if (state.depthModeKey === "echo") {
 			controls.push(
+				{key: "depthEchoPhase", label: "Phase", value: state.depthEchoPhase, min: 0, max: Math.max(0.1, state.depthEchoWavelength), minLabel: "0m", maxLabel: state.depthEchoWavelength.toFixed(1) + "m", valueText: state.depthEchoPhase.toFixed(1) + "m"},
+				{key: "depthEchoPhaseSpeed", label: "Phase-Speed", value: state.depthEchoPhaseSpeed, min: -10, max: 10, minLabel: "-10m/s", maxLabel: "10m/s", valueText: state.depthEchoPhaseSpeed.toFixed(1) + "m/s"},
 				{key: "depthEchoWavelength", label: "Wavelength", value: state.depthEchoWavelength, min: 0.1, max: 10, minLabel: "0.1m", maxLabel: "10m", valueText: state.depthEchoWavelength.toFixed(1) + "m"},
 				{key: "depthEchoDutyCycle", label: "DutyCycle", value: state.depthEchoDutyCycle, min: 0, max: 1, minLabel: "0%", maxLabel: "100%", valueText: Math.round(state.depthEchoDutyCycle * 100) + "%"},
-				{key: "depthEchoFade", label: "Fade", value: state.depthEchoFade, min: 0, max: 1, minLabel: "Hard", maxLabel: "Flow", valueText: Math.round(state.depthEchoFade * 100) + "%"},
-				{key: "depthEchoPhaseSpeed", label: "Phase-Speed", value: state.depthEchoPhaseSpeed, min: -10, max: 10, minLabel: "-10m/s", maxLabel: "10m/s", valueText: state.depthEchoPhaseSpeed.toFixed(1) + "m/s"}
+				{key: "depthEchoFade", label: "Fade", value: state.depthEchoFade, min: 0, max: 1, minLabel: "Hard", maxLabel: "Flow", valueText: Math.round(state.depthEchoFade * 100) + "%"}
+			);
+			echoReactiveControls.push(
+				{key: "depthEchoPhaseReactive", label: "Phase", checkedBool: !!state.depthEchoPhaseReactiveBool},
+				{key: "depthEchoDutyCycleReactive", label: "Duty", checkedBool: !!state.depthEchoDutyCycleReactiveBool}
 			);
 		} else {
 			controls.push(
@@ -105,7 +111,7 @@ const getPassthroughControlDefinitions = function(state) {
 			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
 		);
 	}
-	return {controls: controls};
+	return {controls: controls, echoReactiveControls: echoReactiveControls};
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {

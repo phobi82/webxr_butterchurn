@@ -505,11 +505,19 @@ const createPassthroughController = function(options) {
 		depthModeKey: "distance",
 		depthThreshold: 0.80,
 		depthFade: 0.20,
-		depthEchoWavelength: 10,
-		depthEchoDutyCycle: 0.9,
+		depthDistanceMrRetain: 0.3,
+		depthEchoPhase: 0,
+		depthEchoWavelength: 3,
+		depthEchoDutyCycle: 0.25,
 		depthEchoFade: 1,
 		depthEchoPhaseSpeed: 5,
 		depthEchoPhaseOffset: 0,
+		depthEchoMrRetain: 0.8,
+		depthEchoPhaseReactiveBool: false,
+		depthEchoPhaseSpeedReactiveBool: false,
+		depthEchoWavelengthReactiveBool: false,
+		depthEchoDutyCycleReactiveBool: true,
+		depthEchoFadeReactiveBool: false,
 		depthMrRetain: 0.3,
 		usableDepthAvailableBool: false,
 		smoothedAudioDrive: 0,
@@ -520,17 +528,8 @@ const createPassthroughController = function(options) {
 		return depthModeKey === "echo" ? 1 : 0;
 	};
 
-	const buildDepthRenderState = function() {
-		return {
-			depthMode: getDepthModeFloat(state.depthModeKey),
-			depthThreshold: state.depthThreshold,
-			depthFade: state.depthFade,
-			depthEchoWavelength: state.depthEchoWavelength,
-			depthEchoDutyCycle: state.depthEchoDutyCycle,
-			depthEchoFade: state.depthEchoFade,
-			depthPhaseOffset: state.depthEchoPhaseOffset,
-			depthMrRetain: state.depthMrRetain
-		};
+	const getDepthMrRetainForMode = function(depthModeKey) {
+		return depthModeKey === "echo" ? state.depthEchoMrRetain : state.depthDistanceMrRetain;
 	};
 
 	const quantizeDepthEchoPhaseSpeed = function(value) {
@@ -539,6 +538,57 @@ const createPassthroughController = function(options) {
 
 	const quantizeDepthEchoWavelength = function(value) {
 		return clampNumber(Math.round(value * 10) / 10, 0.1, 10);
+	};
+
+	const wrapEchoPhase = function(phaseValue, wavelength) {
+		wavelength = Math.max(0.1, wavelength || 0.1);
+		return ((phaseValue % wavelength) + wavelength) % wavelength;
+	};
+
+	const getEffectiveEchoDepthState = function() {
+		var effectiveWavelength = state.depthEchoWavelength;
+		var effectiveDutyCycle = state.depthEchoDutyCycle;
+		var effectiveFade = state.depthEchoFade;
+		var audioDrive = clampNumber(state.smoothedAudioDrive, 0, 1);
+		if (state.depthEchoWavelengthReactiveBool) {
+			effectiveWavelength = clampNumber(state.depthEchoWavelength * lerpNumber(1.45, 0.55, audioDrive), 0.1, 10);
+		}
+		if (state.depthEchoDutyCycleReactiveBool) {
+			effectiveDutyCycle = clampNumber(state.depthEchoDutyCycle + (audioDrive - 0.5) * 1.6, 0, 1);
+		}
+		if (state.depthEchoFadeReactiveBool) {
+			effectiveFade = clampNumber(state.depthEchoFade + (audioDrive - 0.5) * 0.9, 0, 1);
+		}
+		var effectivePhase = wrapEchoPhase(state.depthEchoPhase + state.depthEchoPhaseOffset, effectiveWavelength);
+		if (state.depthEchoPhaseReactiveBool) {
+			effectivePhase = wrapEchoPhase(effectivePhase + audioDrive * effectiveWavelength, effectiveWavelength);
+		}
+		return {
+			depthMode: getDepthModeFloat(state.depthModeKey),
+			depthThreshold: state.depthThreshold,
+			depthFade: state.depthFade,
+			depthEchoWavelength: effectiveWavelength,
+			depthEchoDutyCycle: effectiveDutyCycle,
+			depthEchoFade: effectiveFade,
+			depthPhaseOffset: effectivePhase,
+			depthMrRetain: state.depthMrRetain
+		};
+	};
+
+	const buildDepthRenderState = function() {
+		if (state.depthModeKey === "echo") {
+			return getEffectiveEchoDepthState();
+		}
+		return {
+			depthMode: getDepthModeFloat(state.depthModeKey),
+			depthThreshold: state.depthThreshold,
+			depthFade: state.depthFade,
+			depthEchoWavelength: state.depthEchoWavelength,
+			depthEchoDutyCycle: state.depthEchoDutyCycle,
+			depthEchoFade: state.depthEchoFade,
+			depthPhaseOffset: wrapEchoPhase(state.depthEchoPhase + state.depthEchoPhaseOffset, state.depthEchoWavelength),
+			depthMrRetain: state.depthMrRetain
+		};
 	};
 
 	const getFlashlightMasks = function(args) {
@@ -697,10 +747,6 @@ const createPassthroughController = function(options) {
 			state.availableBool = availabilityState.availableBool;
 			state.fallbackBool = availabilityState.fallbackBool;
 			state.statusText = availabilityState.statusText;
-			if (state.availableBool) {
-				state.mixModeKey = "audioReactive";
-				state.audioReactiveIntensity = 1;
-			}
 		},
 		updateFrame: function(args) {
 			args = args || {};
@@ -710,9 +756,13 @@ const createPassthroughController = function(options) {
 			const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
 			state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
 			state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
-			state.depthEchoPhaseOffset += state.depthEchoPhaseSpeed * delta;
+			var effectivePhaseSpeed = state.depthEchoPhaseSpeed;
+			if (state.depthEchoPhaseSpeedReactiveBool) {
+				effectivePhaseSpeed = clampNumber(state.depthEchoPhaseSpeed + (state.smoothedBlendDrive - 0.5) * 10, -10, 10);
+			}
+			state.depthEchoPhaseOffset += effectivePhaseSpeed * delta;
 			if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
-				state.depthEchoPhaseOffset = ((state.depthEchoPhaseOffset % state.depthEchoWavelength) + state.depthEchoWavelength) % state.depthEchoWavelength;
+				state.depthEchoPhaseOffset = wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
 			}
 		},
 		getUiState: function() {
@@ -733,6 +783,7 @@ const createPassthroughController = function(options) {
 				selectedDepthModeKey: state.depthModeKey,
 				usableDepthAvailableBool: state.usableDepthAvailableBool,
 				passthroughControls: ptControlState.controls || [],
+				echoReactiveControls: ptControlState.echoReactiveControls || [],
 				lightingModes: passthroughLightingModeDefinitions,
 				selectedLightingModeKey: state.lightingModeKey,
 				lightingControls: lightingControlState.controls || [],
@@ -747,6 +798,7 @@ const createPassthroughController = function(options) {
 		toggleDepth: function() { state.depthActiveBool = !state.depthActiveBool; },
 		cycleDepthMode: function(direction) {
 			state.depthModeKey = cycleModeKey(passthroughDepthModeDefinitions, state.depthModeKey, direction < 0 ? -1 : 1);
+			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 		},
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);
@@ -809,9 +861,13 @@ const createPassthroughController = function(options) {
 			if (key === "depthFade") {
 				state.depthFade = clampNumber(value, 0, 2);
 			}
+			if (key === "depthEchoPhase") {
+				state.depthEchoPhase = clampNumber(value, 0, Math.max(0.1, state.depthEchoWavelength));
+			}
 			if (key === "depthEchoWavelength") {
 				state.depthEchoWavelength = quantizeDepthEchoWavelength(value);
-				state.depthEchoPhaseOffset = ((state.depthEchoPhaseOffset % state.depthEchoWavelength) + state.depthEchoWavelength) % state.depthEchoWavelength;
+				state.depthEchoPhase = clampNumber(state.depthEchoPhase, 0, state.depthEchoWavelength);
+				state.depthEchoPhaseOffset = wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
 			}
 			if (key === "depthEchoDutyCycle") {
 				state.depthEchoDutyCycle = clampNumber(value, 0, 1);
@@ -824,6 +880,28 @@ const createPassthroughController = function(options) {
 			}
 			if (key === "depthMrRetain") {
 				state.depthMrRetain = clampNumber(value, 0, 1);
+				if (state.depthModeKey === "echo") {
+					state.depthEchoMrRetain = state.depthMrRetain;
+				} else {
+					state.depthDistanceMrRetain = state.depthMrRetain;
+				}
+			}
+		},
+		toggleDepthEchoReactive: function(key) {
+			if (key === "depthEchoPhaseReactive") {
+				state.depthEchoPhaseReactiveBool = !state.depthEchoPhaseReactiveBool;
+			}
+			if (key === "depthEchoPhaseSpeedReactive") {
+				state.depthEchoPhaseSpeedReactiveBool = !state.depthEchoPhaseSpeedReactiveBool;
+			}
+			if (key === "depthEchoWavelengthReactive") {
+				state.depthEchoWavelengthReactiveBool = !state.depthEchoWavelengthReactiveBool;
+			}
+			if (key === "depthEchoDutyCycleReactive") {
+				state.depthEchoDutyCycleReactiveBool = !state.depthEchoDutyCycleReactiveBool;
+			}
+			if (key === "depthEchoFadeReactive") {
+				state.depthEchoFadeReactiveBool = !state.depthEchoFadeReactiveBool;
 			}
 		},
 		setDepthAvailability: function(availableBool) {

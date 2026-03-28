@@ -262,14 +262,36 @@ const createPassthroughMenuSectionState = function(args) {
 	const passthroughSliderControls = args.sliderControls || [];
 	const flashlightSliderControls = [];
 	const depthSliderControls = [];
+	const depthSliderControlByKey = {};
+	const echoReactiveControlByKey = {};
+	const appendDepthSliderControlByKey = function(controlKey) {
+		const sliderControl = depthSliderControlByKey[controlKey];
+		if (!sliderControl || !sliderControl.control) {
+			return;
+		}
+		controls.push(createSliderMenuControlState({
+			key: sliderControl.control.key,
+			label: sliderControl.control.label,
+			valueText: sliderControl.control.valueText || formatMenuPercentText(sliderControl.control.value),
+			sliderU: sliderControl.sliderU || 0,
+			minLabel: sliderControl.control.minLabel,
+			maxLabel: sliderControl.control.maxLabel,
+			hoveredBool: !!sliderControl.hoveredBool,
+			activeBool: !!sliderControl.activeBool
+		}));
+	};
 	for (let i = 0; i < passthroughSliderControls.length; i += 1) {
 		const sliderControl = passthroughSliderControls[i];
 		const controlKey = sliderControl && sliderControl.control ? sliderControl.control.key : "";
 		if (controlKey.indexOf("depth") === 0) {
 			depthSliderControls.push(sliderControl);
+			depthSliderControlByKey[controlKey] = sliderControl;
 			continue;
 		}
 		flashlightSliderControls.push(sliderControl);
+	}
+	for (let i = 0; i < (uiState.echoReactiveControls || []).length; i += 1) {
+		echoReactiveControlByKey[uiState.echoReactiveControls[i].key] = uiState.echoReactiveControls[i];
 	}
 	controls.push(createCheckboxMenuControlState({
 		key: "passthroughFlashlightToggle",
@@ -296,7 +318,29 @@ const createPassthroughMenuSectionState = function(args) {
 			hoveredAction: args.hoveredDepthModeAction || ""
 		}));
 	}
-	appendSliderMenuControls(controls, depthSliderControls);
+	if (uiState.depthActiveBool && uiState.selectedDepthModeKey === "echo") {
+		controls.push(createChoiceRowMenuControlState({
+			key: "depthEchoReactiveRow",
+			label: "Sound-reactive",
+			rowStyle: "checkbox",
+			items: (uiState.echoReactiveControls || []).map(function(item) {
+				return {
+					key: item.key,
+					label: item.label,
+					checkedBool: !!item.checkedBool,
+					hoveredBool: args.hoveredEchoReactiveControlKey === item.key
+				};
+			})
+		}));
+		appendDepthSliderControlByKey("depthEchoPhase");
+		appendDepthSliderControlByKey("depthEchoPhaseSpeed");
+		appendDepthSliderControlByKey("depthEchoWavelength");
+		appendDepthSliderControlByKey("depthEchoDutyCycle");
+		appendDepthSliderControlByKey("depthEchoFade");
+		appendDepthSliderControlByKey("depthMrRetain");
+	} else {
+		appendSliderMenuControls(controls, depthSliderControls);
+	}
 	return createMenuSectionState({
 		key: "passthrough",
 		title: "Passthrough",
