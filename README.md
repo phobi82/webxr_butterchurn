@@ -153,9 +153,9 @@ The current menu exposes:
 - `Passthrough` section:
   - `Flashlight` toggle with `Radius` and `Softness`
   - when usable depth data exists: `Depth` toggle plus a `Depth Mode` cycler
-  - `Distance`: `Distance`, `Fade`, shared `MR Blend`
-  - `Echo`: `Wavelength`, `DutyCycle`, `Fade`, `Phase-Speed`, shared `MR Blend`
-  - the `Depth` cutout now suppresses the full world layer inside the active depth-mask region while `MR Blend` still controls how much modified reality versus direct passthrough remains there
+  - `Distance`: `Distance`, `Fade`, `MR Blend`
+  - `Echo`: `Sound-reactive` row for `Phase` and `Duty`, then `Phase`, `Phase-Speed`, `Wavelength`, `DutyCycle`, `Fade`, `MR Blend`
+  - in `Echo`, the modified-reality/passthrough bands and the VR-world masking do not use the same blend rule: passthrough still follows the depth band mask, while the VR world stays proportionally present according to `MR Blend`
 - `Scene Lighting` section:
   - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club`
   - `Light Preset` cycler
@@ -174,11 +174,36 @@ The current menu exposes:
 | **Skysphere** | 3D raycasting via view matrix to spherical coordinates with fixed `4x` horizontal wrap | Stable | Convergence at poles | Computes world-space view direction per pixel, converts to yaw/pitch, and closes the full `360` degrees with a fixed four-repeat wrap. The mode also derives its own source-canvas width from the current target height and vertical FOV so the calibrated horizontal wrap stays visually proportionate. The `Mirror Horizontal` checkbox swaps the horizontal wrap for mirrored segments. |
 | **Sky Toroid** | View-space angular offsets with roll correction + head yaw/pitch | Stable | None | Computes per-pixel angular offsets in view space, counter-rotates by the camera roll, then adds world-space head orientation. Combines the roll stability of Skysphere with the pole-free tiling of Toroidal. The `Mirror Horizontal` checkbox swaps its horizontal wrap for mirrored repetition. |
 
+## Passthrough Modes
+
+### Flashlight
+
+`Flashlight` opens controller-driven circular passthrough cutouts with `Radius` and `Softness`. It is independent from the depth-driven modes and can run alongside them.
+
+### Depth Mode: Distance
+
+`Distance` is the direct near-depth cutout mode. Geometry closer than the configured `Distance` is opened toward passthrough, `Fade` softens that edge in meters, and `MR Blend` controls how much modified reality remains in the opened region instead of switching to pure passthrough immediately.
+
+### Depth Mode: Echo
+
+`Echo` creates repeating depth bands that alternate between passthrough-heavy and modified-reality-heavy regions. It supports a manual phase offset, a moving phase, and selective sound-reactivity for the `Phase` and `DutyCycle` controls.
+
+| Parameter | Meaning |
+|---|---|
+| `Phase` | Manual offset of the repeating depth pattern in meters within the current wavelength. |
+| `Phase-Speed` | Constant motion of the depth bands in `m/s`. Positive values move the pattern forward, negative values backward. |
+| `Wavelength` | Full depth period of one on/off cycle in meters. |
+| `DutyCycle` | Fraction of the wavelength that is occupied by the active band. Lower values make thinner bands, higher values make wider bands. |
+| `Fade` | Softness of the transition between active and inactive depth bands. |
+| `MR Blend` | Amount of modified reality retained inside the Echo band instead of cutting directly to passthrough. |
+| `Sound-reactive: Phase` | Audio drives the phase position across the wavelength on top of the manual phase and phase-speed motion. |
+| `Sound-reactive: Duty` | Audio widens and narrows the active Echo band around the base `DutyCycle`. |
+
 ## Current Status
 
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
 - Live passthrough uses the shared background and overlay pipeline in AR, while desktop preview, opaque AR, and VR fall back to a black background.
-- When live passthrough is available, startup switches `Background` to `sound-reactive` with full modified-reality bias.
+- `Background` now stays on `manual` by default instead of auto-switching to `sound-reactive` when live passthrough appears.
 - The runtime requests optional WebXR depth sensing for immersive AR with a fallback ladder: GPU depth first, CPU depth second, plain AR last.
 - When usable depth data is present, the `Depth` toggle auto-enables and depth is used both for passthrough punch and for scaling passthrough light masks; the depth punch can run as a near-distance cutout or as animated periodic `Echo` bands, while lighting still falls back to synthetic ceiling, wall, and floor anchors when sensed depth is unavailable.
 - `Background` handles full-frame visualizer-to-modified-reality mixing, `Flashlight` and optional `Depth` open passthrough masks, and scene lighting runs as `None`, `Uniform`, `Spots`, or `Club`; `Club` is the richer preset- and audio-driven mode.
