@@ -41,32 +41,35 @@ const createFullscreenTextureMode = function(spec) {
 			this.lastUploadedCanvasVersion = -1;
 			this.lastPreparedTimeSeconds = -1;
 		},
-		prepareSourceFrame: function(width, height, timeSeconds) {
-			this.sourceBackend.ensureCanvasSize(width, height);
+		prepareSourceFrame: function(sourceWidth, sourceHeight, timeSeconds) {
+			this.sourceBackend.ensureCanvasSize(sourceWidth, sourceHeight);
 			this.sourceBackend.advanceFrame(timeSeconds);
-			if (this.lastPreparedTimeSeconds === timeSeconds && width === this.lastPreparedWidth && height === this.lastPreparedHeight) {
+			if (this.lastPreparedTimeSeconds === timeSeconds && sourceWidth === this.lastPreparedWidth && sourceHeight === this.lastPreparedHeight) {
 				return this.sourceBackend.getState();
 			}
 			this.sourceBackend.renderCanvas(timeSeconds);
 			this.lastPreparedTimeSeconds = timeSeconds;
-			this.lastPreparedWidth = width;
-			this.lastPreparedHeight = height;
+			this.lastPreparedWidth = sourceWidth;
+			this.lastPreparedHeight = sourceHeight;
 			return this.sourceBackend.getState();
 		},
 		drawPreScene: function(sourceState, frameState) {
 			const viewport = this.gl.getParameter(this.gl.VIEWPORT);
 			const width = viewport[2];
 			const height = viewport[3];
-			sourceState = this.prepareSourceFrame(width, height, frameState.timeSeconds);
+			const sourceSize = spec.getSourceFrameSize ? spec.getSourceFrameSize(frameState, width, height) : null;
+			const sourceWidth = Math.max(1, sourceSize && sourceSize.width ? sourceSize.width | 0 : width | 0);
+			const sourceHeight = Math.max(1, sourceSize && sourceSize.height ? sourceSize.height | 0 : height | 0);
+			sourceState = this.prepareSourceFrame(sourceWidth, sourceHeight, frameState.timeSeconds);
 			const sourceCanvas = sourceState.textureSource;
 			if (!sourceCanvas) {
 				return;
 			}
-			if (sourceState.canvasRenderVersion !== this.lastUploadedCanvasVersion || width !== this.lastUploadedWidth || height !== this.lastUploadedHeight) {
+			if (sourceState.canvasRenderVersion !== this.lastUploadedCanvasVersion || sourceWidth !== this.lastUploadedWidth || sourceHeight !== this.lastUploadedHeight) {
 				this.uploadSourceTexture(sourceCanvas);
 				this.lastUploadedCanvasVersion = sourceState.canvasRenderVersion;
-				this.lastUploadedWidth = width;
-				this.lastUploadedHeight = height;
+				this.lastUploadedWidth = sourceWidth;
+				this.lastUploadedHeight = sourceHeight;
 			}
 			const orientationOffset = spec.getOrientationOffset ? spec.getOrientationOffset(sourceState, frameState) : {x: 0, y: 0};
 			this.gl.disable(this.gl.DEPTH_TEST);

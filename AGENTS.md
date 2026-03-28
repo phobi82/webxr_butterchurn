@@ -99,6 +99,7 @@ Recommended structure order:
 ## Behavior and Logic
 
 - Follow the user's description **literally and precisely**.
+- If there is any relevant ambiguity or uncertainty, ask a focused clarifying question before implementing instead of guessing.
 - Before starting implementation, ask targeted clarifying questions to confirm exactly what the user wants.
 - Follow-up questions must take previous answers into account so the clarification adapts to the current result instead of repeating a fixed checklist.
 - Use clarification not only to confirm the request, but also to reveal better, simpler, or safer implementation options when relevant.

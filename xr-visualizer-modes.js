@@ -2,6 +2,8 @@
 
 const headYawBufferShiftFactor = 0.8;
 const headPitchBufferShiftFactor = 0.8;
+const fullTurnRadians = Math.PI * 2;
+const skysphereHorizontalRepeatCount = 4;
 const visualizerBackgroundCompositeShaderChunk = [
 	"uniform float backgroundMaskCount;",
 	"uniform vec2 backgroundMaskCenters[2];",
@@ -94,6 +96,14 @@ const skysphere = function() {
 	let base = createFullscreenTextureMode({
 		label: "Skysphere mode",
 		fragmentSource: skysphereFragmentSource,
+		getSourceFrameSize: function(frameState, viewportWidth, viewportHeight) {
+			const verticalFov = Math.max(0.0001, frameState.headVerticalFov || Math.PI / 2);
+			const perRepeatHorizontalSpan = fullTurnRadians / skysphereHorizontalRepeatCount;
+			return {
+				width: Math.max(1, Math.round(viewportHeight * perRepeatHorizontalSpan / verticalFov)),
+				height: Math.max(1, viewportHeight | 0)
+			};
+		},
 		applyUniforms: function(gl, programInfo, sourceState, frameState) {
 			let vm = frameState.viewMatrix;
 			let pm = frameState.projMatrix;
@@ -101,7 +111,7 @@ const skysphere = function() {
 			gl.uniform3f(camUpLoc, vm[1], vm[5], vm[9]);
 			gl.uniform3f(camForwardLoc, -vm[2], -vm[6], -vm[10]);
 			gl.uniform4f(projParamsLoc, pm[0], pm[5], pm[8], pm[9]);
-			gl.uniform2f(texScaleLoc, 1.0 / frameState.headHorizontalFov, 1.0 / frameState.headVerticalFov);
+			gl.uniform2f(texScaleLoc, skysphereHorizontalRepeatCount / fullTurnRadians, 1.0 / frameState.headVerticalFov);
 		}
 	});
 	let baseInit = base.init;
