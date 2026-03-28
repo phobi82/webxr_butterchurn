@@ -205,6 +205,12 @@ const createRuntime = function(options) {
 	const cycleShaderMode = function(direction) {
 		cycleSelection(state.visualizerEngine, getVisualizerSelectionState, "modeNames", "currentModeIndex", function(i) { this.selectMode(i); }, direction);
 	};
+	const toggleHorizontalMirror = function() {
+		if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
+			return Promise.resolve();
+		}
+		return state.visualizerEngine.toggleHorizontalMirror();
+	};
 	const cycleLightingPreset = function(direction) {
 		if (!sceneLighting || !sceneLighting.selectPreset) {
 			return Promise.resolve();
@@ -230,6 +236,7 @@ const createRuntime = function(options) {
 	};
 	const xrMenuActionCallbacks = {
 		onShaderModeAction: cycleShaderMode,
+		onHorizontalMirrorToggle: toggleHorizontalMirror,
 		onLightPresetAction: cycleLightingEffect,
 		onLightPresetVariantAction: cycleLightingVariant,
 		onEffectSemanticModeAction: function(direction) {
@@ -249,6 +256,7 @@ const createRuntime = function(options) {
 	};
 	const desktopMenuActionCallbacks = {
 		onShaderModeAction: cycleShaderMode,
+		onHorizontalMirrorToggle: toggleHorizontalMirror,
 		onLightPresetAction: cycleLightingEffect,
 		onLightPresetVariantAction: cycleLightingVariant,
 		onEffectSemanticModeAction: xrMenuActionCallbacks.onEffectSemanticModeAction,
@@ -318,6 +326,7 @@ const createRuntime = function(options) {
 			audioSourceName: audioSourceState.sourceName || "",
 			shaderModeNames: visualizerSelectionState ? visualizerSelectionState.modeNames : ["Toroidal"],
 			currentShaderModeIndex: visualizerSelectionState ? visualizerSelectionState.currentModeIndex : 0,
+			horizontalMirrorBool: visualizerSelectionState ? !!visualizerSelectionState.horizontalMirrorBool : false,
 			lightPresetNames: lightingSelectionState ? lightingSelectionState.presetNames : ["Aurora Drift"],
 			currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
 			currentLightPresetName: lightingSelectionState ? lightingSelectionState.currentPresetName : "Aurora Drift",

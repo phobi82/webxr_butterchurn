@@ -31,6 +31,7 @@ const toroidalFragmentSource = [
 	"uniform vec2 viewportSize;",
 	"uniform vec2 eyeCenterOffset;",
 	"uniform vec2 orientationOffset;",
+	"uniform float horizontalMirror;",
 	"uniform float backgroundAlpha;",
 	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
@@ -40,14 +41,16 @@ const toroidalFragmentSource = [
 	"}",
 	"void main(){",
 	"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
-	"vec2 sampleUv=vec2(fract(texel.x+orientationOffset.x),mirrorRepeat(texel.y+orientationOffset.y));",
+	"float rawU=texel.x+orientationOffset.x;",
+	"vec2 sampleUv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(texel.y+orientationOffset.y));",
 	"vec4 sampleColor=texture2D(sourceTexture,sampleUv);",
 	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
 ].join("");
 
 const toroidal = function() {
-	return createFullscreenTextureMode({
+	let horizontalMirrorLoc = null;
+	let base = createFullscreenTextureMode({
 		label: "Toroidal mode",
 		fragmentSource: toroidalFragmentSource,
 		getOrientationOffset: function(sourceState, frameState) {
@@ -55,8 +58,17 @@ const toroidal = function() {
 				x: wrapUnit(frameState.headYaw * headYawBufferShiftFactor / frameState.headHorizontalFov),
 				y: clampNumber(frameState.headPitch * headPitchBufferShiftFactor / frameState.headVerticalFov, -1000, 1000)
 			};
+		},
+		applyUniforms: function(gl, programInfo, sourceState, frameState) {
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
 		}
 	});
+	let baseInit = base.init;
+	base.init = function(options) {
+		baseInit.call(this, options);
+		horizontalMirrorLoc = this.gl.getUniformLocation(this.programInfo.program, "horizontalMirror");
+	};
+	return base;
 };
 
 const skysphereFragmentSource = [
@@ -67,6 +79,7 @@ const skysphereFragmentSource = [
 	"uniform vec3 camForward;",
 	"uniform vec4 projParams;",
 	"uniform vec2 texScale;",
+	"uniform float horizontalMirror;",
 	"uniform float backgroundAlpha;",
 	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
@@ -81,7 +94,8 @@ const skysphereFragmentSource = [
 	"vec3 dir=normalize(camRight*vx+camUp*vy+camForward);",
 	"float yaw=atan(dir.x,-dir.z);",
 	"float pitch=asin(clamp(dir.y,-1.0,1.0));",
-	"vec2 uv=vec2(fract(yaw*texScale.x+0.5),mirrorRepeat(pitch*texScale.y+0.5));",
+	"float rawU=yaw*texScale.x+0.5;",
+	"vec2 uv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(pitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
 	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
@@ -93,6 +107,7 @@ const skysphere = function() {
 	let camForwardLoc = null;
 	let projParamsLoc = null;
 	let texScaleLoc = null;
+	let horizontalMirrorLoc = null;
 	let base = createFullscreenTextureMode({
 		label: "Skysphere mode",
 		fragmentSource: skysphereFragmentSource,
@@ -112,6 +127,7 @@ const skysphere = function() {
 			gl.uniform3f(camForwardLoc, -vm[2], -vm[6], -vm[10]);
 			gl.uniform4f(projParamsLoc, pm[0], pm[5], pm[8], pm[9]);
 			gl.uniform2f(texScaleLoc, skysphereHorizontalRepeatCount / fullTurnRadians, 1.0 / frameState.headVerticalFov);
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
 		}
 	});
 	let baseInit = base.init;
@@ -123,6 +139,7 @@ const skysphere = function() {
 		camForwardLoc = this.gl.getUniformLocation(program, "camForward");
 		projParamsLoc = this.gl.getUniformLocation(program, "projParams");
 		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
 	};
 	return base;
 };
@@ -134,6 +151,7 @@ const skyToroidFragmentSource = [
 	"uniform vec2 headOrientation;",
 	"uniform float headRoll;",
 	"uniform vec2 texScale;",
+	"uniform float horizontalMirror;",
 	"uniform float backgroundAlpha;",
 	visualizerBackgroundCompositeShaderChunk,
 	"varying vec2 vScreenUv;",
@@ -151,7 +169,8 @@ const skyToroidFragmentSource = [
 	"float corrVy=-vx*sinR+vy*cosR;",
 	"float totalYaw=headOrientation.x+atan(corrVx,1.0);",
 	"float totalPitch=headOrientation.y+atan(corrVy,1.0);",
-	"vec2 uv=vec2(fract(totalYaw*texScale.x+0.5),mirrorRepeat(totalPitch*texScale.y+0.5));",
+	"float rawU=totalYaw*texScale.x+0.5;",
+	"vec2 uv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(totalPitch*texScale.y+0.5));",
 	"vec4 sampleColor=texture2D(sourceTexture,uv);",
 	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
 	"}"
@@ -162,6 +181,7 @@ const skyToroid = function() {
 	let headOrientationLoc = null;
 	let headRollLoc = null;
 	let texScaleLoc = null;
+	let horizontalMirrorLoc = null;
 	let base = createFullscreenTextureMode({
 		label: "Sky Toroid mode",
 		fragmentSource: skyToroidFragmentSource,
@@ -172,6 +192,7 @@ const skyToroid = function() {
 			gl.uniform2f(headOrientationLoc, frameState.headYaw, frameState.headPitch);
 			gl.uniform1f(headRollLoc, -Math.atan2(vm[4], vm[5]));
 			gl.uniform2f(texScaleLoc, 1.0 / frameState.headHorizontalFov, 1.0 / frameState.headVerticalFov);
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
 		}
 	});
 	let baseInit = base.init;
@@ -182,6 +203,7 @@ const skyToroid = function() {
 		headOrientationLoc = this.gl.getUniformLocation(program, "headOrientation");
 		headRollLoc = this.gl.getUniformLocation(program, "headRoll");
 		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
 	};
 	return base;
 };

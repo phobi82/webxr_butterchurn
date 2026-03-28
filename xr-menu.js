@@ -70,10 +70,17 @@ const createMenuView = function(options) {
 				cursorY = controlLayout.arrowButtonTop + controlLayout.arrowButtonHeight + 10;
 			}
 			if (control.type === "choiceRow") {
+				const checkboxRowBool = control.rowStyle === "checkbox";
 				controlLayout.labelY = cursorY;
 				controlLayout.rowTop = cursorY + (control.label ? 24 : 6);
-				controlLayout.rowHeight = 70;
-				cursorY = controlLayout.rowTop + controlLayout.rowHeight + 16;
+				controlLayout.rowHeight = checkboxRowBool ? 54 : 70;
+				cursorY = controlLayout.rowTop + controlLayout.rowHeight + (checkboxRowBool ? 14 : 16);
+			}
+			if (control.type === "checkbox") {
+				controlLayout.labelY = cursorY;
+				controlLayout.rowTop = cursorY + 8;
+				controlLayout.rowHeight = 54;
+				cursorY = controlLayout.rowTop + controlLayout.rowHeight + 14;
 			}
 			if (control.type === "slider") {
 				controlLayout.trackY = cursorY + 30;
@@ -240,7 +247,8 @@ const createMenuView = function(options) {
 				}
 				if (control.type === "choiceRow" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight) {
 					const items = control.items || [];
-					const gap = 100;
+					const checkboxRowBool = control.rowStyle === "checkbox";
+					const gap = checkboxRowBool ? 28 : 100;
 					const rowStartX = layout.prevX;
 					const rowEndX = layout.nextX + layout.nextWidth;
 					const rowWidth = rowEndX - rowStartX;
@@ -252,6 +260,10 @@ const createMenuView = function(options) {
 							moduleChoiceItemKey = items[k].key;
 						}
 					}
+				}
+				if (control.type === "checkbox" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight && x >= layout.prevX && x <= layout.nextX + layout.nextWidth) {
+					moduleChoiceControlKey = control.key;
+					moduleChoiceItemKey = "toggle";
 				}
 				if (control.type === "slider" && y >= controlLayout.hitTop && y <= controlLayout.hitBottom && x >= layout.contentLeft + 20 && x <= layout.contentRight - 20) {
 					moduleSliderControlKey = control.key;
@@ -364,31 +376,70 @@ const createMenuView = function(options) {
 			}
 			const drawChoiceRow = function(control, controlLayout) {
 				const items = control.items || [];
-				const gap = 100;
+				const checkboxRowBool = control.rowStyle === "checkbox";
+				const gap = checkboxRowBool ? 28 : 100;
 				const rowStartX = layout.prevX;
 				const rowEndX = layout.nextX + layout.nextWidth;
 				const rowWidth = rowEndX - rowStartX;
 				const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
-				menuCtx.textBaseline = "top";
 				for (let i = 0; i < items.length; i += 1) {
 					const item = items[i];
 					const itemX = rowStartX + i * (buttonWidth + gap);
-					menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)";
-					menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
-					menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
-					menuCtx.lineWidth = 2;
-					menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
-					menuCtx.fillStyle = "#ffffff";
-					menuCtx.font = "bold 30px Arial";
-					menuCtx.textAlign = "center";
-					menuCtx.fillText(item.label, itemX + buttonWidth * 0.5, controlLayout.rowTop + 16);
-					if (item.metaText) {
-						menuCtx.fillStyle = "rgba(255,255,255,0.7)";
-						menuCtx.font = "20px Arial";
-						menuCtx.fillText(item.metaText, itemX + buttonWidth * 0.5, controlLayout.rowTop + 48);
+					if (checkboxRowBool) {
+						const boxSize = 28;
+						const boxX = itemX + 14;
+						const boxY = controlLayout.rowTop + (controlLayout.rowHeight - boxSize) * 0.5;
+						const rowCenterY = controlLayout.rowTop + controlLayout.rowHeight * 0.5;
+						menuCtx.fillStyle = item.hoveredBool ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)";
+						menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
+						menuCtx.lineWidth = 2;
+						menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.fillStyle = item.checkedBool ? accentSoft : "rgba(255,255,255,0.08)";
+						menuCtx.fillRect(boxX, boxY, boxSize, boxSize);
+						menuCtx.strokeStyle = item.hoveredBool || item.checkedBool ? accentColor : "rgba(255,255,255,0.35)";
+						menuCtx.lineWidth = 3;
+						menuCtx.strokeRect(boxX, boxY, boxSize, boxSize);
+						if (item.checkedBool) {
+							menuCtx.strokeStyle = accentColor;
+							menuCtx.lineWidth = 4;
+							menuCtx.beginPath();
+							menuCtx.moveTo(boxX + 6, boxY + 15);
+							menuCtx.lineTo(boxX + 12, boxY + 22);
+							menuCtx.lineTo(boxX + 22, boxY + 8);
+							menuCtx.stroke();
+						}
+						menuCtx.textBaseline = "middle";
+						menuCtx.textAlign = "left";
+						menuCtx.fillStyle = "#ffffff";
+						menuCtx.font = "bold 22px Arial";
+						menuCtx.fillText(item.label, boxX + boxSize + 14, rowCenterY);
+						if (item.valueText) {
+							menuCtx.textAlign = "right";
+							menuCtx.fillStyle = accentColor;
+							menuCtx.font = "bold 18px Arial";
+							menuCtx.fillText(item.valueText, itemX + buttonWidth - 14, rowCenterY);
+						}
+					} else {
+						menuCtx.textBaseline = "top";
+						menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)";
+						menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
+						menuCtx.lineWidth = 2;
+						menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.fillStyle = "#ffffff";
+						menuCtx.font = "bold 30px Arial";
+						menuCtx.textAlign = "center";
+						menuCtx.fillText(item.label, itemX + buttonWidth * 0.5, controlLayout.rowTop + 16);
+						if (item.metaText) {
+							menuCtx.fillStyle = "rgba(255,255,255,0.7)";
+							menuCtx.font = "20px Arial";
+							menuCtx.fillText(item.metaText, itemX + buttonWidth * 0.5, controlLayout.rowTop + 48);
+						}
 					}
 				}
 				menuCtx.textAlign = "left";
+				menuCtx.textBaseline = "top";
 			};
 			const drawDynamicSection = function(section) {
 				const sectionLayout = layout.sectionLayoutByKey[section.key];
@@ -449,6 +500,47 @@ const createMenuView = function(options) {
 							menuCtx.fillText(control.label, layout.contentLeft + 28, controlLayout.labelY);
 						}
 						drawChoiceRow(control, controlLayout);
+					}
+					if (control.type === "checkbox") {
+						const rowStartX = layout.prevX;
+						const rowEndX = layout.nextX + layout.nextWidth;
+						const rowWidth = rowEndX - rowStartX;
+						const boxSize = 34;
+						const boxX = rowStartX + 18;
+						const boxY = controlLayout.rowTop + 10;
+						const rowCenterY = controlLayout.rowTop + controlLayout.rowHeight * 0.5;
+						menuCtx.fillStyle = control.hoveredBool ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)";
+						menuCtx.fillRect(rowStartX, controlLayout.rowTop, rowWidth, controlLayout.rowHeight);
+						menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
+						menuCtx.lineWidth = 2;
+						menuCtx.strokeRect(rowStartX, controlLayout.rowTop, rowWidth, controlLayout.rowHeight);
+						menuCtx.fillStyle = control.checkedBool ? accentSoft : "rgba(255,255,255,0.08)";
+						menuCtx.fillRect(boxX, boxY, boxSize, boxSize);
+						menuCtx.strokeStyle = control.hoveredBool || control.checkedBool ? accentColor : "rgba(255,255,255,0.35)";
+						menuCtx.lineWidth = 3;
+						menuCtx.strokeRect(boxX, boxY, boxSize, boxSize);
+						if (control.checkedBool) {
+							menuCtx.strokeStyle = accentColor;
+							menuCtx.lineWidth = 4;
+							menuCtx.beginPath();
+							menuCtx.moveTo(boxX + 7, boxY + 18);
+							menuCtx.lineTo(boxX + 15, boxY + 27);
+							menuCtx.lineTo(boxX + 28, boxY + 9);
+							menuCtx.stroke();
+						}
+						menuCtx.textBaseline = "middle";
+						menuCtx.textAlign = "left";
+						menuCtx.fillStyle = "#ffffff";
+						menuCtx.font = "bold 24px Arial";
+						menuCtx.fillText(control.label, boxX + boxSize + 20, rowCenterY);
+						if (control.valueText) {
+							menuCtx.textAlign = "right";
+							menuCtx.fillStyle = accentColor;
+							menuCtx.font = "bold 22px Arial";
+							menuCtx.fillText(control.valueText, rowEndX - 18, rowCenterY);
+							menuCtx.textAlign = "left";
+						}
+						menuCtx.textBaseline = "top";
 					}
 					if (control.type === "slider") {
 						const knobX = menuLayoutWidth * control.sliderU;
@@ -549,6 +641,7 @@ const createMenuController = function(options) {
 		hoveredJumpMode: "",
 		hoveredExitVrBool: false,
 		hoveredShaderModeAction: "",
+		hoveredHorizontalMirrorBool: false,
 		hoveredLightPresetAction: "",
 		hoveredLightPresetVariantAction: "",
 		hoveredEffectSemanticModeAction: "",
@@ -717,7 +810,9 @@ const createMenuController = function(options) {
 			eyeDistanceActiveBool: !!state.activeSliderHand,
 			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
 			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
+			horizontalMirrorBool: !!externalState.horizontalMirrorBool,
 			hoveredShaderModeAction: state.hoveredShaderModeAction,
+			hoveredHorizontalMirrorBool: state.hoveredHorizontalMirrorBool,
 			lightingModes: passthroughUiState.lightingModes || [],
 			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
 			hoveredSceneLightingModeAction: state.hoveredSceneLightingModeAction,
@@ -780,6 +875,7 @@ const createMenuController = function(options) {
 		state.hoveredJumpMode = "";
 		state.hoveredExitVrBool = false;
 		state.hoveredShaderModeAction = "";
+		state.hoveredHorizontalMirrorBool = false;
 		state.hoveredLightPresetAction = "";
 		state.hoveredLightPresetVariantAction = "";
 		state.hoveredEffectSemanticModeAction = "";
@@ -839,6 +935,7 @@ const createMenuController = function(options) {
 			state.hoveredJumpMode = "";
 			state.hoveredExitVrBool = false;
 			state.hoveredShaderModeAction = "";
+			state.hoveredHorizontalMirrorBool = false;
 			state.hoveredLightPresetAction = "";
 			state.hoveredLightPresetVariantAction = "";
 			state.hoveredEffectSemanticModeAction = "";
@@ -851,12 +948,15 @@ const createMenuController = function(options) {
 		state.hoveredMenuSliderControlKeys = {};
 		setMenuSliderHover(hit.moduleSliderControlKey);
 		setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
-		state.hoveredPassthroughToggle = hit.moduleChoiceControlKey === "passthroughToggle" ? hit.moduleChoiceItemKey : "";
+		state.hoveredPassthroughToggle =
+			hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
+			(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : "");
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
 		state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : "";
 		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
 		state.hoveredExitVrBool = hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr";
 		state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : "";
+		state.hoveredHorizontalMirrorBool = hit.moduleChoiceControlKey === "visualizerHorizontalMirror";
 		state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : "";
 		state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : "";
 		state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : "";
@@ -950,12 +1050,15 @@ const createMenuController = function(options) {
 				state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.eyeDistanceHoverBool;
 				state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.floorAlphaHoverBool;
 				setMenuSliderHover(hit.moduleSliderControlKey);
-				state.hoveredPassthroughToggle = hit.moduleChoiceControlKey === "passthroughToggle" ? hit.moduleChoiceItemKey : state.hoveredPassthroughToggle;
+				state.hoveredPassthroughToggle =
+					hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
+					(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : state.hoveredPassthroughToggle);
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
 				state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : state.hoveredMixModeKey;
 				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
 				state.hoveredExitVrBool = (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr") || state.hoveredExitVrBool;
 				state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : state.hoveredShaderModeAction;
+				state.hoveredHorizontalMirrorBool = (hit.moduleChoiceControlKey === "visualizerHorizontalMirror") || state.hoveredHorizontalMirrorBool;
 				state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : state.hoveredLightPresetAction;
 				state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : state.hoveredLightPresetVariantAction;
 				state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : state.hoveredEffectSemanticModeAction;
@@ -1125,12 +1228,17 @@ const createMenuController = function(options) {
 			if (hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
 				callbacks.onShaderModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
+			if (hit.moduleChoiceControlKey === "visualizerHorizontalMirror" && callbacks.onHorizontalMirrorToggle) {
+				callbacks.onHorizontalMirrorToggle();
+			}
 			if (hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
 				callbacks.onPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
-			if (hit.moduleChoiceControlKey === "passthroughToggle" && passthroughController) {
-				if (hit.moduleChoiceItemKey === "flashlight" && passthroughController.toggleFlashlight) { passthroughController.toggleFlashlight(); }
-				if (hit.moduleChoiceItemKey === "depth" && passthroughController.toggleDepth) { passthroughController.toggleDepth(); }
+			if (hit.moduleChoiceControlKey === "passthroughFlashlightToggle" && passthroughController && passthroughController.toggleFlashlight) {
+				passthroughController.toggleFlashlight();
+			}
+			if (hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
+				passthroughController.toggleDepth();
 			}
 			if (hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 				passthroughController.cycleLightingMode(hit.moduleCycleAction === "prev" ? -1 : 1);
@@ -1268,12 +1376,17 @@ const createMenuController = function(options) {
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
 					callbacks.onShaderModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "visualizerHorizontalMirror" && callbacks.onHorizontalMirrorToggle) {
+					callbacks.onHorizontalMirrorToggle();
+				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
 					callbacks.onPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughToggle" && passthroughController) {
-					if (ray.hit.moduleChoiceItemKey === "flashlight" && passthroughController.toggleFlashlight) { passthroughController.toggleFlashlight(); }
-					if (ray.hit.moduleChoiceItemKey === "depth" && passthroughController.toggleDepth) { passthroughController.toggleDepth(); }
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughFlashlightToggle" && passthroughController && passthroughController.toggleFlashlight) {
+					passthroughController.toggleFlashlight();
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
+					passthroughController.toggleDepth();
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 					passthroughController.cycleLightingMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);

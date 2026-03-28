@@ -38,7 +38,20 @@ const createChoiceRowMenuControlState = function(args) {
 		type: "choiceRow",
 		key: args.key || "",
 		label: args.label || "",
+		rowStyle: args.rowStyle || "choice",
 		items: args.items || []
+	};
+};
+
+const createCheckboxMenuControlState = function(args) {
+	args = args || {};
+	return {
+		type: "checkbox",
+		key: args.key || "",
+		label: args.label || "",
+		valueText: args.valueText || "",
+		checkedBool: !!args.checkedBool,
+		hoveredBool: !!args.hoveredBool
 	};
 };
 
@@ -188,6 +201,13 @@ const createVisualizerModeMenuSectionState = function(args) {
 				valueText: args.valueText || "",
 				metaText: args.metaText || "",
 				hoveredAction: args.hoveredAction || ""
+			}),
+			createCheckboxMenuControlState({
+				key: "visualizerHorizontalMirror",
+				label: "Mirror Horizontal",
+				valueText: args.checkboxValueText || "",
+				checkedBool: !!args.horizontalMirrorBool,
+				hoveredBool: !!args.hoveredHorizontalMirrorBool
 			})
 		]
 	});
@@ -239,14 +259,36 @@ const createPassthroughMenuSectionState = function(args) {
 	args = args || {};
 	const uiState = args.uiState || {};
 	const controls = [];
-	const toggleItems = [
-		{key: "flashlight", label: "Flashlight", selectedBool: !!uiState.flashlightActiveBool, hoveredBool: args.hoveredPassthroughToggle === "flashlight"}
-	];
-	if (uiState.usableDepthAvailableBool) {
-		toggleItems.push({key: "depth", label: "Depth", selectedBool: !!uiState.depthActiveBool, hoveredBool: args.hoveredPassthroughToggle === "depth"});
+	const passthroughSliderControls = args.sliderControls || [];
+	const flashlightSliderControls = [];
+	const depthSliderControls = [];
+	for (let i = 0; i < passthroughSliderControls.length; i += 1) {
+		const sliderControl = passthroughSliderControls[i];
+		const controlKey = sliderControl && sliderControl.control ? sliderControl.control.key : "";
+		if (controlKey.indexOf("depth") === 0) {
+			depthSliderControls.push(sliderControl);
+			continue;
+		}
+		flashlightSliderControls.push(sliderControl);
 	}
-	controls.push(createChoiceRowMenuControlState({key: "passthroughToggle", label: "", items: toggleItems}));
-	appendSliderMenuControls(controls, args.sliderControls);
+	controls.push(createCheckboxMenuControlState({
+		key: "passthroughFlashlightToggle",
+		label: "Flashlight",
+		valueText: uiState.flashlightActiveBool ? "On" : "Off",
+		checkedBool: !!uiState.flashlightActiveBool,
+		hoveredBool: args.hoveredPassthroughToggle === "flashlight"
+	}));
+	appendSliderMenuControls(controls, flashlightSliderControls);
+	if (uiState.usableDepthAvailableBool) {
+		controls.push(createCheckboxMenuControlState({
+			key: "passthroughDepthToggle",
+			label: "Depth",
+			valueText: uiState.depthActiveBool ? "On" : "Off",
+			checkedBool: !!uiState.depthActiveBool,
+			hoveredBool: args.hoveredPassthroughToggle === "depth"
+		}));
+	}
+	appendSliderMenuControls(controls, depthSliderControls);
 	return createMenuSectionState({
 		key: "passthrough",
 		title: "Passthrough",
@@ -325,7 +367,10 @@ const createLowerMenuSections = function(args) {
 		createVisualizerModeMenuSectionState({
 			valueText: args.currentShaderModeName,
 			metaText: args.shaderModeMetaText,
-			hoveredAction: args.hoveredShaderModeAction
+			hoveredAction: args.hoveredShaderModeAction,
+			horizontalMirrorBool: args.horizontalMirrorBool,
+			checkboxValueText: args.horizontalMirrorBool ? "On" : "Off",
+			hoveredHorizontalMirrorBool: args.hoveredHorizontalMirrorBool
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,

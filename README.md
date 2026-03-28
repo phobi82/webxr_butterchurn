@@ -159,6 +159,7 @@ The current menu exposes:
   - `Light Preset` cycler
   - all lighting modes except `None`: `Darkness`
 - visualizer mode selector
+- `Mirror Horizontal` checkbox for mirrored horizontal sampling in `Toroidal`, `Skysphere`, and `Sky Toroid`
 - Butterchurn preset selector
 - `Session` section with an `Exit VR` button while an immersive session is active
 - live audio meters for `Level`, `Bass`, `Kick`, `Bass Hit`, `Transient`, `Beat Pulse`, `Strobe`, `Fill`, `Left Hit`, and `Right Hit`
@@ -167,9 +168,9 @@ The current menu exposes:
 
 | Mode | Mapping | Roll | Poles | Description |
 |---|---|---|---|---|
-| **Toroidal** | Screen-space UV + head yaw/pitch offset | Rotates with head roll | None | Flat fullscreen quad with toroidal texture wrapping driven by head orientation. Fastest and simplest mode. |
-| **Skysphere** | 3D raycasting via view matrix to spherical coordinates with fixed `4x` horizontal wrap | Stable | Convergence at poles | Computes world-space view direction per pixel, converts to yaw/pitch, and closes the full `360` degrees with a fixed four-repeat wrap. The mode also derives its own source-canvas width from the current target height and vertical FOV so the calibrated horizontal wrap stays visually proportionate. Background stays fixed in world space during roll. |
-| **Sky Toroid** | View-space angular offsets with roll correction + head yaw/pitch | Stable | None | Computes per-pixel angular offsets in view space, counter-rotates by the camera roll, then adds world-space head orientation. Combines the roll stability of Skysphere with the pole-free tiling of Toroidal. |
+| **Toroidal** | Screen-space UV + head yaw/pitch offset | Rotates with head roll | None | Flat fullscreen quad with toroidal texture wrapping driven by head orientation. Fastest and simplest mode. The `Mirror Horizontal` checkbox can replace the normal horizontal wrap with mirrored repetition. |
+| **Skysphere** | 3D raycasting via view matrix to spherical coordinates with fixed `4x` horizontal wrap | Stable | Convergence at poles | Computes world-space view direction per pixel, converts to yaw/pitch, and closes the full `360` degrees with a fixed four-repeat wrap. The mode also derives its own source-canvas width from the current target height and vertical FOV so the calibrated horizontal wrap stays visually proportionate. The `Mirror Horizontal` checkbox swaps the horizontal wrap for mirrored segments. |
+| **Sky Toroid** | View-space angular offsets with roll correction + head yaw/pitch | Stable | None | Computes per-pixel angular offsets in view space, counter-rotates by the camera roll, then adds world-space head orientation. Combines the roll stability of Skysphere with the pole-free tiling of Toroidal. The `Mirror Horizontal` checkbox swaps its horizontal wrap for mirrored repetition. |
 
 ## Current Status
 

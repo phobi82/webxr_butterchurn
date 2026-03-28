@@ -121,6 +121,7 @@ const createVisualizerEngine = function(options) {
 		timeSeconds: 0,
 		headYaw: 0,
 		headPitch: 0,
+		horizontalMirrorBool: false,
 		headHorizontalFov: Math.PI / 2,
 		headVerticalFov: Math.PI / 2,
 		backgroundAlpha: 1,
@@ -269,6 +270,7 @@ const createVisualizerEngine = function(options) {
 			return {
 				modeNames: this.modeNames.slice(),
 				currentModeIndex: this.currentModeIndex,
+				horizontalMirrorBool: !!frameState.horizontalMirrorBool,
 				presetNames: this.sourceBackend.getPresetNames(),
 				currentPresetIndex: this.sourceBackend.getCurrentPresetIndex()
 			};
@@ -283,6 +285,10 @@ const createVisualizerEngine = function(options) {
 				return Promise.resolve();
 			}
 			this.currentModeIndex = (index + this.modeNames.length) % this.modeNames.length;
+			return Promise.resolve();
+		},
+		toggleHorizontalMirror: function() {
+			frameState.horizontalMirrorBool = !frameState.horizontalMirrorBool;
 			return Promise.resolve();
 		},
 		startSession: function() {
