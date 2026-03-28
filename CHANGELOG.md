@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Switched the remaining XR visualizer, passthrough, and world texture sampling paths from `NEAREST` to `LINEAR` filtering so Quest output no longer uses deliberate point sampling in those runtime paths.
+- Extended the passthrough `Depth` controls with a `Depth Mode` cycler, keeping `Distance` as the existing near-cutout mode and adding a new animated `Echo` mode with `Wavelength`, `DutyCycle`, `Fade`, and `Phase-Speed`, while `MR Blend` now applies across all depth modes.
 
 ## [0.8.2] - 2026-03-28
 

@@ -634,6 +634,7 @@ const createMenuController = function(options) {
 		floorAlphaHoverBool: false,
 		hoveredMenuSliderControlKeys: {},
 		hoveredPassthroughToggle: "",
+		hoveredPassthroughDepthModeAction: "",
 		hoveredSceneLightingModeAction: "",
 		hoveredMixModeKey: "",
 		hoveredJumpMode: "",
@@ -685,6 +686,8 @@ const createMenuController = function(options) {
 			backgroundControls: [],
 			flashlightActiveBool: false,
 			depthActiveBool: false,
+			depthModes: passthroughDepthModeDefinitions,
+			selectedDepthModeKey: "distance",
 			usableDepthAvailableBool: false,
 			passthroughControls: [],
 			lightingModes: passthroughLightingModeDefinitions,
@@ -800,6 +803,7 @@ const createMenuController = function(options) {
 			passthroughControls: passthroughControls,
 			hoveredMixModeKey: state.hoveredMixModeKey,
 			hoveredPassthroughToggle: state.hoveredPassthroughToggle,
+			hoveredDepthModeAction: state.hoveredPassthroughDepthModeAction,
 			eyeDistanceMeters: state.eyeDistanceMeters,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
@@ -868,6 +872,7 @@ const createMenuController = function(options) {
 		state.floorAlphaHoverBool = false;
 		state.hoveredMenuSliderControlKeys = {};
 		state.hoveredPassthroughToggle = "";
+		state.hoveredPassthroughDepthModeAction = "";
 		state.hoveredSceneLightingModeAction = "";
 		state.hoveredMixModeKey = "";
 		state.hoveredJumpMode = "";
@@ -928,6 +933,7 @@ const createMenuController = function(options) {
 			state.hoveredMenuSliderControlKeys = {};
 			setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
 			state.hoveredPassthroughToggle = "";
+			state.hoveredPassthroughDepthModeAction = "";
 			state.hoveredSceneLightingModeAction = "";
 			state.hoveredMixModeKey = "";
 			state.hoveredJumpMode = "";
@@ -949,6 +955,7 @@ const createMenuController = function(options) {
 		state.hoveredPassthroughToggle =
 			hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 			(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : "");
+		state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : "";
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
 		state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : "";
 		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
@@ -1051,6 +1058,7 @@ const createMenuController = function(options) {
 				state.hoveredPassthroughToggle =
 					hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 					(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : state.hoveredPassthroughToggle);
+				state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : state.hoveredPassthroughDepthModeAction;
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
 				state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : state.hoveredMixModeKey;
 				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
@@ -1238,6 +1246,9 @@ const createMenuController = function(options) {
 			if (hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
 				passthroughController.toggleDepth();
 			}
+			if (hit.moduleCycleControlKey === "passthroughDepthMode" && passthroughController && passthroughController.cycleDepthMode) {
+				passthroughController.cycleDepthMode(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
 			if (hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 				passthroughController.cycleLightingMode(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
@@ -1385,6 +1396,9 @@ const createMenuController = function(options) {
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
 					passthroughController.toggleDepth();
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughDepthMode" && passthroughController && passthroughController.cycleDepthMode) {
+					passthroughController.cycleDepthMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
 					passthroughController.cycleLightingMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);

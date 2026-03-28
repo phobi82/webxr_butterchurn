@@ -288,6 +288,14 @@ const createPassthroughMenuSectionState = function(args) {
 			hoveredBool: args.hoveredPassthroughToggle === "depth"
 		}));
 	}
+	if (uiState.usableDepthAvailableBool && uiState.depthActiveBool) {
+		controls.push(createCyclerMenuControlState({
+			key: "passthroughDepthMode",
+			label: "Depth Mode",
+			valueText: getMenuModeLabelByKey(uiState.depthModes, uiState.selectedDepthModeKey, "Distance"),
+			hoveredAction: args.hoveredDepthModeAction || ""
+		}));
+	}
 	appendSliderMenuControls(controls, depthSliderControls);
 	return createMenuSectionState({
 		key: "passthrough",
@@ -353,6 +361,7 @@ const createLowerMenuSections = function(args) {
 		createPassthroughMenuSectionState({
 			uiState: args.passthroughUiState,
 			hoveredPassthroughToggle: args.hoveredPassthroughToggle,
+			hoveredDepthModeAction: args.hoveredDepthModeAction,
 			sliderControls: args.passthroughControls
 		}),
 		createSceneLightingMenuSectionState({

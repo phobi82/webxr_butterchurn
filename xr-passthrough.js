@@ -502,12 +502,43 @@ const createPassthroughController = function(options) {
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
+		depthModeKey: "distance",
 		depthThreshold: 0.80,
 		depthFade: 0.20,
+		depthEchoWavelength: 10,
+		depthEchoDutyCycle: 0.9,
+		depthEchoFade: 1,
+		depthEchoPhaseSpeed: 5,
+		depthEchoPhaseOffset: 0,
 		depthMrRetain: 0.3,
 		usableDepthAvailableBool: false,
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
+	};
+
+	const getDepthModeFloat = function(depthModeKey) {
+		return depthModeKey === "echo" ? 1 : 0;
+	};
+
+	const buildDepthRenderState = function() {
+		return {
+			depthMode: getDepthModeFloat(state.depthModeKey),
+			depthThreshold: state.depthThreshold,
+			depthFade: state.depthFade,
+			depthEchoWavelength: state.depthEchoWavelength,
+			depthEchoDutyCycle: state.depthEchoDutyCycle,
+			depthEchoFade: state.depthEchoFade,
+			depthPhaseOffset: state.depthEchoPhaseOffset,
+			depthMrRetain: state.depthMrRetain
+		};
+	};
+
+	const quantizeDepthEchoPhaseSpeed = function(value) {
+		return clampNumber(Math.round(value * 10) / 10, -10, 10);
+	};
+
+	const quantizeDepthEchoWavelength = function(value) {
+		return clampNumber(Math.round(value * 10) / 10, 0.1, 10);
 	};
 
 	const getFlashlightMasks = function(args) {
@@ -679,6 +710,10 @@ const createPassthroughController = function(options) {
 			const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
 			state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
 			state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
+			state.depthEchoPhaseOffset += state.depthEchoPhaseSpeed * delta;
+			if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
+				state.depthEchoPhaseOffset = ((state.depthEchoPhaseOffset % state.depthEchoWavelength) + state.depthEchoWavelength) % state.depthEchoWavelength;
+			}
 		},
 		getUiState: function() {
 			const bgControlState = getBackgroundControlDefinitions(state);
@@ -694,6 +729,8 @@ const createPassthroughController = function(options) {
 				backgroundControls: bgControlState.controls || [],
 				flashlightActiveBool: state.flashlightActiveBool,
 				depthActiveBool: state.depthActiveBool,
+				depthModes: passthroughDepthModeDefinitions,
+				selectedDepthModeKey: state.depthModeKey,
 				usableDepthAvailableBool: state.usableDepthAvailableBool,
 				passthroughControls: ptControlState.controls || [],
 				lightingModes: passthroughLightingModeDefinitions,
@@ -708,6 +745,9 @@ const createPassthroughController = function(options) {
 		},
 		toggleFlashlight: function() { state.flashlightActiveBool = !state.flashlightActiveBool; },
 		toggleDepth: function() { state.depthActiveBool = !state.depthActiveBool; },
+		cycleDepthMode: function(direction) {
+			state.depthModeKey = cycleModeKey(passthroughDepthModeDefinitions, state.depthModeKey, direction < 0 ? -1 : 1);
+		},
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);
 		},
@@ -769,6 +809,19 @@ const createPassthroughController = function(options) {
 			if (key === "depthFade") {
 				state.depthFade = clampNumber(value, 0, 2);
 			}
+			if (key === "depthEchoWavelength") {
+				state.depthEchoWavelength = quantizeDepthEchoWavelength(value);
+				state.depthEchoPhaseOffset = ((state.depthEchoPhaseOffset % state.depthEchoWavelength) + state.depthEchoWavelength) % state.depthEchoWavelength;
+			}
+			if (key === "depthEchoDutyCycle") {
+				state.depthEchoDutyCycle = clampNumber(value, 0, 1);
+			}
+			if (key === "depthEchoFade") {
+				state.depthEchoFade = clampNumber(value, 0, 1);
+			}
+			if (key === "depthEchoPhaseSpeed") {
+				state.depthEchoPhaseSpeed = quantizeDepthEchoPhaseSpeed(value);
+			}
 			if (key === "depthMrRetain") {
 				state.depthMrRetain = clampNumber(value, 0, 1);
 			}
@@ -784,8 +837,8 @@ const createPassthroughController = function(options) {
 			var flashlight = null;
 			var worldMask = null;
 			if (state.depthActiveBool) {
-				depth = {depthThreshold: state.depthThreshold, depthFade: state.depthFade, depthMrRetain: state.depthMrRetain};
-				worldMask = {depthThreshold: state.depthThreshold, depthFade: state.depthFade};
+				depth = buildDepthRenderState();
+				worldMask = buildDepthRenderState();
 			}
 			if (state.flashlightActiveBool) {
 				var masks = getFlashlightMasks(args || {});
@@ -814,7 +867,7 @@ const createPassthroughController = function(options) {
 				visibleShare: visibleShare,
 				maskCount: 0,
 				masks: [],
-				depth: state.depthActiveBool ? {depthThreshold: state.depthThreshold, depthFade: state.depthFade, depthMrRetain: state.depthMrRetain} : null,
+				depth: state.depthActiveBool ? buildDepthRenderState() : null,
 				darkAlpha: 1 - darkness,
 				additiveColor: lightingColor,
 				additiveStrength: additiveStrength,
@@ -945,6 +998,32 @@ const createPassthroughOverlayRenderer = function() {
 	].join("");
 
 	const depthOverlayShaderChunk = [
+		"float computeDepthMask(float depthMeters){",
+		"if(depthMode<0.5){",
+		"return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"}",
+		"float wavelength=max(depthEchoWavelength,0.0001);",
+		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+		"float visibleWidth=wavelength*dutyCycle;",
+		"if(visibleWidth<=0.0001){",
+		"return 0.0;",
+		"}",
+		"if(visibleWidth>=wavelength-0.0001){",
+		"return 1.0;",
+		"}",
+		"float halfPeriod=wavelength*0.5;",
+		"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+		"float distanceFromBandCenter=abs(centeredPhase);",
+		"float hiddenWidth=wavelength-visibleWidth;",
+		"float visibleHalfWidth=visibleWidth*0.5;",
+		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+		"if(fadeHalfWidth<=0.0001){",
+		"return step(distanceFromBandCenter,visibleHalfWidth);",
+		"}",
+		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+		"}",
 		"float computeDepthRetainShare(float baseVisibleShare){",
 		"if(depthMrRetain<=0.0001){",
 		"return baseVisibleShare;",
@@ -953,7 +1032,7 @@ const createPassthroughOverlayRenderer = function() {
 		"float rawDepth=sampleDepth(depthUv);",
 		"float valid=step(0.001,rawDepth);",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
-		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"float mask=computeDepthMask(depthMeters);",
 		"float localRetain=depthMrRetain*(1.0-mask)*valid;",
 		"return max(baseVisibleShare,localRetain);",
 		"}"
@@ -976,8 +1055,13 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float spotAdditiveScale;",
 		"uniform float spotAlphaBlendScale;",
 		"uniform sampler2D depthTexture;",
+		"uniform float depthMode;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
@@ -1038,8 +1122,13 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float spotAlphaBlendScale;",
 		"uniform sampler2DArray depthTexture;",
 		"uniform int depthTextureLayer;",
+		"uniform float depthMode;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
@@ -1091,8 +1180,13 @@ const createPassthroughOverlayRenderer = function() {
 			spotAlphaBlendScale: gl.getUniformLocation(targetProgram, "spotAlphaBlendScale"),
 			depthTexture: gl.getUniformLocation(targetProgram, "depthTexture"),
 			depthTextureLayer: gl.getUniformLocation(targetProgram, "depthTextureLayer"),
+			depthMode: gl.getUniformLocation(targetProgram, "depthMode"),
 			depthThreshold: gl.getUniformLocation(targetProgram, "depthThreshold"),
 			depthFade: gl.getUniformLocation(targetProgram, "depthFade"),
+			depthEchoWavelength: gl.getUniformLocation(targetProgram, "depthEchoWavelength"),
+			depthEchoDutyCycle: gl.getUniformLocation(targetProgram, "depthEchoDutyCycle"),
+			depthEchoFade: gl.getUniformLocation(targetProgram, "depthEchoFade"),
+			depthPhaseOffset: gl.getUniformLocation(targetProgram, "depthPhaseOffset"),
 			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(targetProgram, "depthNearZ"),
@@ -1267,8 +1361,13 @@ const createPassthroughOverlayRenderer = function() {
 			gl.uniform1f(activeLocs.spotAdditiveScale, renderState.spotAdditiveScale == null ? 1 : renderState.spotAdditiveScale);
 			gl.uniform1f(activeLocs.spotAlphaBlendScale, renderState.spotAlphaBlendScale == null ? 1 : renderState.spotAlphaBlendScale);
 			if (useDepthOverlayBool && activeLocs.depthTexture) {
+				gl.uniform1f(activeLocs.depthMode, renderState.depth.depthMode == null ? 0 : renderState.depth.depthMode);
 				gl.uniform1f(activeLocs.depthThreshold, renderState.depth.depthThreshold);
 				gl.uniform1f(activeLocs.depthFade, renderState.depth.depthFade);
+				gl.uniform1f(activeLocs.depthEchoWavelength, renderState.depth.depthEchoWavelength == null ? 1 : renderState.depth.depthEchoWavelength);
+				gl.uniform1f(activeLocs.depthEchoDutyCycle, renderState.depth.depthEchoDutyCycle == null ? 0.5 : renderState.depth.depthEchoDutyCycle);
+				gl.uniform1f(activeLocs.depthEchoFade, renderState.depth.depthEchoFade == null ? 0 : renderState.depth.depthEchoFade);
+				gl.uniform1f(activeLocs.depthPhaseOffset, renderState.depth.depthPhaseOffset == null ? 0 : renderState.depth.depthPhaseOffset);
 				gl.uniform1f(activeLocs.depthMrRetain, renderState.depth.depthMrRetain || 0);
 				gl.uniform1f(activeLocs.rawValueToMeters, depthProfile && depthInfo ? (depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001)) : (depthInfo && depthInfo.rawValueToMeters || 0.001));
 				gl.uniform1f(activeLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
@@ -1322,19 +1421,42 @@ const createPunchRenderer = function() {
 	const texture2dFragSource = [
 		"precision mediump float;",
 		"uniform sampler2D depthTexture;",
+		"uniform float depthMode;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
+		"float computeDepthMask(float depthMeters){",
+		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+		"float wavelength=max(depthEchoWavelength,0.0001);",
+		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+		"float visibleWidth=wavelength*dutyCycle;",
+		"if(visibleWidth<=0.0001){return 0.0;}",
+		"if(visibleWidth>=wavelength-0.0001){return 1.0;}",
+		"float halfPeriod=wavelength*0.5;",
+		"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+		"float distanceFromBandCenter=abs(centeredPhase);",
+		"float hiddenWidth=wavelength-visibleWidth;",
+		"float visibleHalfWidth=visibleWidth*0.5;",
+		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+		"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+		"}",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture2D(depthTexture,depthUv).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
-		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"float mask=computeDepthMask(depthMeters);",
 		"float punchMask=mix(1.0,mask,valid);",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -1356,20 +1478,43 @@ const createPunchRenderer = function() {
 		"precision mediump sampler2DArray;",
 		"uniform sampler2DArray depthTexture;",
 		"uniform int depthTextureLayer;",
+		"uniform float depthMode;",
 		"uniform float depthThreshold;",
 		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform mat4 depthUvTransform;",
 		"in vec2 vScreenUv;",
 		"out vec4 fragColor;",
+		"float computeDepthMask(float depthMeters){",
+		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+		"float wavelength=max(depthEchoWavelength,0.0001);",
+		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+		"float visibleWidth=wavelength*dutyCycle;",
+		"if(visibleWidth<=0.0001){return 0.0;}",
+		"if(visibleWidth>=wavelength-0.0001){return 1.0;}",
+		"float halfPeriod=wavelength*0.5;",
+		"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+		"float distanceFromBandCenter=abs(centeredPhase);",
+		"float hiddenWidth=wavelength-visibleWidth;",
+		"float visibleHalfWidth=visibleWidth*0.5;",
+		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+		"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+		"}",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
-		"float mask=depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);",
+		"float mask=computeDepthMask(depthMeters);",
 		"float punchMask=mix(1.0,mask,valid);",
 		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -1399,8 +1544,13 @@ const createPunchRenderer = function() {
 			position: gl.getAttribLocation(prog, "position"),
 			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
 			depthTextureLayer: gl.getUniformLocation(prog, "depthTextureLayer"),
+			depthMode: gl.getUniformLocation(prog, "depthMode"),
 			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
 			depthFade: gl.getUniformLocation(prog, "depthFade"),
+			depthEchoWavelength: gl.getUniformLocation(prog, "depthEchoWavelength"),
+			depthEchoDutyCycle: gl.getUniformLocation(prog, "depthEchoDutyCycle"),
+			depthEchoFade: gl.getUniformLocation(prog, "depthEchoFade"),
+			depthPhaseOffset: gl.getUniformLocation(prog, "depthPhaseOffset"),
 			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
@@ -1508,8 +1658,13 @@ const createPunchRenderer = function() {
 			gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
 		}
 		gl.uniform1i(locs.depthTexture, 0);
+		gl.uniform1f(locs.depthMode, punchState.depthMode == null ? 0 : punchState.depthMode);
 		gl.uniform1f(locs.depthThreshold, punchState.depthThreshold);
 		gl.uniform1f(locs.depthFade, punchState.depthFade);
+		gl.uniform1f(locs.depthEchoWavelength, punchState.depthEchoWavelength == null ? 1 : punchState.depthEchoWavelength);
+		gl.uniform1f(locs.depthEchoDutyCycle, punchState.depthEchoDutyCycle == null ? 0.5 : punchState.depthEchoDutyCycle);
+		gl.uniform1f(locs.depthEchoFade, punchState.depthEchoFade == null ? 0 : punchState.depthEchoFade);
+		gl.uniform1f(locs.depthPhaseOffset, punchState.depthPhaseOffset == null ? 0 : punchState.depthPhaseOffset);
 		gl.uniform1f(locs.depthMrRetain, punchState.depthMrRetain || 0);
 		gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 		gl.uniform1f(locs.depthNearZ, profile.nearZ);
