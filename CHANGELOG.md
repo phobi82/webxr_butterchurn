@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-03-28
+
 ### Changed
 - The depth-aware passthrough cutout now also suppresses the full VR world layer inside the near-object region, so darkened modified reality and passthrough light effects can show through there without floor, GLB, or other world geometry leaking into the same cutout.
+- Changed the default `MR Blend` value from `0%` to `30%`, so the depth-aware cutout starts with some retained modified reality instead of opening immediately to direct passthrough only.
+
+### Fixed
+- Restored the original additive and alpha-blend passthrough light semantics inside the depth-aware overlay path, so depth-enabled lighting matches the non-depth passthrough effects again instead of using a drifted shader approximation.
+
 
 ## [0.8.0] - 2026-03-27
 
