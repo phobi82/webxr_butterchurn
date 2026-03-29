@@ -208,6 +208,7 @@ The current menu exposes:
 - The runtime requests optional WebXR depth sensing for immersive AR with a fallback ladder: GPU depth first, CPU depth second, plain AR last.
 - When usable depth data is present, the `Depth` toggle auto-enables and depth is used both for passthrough punch and for scaling passthrough light masks; the depth punch can run as a near-distance cutout or as animated periodic `Echo` bands, while lighting still falls back to synthetic ceiling, wall, and floor anchors when sensed depth is unavailable.
 - `Background` handles full-frame visualizer-to-modified-reality mixing, `Flashlight` and optional `Depth` open passthrough masks, and scene lighting runs as `None`, `Uniform`, `Spots`, or `Club`; `Club` is the richer preset- and audio-driven mode.
+- The passthrough defaults now start with `Flashlight` at `Radius 15%` and `Softness 5%`, while the `Echo` depth-mode default `MR Blend` starts at `95%` without changing the startup depth mode.
 - The lower menu is one shared state-driven system, `TestLab.html` reuses the same runtime with its own reduced menu/preset setup, and translucent world/menu rendering preserves XR framebuffer alpha.
 
 ## GitHub Pages

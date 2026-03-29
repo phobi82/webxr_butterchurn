@@ -66,8 +66,9 @@ const appConfig = {
 		initialLightingDarkness: 0.05,
 		initialManualMix: 0,
 		initialAudioReactiveIntensity: -1,
-		initialFlashlightRadius: 0.18,
-		initialFlashlightSoftness: 0.1
+		initialFlashlightRadius: 0.15,
+		initialFlashlightSoftness: 0.05,
+		initialDepthEchoMrRetain: 0.95
 	},
 	lighting: {
 		initialPresetIndex: 4

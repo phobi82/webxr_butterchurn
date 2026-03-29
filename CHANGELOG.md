@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Changed the default passthrough `Flashlight` tuning to `Radius 15%` and `Softness 5%`, and changed the `Echo` depth-mode default `MR Blend` to `95%` without changing the startup depth mode.
+
 ### Fixed
 - Changed the passthrough overlay alpha accumulation so the global `Visualizer -> Modified Reality` transition no longer leaves an extra bright direct-passthrough seam between those two layers, while explicit `MR Blend = 0%` and punch/depth openings can still reveal true direct passthrough where intended.
 

@@ -500,9 +500,9 @@ const createPassthroughController = function(options) {
 		effectAlphaBlendShare: options.initialEffectAlphaBlendShare == null ? 1 : options.initialEffectAlphaBlendShare,
 		manualMix: options.initialManualMix == null ? 0 : options.initialManualMix,
 		audioReactiveIntensity: options.initialAudioReactiveIntensity == null ? 0.7 : options.initialAudioReactiveIntensity,
-		flashlightRadius: options.initialFlashlightRadius == null ? 0.18 : options.initialFlashlightRadius,
-		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.1 : options.initialFlashlightSoftness,
-		depthModeKey: "distance",
+		flashlightRadius: options.initialFlashlightRadius == null ? 0.15 : options.initialFlashlightRadius,
+		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
+		depthModeKey: options.initialDepthModeKey || "distance",
 		depthThreshold: 0.80,
 		depthFade: 0.20,
 		depthDistanceMrRetain: 0.3,
@@ -512,13 +512,13 @@ const createPassthroughController = function(options) {
 		depthEchoFade: 1,
 		depthEchoPhaseSpeed: 5,
 		depthEchoPhaseOffset: 0,
-		depthEchoMrRetain: 0.8,
+		depthEchoMrRetain: options.initialDepthEchoMrRetain == null ? 0.95 : options.initialDepthEchoMrRetain,
 		depthEchoPhaseReactiveBool: false,
 		depthEchoPhaseSpeedReactiveBool: false,
 		depthEchoWavelengthReactiveBool: false,
 		depthEchoDutyCycleReactiveBool: true,
 		depthEchoFadeReactiveBool: false,
-		depthMrRetain: 0.3,
+		depthMrRetain: 0,
 		usableDepthAvailableBool: false,
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
@@ -531,6 +531,8 @@ const createPassthroughController = function(options) {
 	const getDepthMrRetainForMode = function(depthModeKey) {
 		return depthModeKey === "echo" ? state.depthEchoMrRetain : state.depthDistanceMrRetain;
 	};
+
+	state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 
 	const quantizeDepthEchoPhaseSpeed = function(value) {
 		return clampNumber(Math.round(value * 10) / 10, -10, 10);
