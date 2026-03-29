@@ -204,6 +204,7 @@ The current menu exposes:
 - The app starts the visualizer engine immediately, but audio-reactive behavior only becomes meaningful once an audio source is active.
 - Live passthrough uses the shared background and overlay pipeline in AR, while desktop preview, opaque AR, and VR fall back to a black background.
 - `Background` now stays on `manual` by default instead of auto-switching to `sound-reactive` when live passthrough appears.
+- The global `Background` mix now crossfades the visualizer into the darkened modified-reality layer without leaving an extra direct-passthrough gap in between; true direct passthrough should still appear only in explicit openings such as `MR Blend = 0%`, `Flashlight`, or depth punch.
 - The runtime requests optional WebXR depth sensing for immersive AR with a fallback ladder: GPU depth first, CPU depth second, plain AR last.
 - When usable depth data is present, the `Depth` toggle auto-enables and depth is used both for passthrough punch and for scaling passthrough light masks; the depth punch can run as a near-distance cutout or as animated periodic `Echo` bands, while lighting still falls back to synthetic ceiling, wall, and floor anchors when sensed depth is unavailable.
 - `Background` handles full-frame visualizer-to-modified-reality mixing, `Flashlight` and optional `Depth` open passthrough masks, and scene lighting runs as `None`, `Uniform`, `Spots`, or `Club`; `Club` is the richer preset- and audio-driven mode.

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Changed the passthrough overlay alpha accumulation so the global `Visualizer -> Modified Reality` transition no longer leaves an extra bright direct-passthrough seam between those two layers, while explicit `MR Blend = 0%` and punch/depth openings can still reveal true direct passthrough where intended.
+
 ## [0.8.3] - 2026-03-28
 
 ### Changed

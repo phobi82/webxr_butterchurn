@@ -1416,7 +1416,9 @@ const createPassthroughOverlayRenderer = function() {
 				}
 			}
 			gl.enable(gl.BLEND);
-			gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+			// Accumulate MR alpha additively so the global visualizer->MR crossfade does not
+			// open an extra direct-passthrough gap between two already intentional layers.
+			gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ONE, gl.ONE);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			gl.useProgram(activeProgram);
