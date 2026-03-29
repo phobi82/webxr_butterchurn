@@ -30,7 +30,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - background mix modes: `manual`, `sound-reactive`
-- passthrough controls: `Flashlight` plus optional `Depth` with `Distance` and `Echo` modes in immersive AR
+- passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Surface-fit`) and `Distance`/`Echo` modes in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR (only Quest 3 in Quest-Browser for now)
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
@@ -49,6 +49,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-visualizer-modes.js`: visualizer mode catalog
 - `xr-passthrough-modes.js`: background mix, passthrough, and lighting control definitions
 - `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
+- `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and surface-fit depth processing
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
@@ -152,7 +153,8 @@ The current menu exposes:
   - `sound-reactive`: bipolar `Intensity` with end labels `Vis -> Mod. Reality` and `Mod. Reality -> Vis`
 - `Passthrough` section:
   - `Flashlight` toggle with `Radius` and `Softness`
-  - when usable depth data exists: `Depth` toggle plus a `Depth Mode` cycler
+  - when usable depth data exists: `Depth` toggle, then a `Reconstruction` cycler and a `Depth Mode` cycler
+  - `Reconstruction`: `Raw`, `Edge-aware`, `Surface-fit`
   - `Distance`: `Distance`, `Fade`, `MR Blend`
   - `Echo`: `Sound-reactive` row for `Phase` and `Duty`, then `Phase`, `Phase-Speed`, `Wavelength`, `DutyCycle`, `Fade`, `MR Blend`
   - in `Echo`, the modified-reality/passthrough bands and the VR-world masking do not use the same blend rule: passthrough still follows the depth band mask, while the VR world stays proportionally present according to `MR Blend`
@@ -180,6 +182,12 @@ The current menu exposes:
 
 `Flashlight` opens controller-driven circular passthrough cutouts with `Radius` and `Softness`. It is independent from the depth-driven modes and can run alongside them.
 
+### Depth Reconstruction
+
+The runtime first converts the raw low-resolution WebXR sensor depth into one shared full-resolution processed depth texture per eye/view in `xr-depth-processing.js`. `Raw` keeps the native block structure as a diagnostic baseline, `Edge-aware` reconstructs a denser depth field while resisting depth bleeding across real discontinuities, and `Surface-fit` performs a broader local plane fit so larger walls, floors, and tabletops can read as smoother surfaces instead of stepped blocks.
+
+That processed depth is reused by the passthrough opening, the modified-reality world mask, and the passthrough overlay logic so those paths no longer each sample the low-resolution sensor depth independently.
+
 ### Depth Mode: Distance
 
 `Distance` is the direct near-depth cutout mode. Geometry closer than the configured `Distance` is opened toward passthrough, `Fade` softens that edge in meters, and `MR Blend` controls how much modified reality remains in the opened region instead of switching to pure passthrough immediately.
@@ -206,7 +214,7 @@ The current menu exposes:
 - `Background` now stays on `manual` by default instead of auto-switching to `sound-reactive` when live passthrough appears.
 - The global `Background` mix now crossfades the visualizer into the darkened modified-reality layer without leaving an extra direct-passthrough gap in between; true direct passthrough should still appear only in explicit openings such as `MR Blend = 0%`, `Flashlight`, or depth punch.
 - The runtime requests optional WebXR depth sensing for immersive AR with a fallback ladder: GPU depth first, CPU depth second, plain AR last.
-- When usable depth data is present, the `Depth` toggle auto-enables and depth is used both for passthrough punch and for scaling passthrough light masks; the depth punch can run as a near-distance cutout or as animated periodic `Echo` bands, while lighting still falls back to synthetic ceiling, wall, and floor anchors when sensed depth is unavailable.
+- When usable depth data is present, the `Depth` toggle auto-enables, the shared per-eye full-resolution depth reconstruction pass feeds the passthrough punch, world mask, and overlay logic, and the depth punch can run as a near-distance cutout or as animated periodic `Echo` bands while lighting still falls back to synthetic ceiling, wall, and floor anchors when sensed depth is unavailable.
 - `Background` handles full-frame visualizer-to-modified-reality mixing, `Flashlight` and optional `Depth` open passthrough masks, and scene lighting runs as `None`, `Uniform`, `Spots`, or `Club`; `Club` is the richer preset- and audio-driven mode.
 - The passthrough defaults now start with `Flashlight` at `Radius 15%` and `Softness 5%`, while the `Echo` depth-mode default `MR Blend` starts at `95%` without changing the startup depth mode.
 - The lower menu is one shared state-driven system, `TestLab.html` reuses the same runtime with its own reduced menu/preset setup, and translucent world/menu rendering preserves XR framebuffer alpha.

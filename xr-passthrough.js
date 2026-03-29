@@ -506,6 +506,7 @@ const createPassthroughController = function(options) {
 		depthThreshold: 0.80,
 		depthFade: 0.20,
 		depthDistanceMrRetain: 0.3,
+		depthReconstructionModeKey: options.initialDepthReconstructionModeKey || "edgeAware",
 		depthEchoPhase: 0,
 		depthEchoWavelength: 3,
 		depthEchoDutyCycle: 0.25,
@@ -781,6 +782,8 @@ const createPassthroughController = function(options) {
 				backgroundControls: bgControlState.controls || [],
 				flashlightActiveBool: state.flashlightActiveBool,
 				depthActiveBool: state.depthActiveBool,
+				depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
+				selectedDepthReconstructionModeKey: state.depthReconstructionModeKey,
 				depthModes: passthroughDepthModeDefinitions,
 				selectedDepthModeKey: state.depthModeKey,
 				usableDepthAvailableBool: state.usableDepthAvailableBool,
@@ -798,9 +801,20 @@ const createPassthroughController = function(options) {
 		},
 		toggleFlashlight: function() { state.flashlightActiveBool = !state.flashlightActiveBool; },
 		toggleDepth: function() { state.depthActiveBool = !state.depthActiveBool; },
+		cycleDepthReconstructionMode: function(direction) {
+			state.depthReconstructionModeKey = cycleModeKey(passthroughDepthReconstructionModeDefinitions, state.depthReconstructionModeKey, direction < 0 ? -1 : 1);
+		},
 		cycleDepthMode: function(direction) {
 			state.depthModeKey = cycleModeKey(passthroughDepthModeDefinitions, state.depthModeKey, direction < 0 ? -1 : 1);
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
+		},
+		getDepthProcessingConfig: function() {
+			return {
+				reconstructionKey: state.depthReconstructionModeKey,
+				edgeAwareBool: state.depthReconstructionModeKey === "edgeAware",
+				surfaceFitBool: state.depthReconstructionModeKey === "surfaceFit",
+				label: state.depthReconstructionModeKey
+			};
 		},
 		cycleLightingMode: function(direction) {
 			state.lightingModeKey = cycleModeKey(passthroughLightingModeDefinitions, state.lightingModeKey, direction < 0 ? -1 : 1);

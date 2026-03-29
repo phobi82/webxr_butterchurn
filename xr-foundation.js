@@ -698,7 +698,8 @@ const createXrSessionBridge = function(options) {
 					depthSensing: {
 						usagePreference: ["gpu-optimized", "cpu-optimized"],
 						dataFormatPreference: ["unsigned-short", "luminance-alpha", "float32"],
-						formatPreference: ["unsigned-short", "luminance-alpha", "float32"]
+						formatPreference: ["unsigned-short", "luminance-alpha", "float32"],
+						depthTypeRequest: ["smooth", "raw"]
 					}
 				});
 				return {session: session};
@@ -712,7 +713,8 @@ const createXrSessionBridge = function(options) {
 				depthSensing: {
 					usagePreference: ["cpu-optimized"],
 					dataFormatPreference: depthDataFormats,
-					formatPreference: depthDataFormats
+					formatPreference: depthDataFormats,
+					depthTypeRequest: ["smooth", "raw"]
 				}
 			});
 			return {session: session};

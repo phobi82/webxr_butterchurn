@@ -877,6 +877,7 @@ const createSceneRenderer = function(options) {
 	let passthroughOverlayRenderer = null;
 	let punchRenderer = null;
 	let worldMaskCompositeRenderer = null;
+	let processedDepthRenderer = null;
 	let geometry = null;
 	let webgl2Bool = false;
 	const currentView = new Float32Array(16);
@@ -1091,7 +1092,11 @@ const createSceneRenderer = function(options) {
 		drawCallback();
 		gl.bindFramebuffer(gl.FRAMEBUFFER, args.outputFramebuffer || null);
 		gl.viewport(args.targetViewport.x, args.targetViewport.y, args.targetViewport.width, args.targetViewport.height);
-		worldMaskCompositeRenderer.compositeWorld(worldMaskState, args.passthroughDepthInfo, args.depthFrameKind || "", args.depthProfile);
+		worldMaskCompositeRenderer.compositeWorld(worldMaskState, args.processedDepthInfo, args.processedDepthFrameKind || "", args.processedDepthProfile);
+	};
+
+	const createProcessedDepthRenderer = function() {
+		return createDepthProcessingRenderer({gl: gl, webgl2Bool: webgl2Bool});
 	};
 
 	const createWorldMaskCompositeRenderer = function() {
@@ -1401,7 +1406,7 @@ const createSceneRenderer = function(options) {
 			projMatrix: currentProj,
 			controllerRays: controllerRays
 		}) : null;
-		const worldMaskActiveBool = !!(worldMaskCompositeRenderer && punchState && punchState.worldMask && args.passthroughDepthInfo && (args.transparentBackgroundBool || args.passthroughFallbackBool));
+		const worldMaskActiveBool = !!(worldMaskCompositeRenderer && punchState && punchState.worldMask && args.processedDepthInfo && (args.transparentBackgroundBool || args.passthroughFallbackBool));
 		// Layer 1: Visualizer Background
 		if (args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
 			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState());
@@ -1422,8 +1427,8 @@ const createSceneRenderer = function(options) {
 				projMatrix: passthroughProjMatrix,
 				controllerRays: controllerRays,
 				sceneLightingState: sceneLightingState,
-				depthInfo: args.passthroughDepthInfo || null
-			}) : null, args.passthroughDepthInfo, args.depthFrameKind || "", webgl2Bool, args.depthProfile);
+				depthInfo: args.rawPassthroughDepthInfo || null
+			}) : null, args.processedDepthInfo, args.processedDepthFrameKind || "", webgl2Bool, args.processedDepthProfile);
 		}
 		// Layer 3: VR World
 		if (worldMaskActiveBool) {
@@ -1435,7 +1440,7 @@ const createSceneRenderer = function(options) {
 		}
 		// Layer 4: Punch (Flashlight or Depth — before menu/rays)
 		if (punchRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool) && punchState) {
-			punchRenderer.draw(punchState, args.passthroughDepthInfo, args.depthFrameKind || "", webgl2Bool, args.depthProfile);
+			punchRenderer.draw(punchState, args.processedDepthInfo, args.processedDepthFrameKind || "", webgl2Bool, args.processedDepthProfile);
 		}
 		// Post-scene (reserved, currently no-op)
 		if (args.visualizerEngine) {
@@ -1506,6 +1511,8 @@ const createSceneRenderer = function(options) {
 			passthroughOverlayRenderer.init(gl);
 			punchRenderer = createPunchRenderer();
 			punchRenderer.init(gl);
+			processedDepthRenderer = createProcessedDepthRenderer();
+			processedDepthRenderer.init();
 			worldMaskCompositeRenderer = createWorldMaskCompositeRenderer();
 			worldMaskCompositeRenderer.init();
 			geometry = createSceneGeometry(gl);
@@ -1532,6 +1539,10 @@ const createSceneRenderer = function(options) {
 			currentPassthroughProj.set(currentProj);
 			args.passthroughViewMatrix = currentPassthroughView;
 			args.passthroughProjMatrix = currentPassthroughProj;
+			args.rawPassthroughDepthInfo = null;
+			args.processedDepthInfo = null;
+			args.processedDepthFrameKind = "";
+			args.processedDepthProfile = null;
 			args.outputFramebuffer = null;
 			args.targetViewport = {x: 0, y: 0, width: canvas.width, height: canvas.height};
 			if (args.visualizerEngine) {
@@ -1572,9 +1583,20 @@ const createSceneRenderer = function(options) {
 				}
 				args.passthroughViewMatrix = currentPassthroughView;
 				args.passthroughProjMatrix = currentPassthroughProj;
-				args.passthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[i] ? args.passthroughDepthInfoByView[i] : null;
+				args.rawPassthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[i] ? args.passthroughDepthInfoByView[i] : null;
 				args.outputFramebuffer = args.baseLayer.framebuffer;
 				args.targetViewport = viewport;
+				args.processedDepthInfo = processedDepthRenderer && args.rawPassthroughDepthInfo ? processedDepthRenderer.process({
+					viewIndex: i,
+					viewport: viewport,
+					depthInfo: args.rawPassthroughDepthInfo,
+					depthFrameKind: args.depthFrameKind || "",
+					depthProfile: args.depthProfile,
+					processingConfig: args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : {reconstructionKey: "edgeAware", edgeAwareBool: true, surfaceFitBool: false},
+					outputFramebuffer: args.baseLayer.framebuffer
+				}) : null;
+				args.processedDepthFrameKind = args.processedDepthInfo ? "gpu-texture" : "";
+				args.processedDepthProfile = args.processedDepthInfo ? {linearScale: args.processedDepthInfo.rawValueToMeters || 16, nearZ: 0} : null;
 				if (args.visualizerEngine) {
 					args.visualizerEngine.setRenderView(currentView, currentProj);
 				}

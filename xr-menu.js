@@ -634,6 +634,7 @@ const createMenuController = function(options) {
 		floorAlphaHoverBool: false,
 		hoveredMenuSliderControlKeys: {},
 		hoveredPassthroughToggle: "",
+		hoveredPassthroughDepthReconstructionAction: "",
 		hoveredPassthroughDepthModeAction: "",
 		hoveredPassthroughEchoReactiveControlKey: "",
 		hoveredSceneLightingModeAction: "",
@@ -687,6 +688,8 @@ const createMenuController = function(options) {
 			backgroundControls: [],
 			flashlightActiveBool: false,
 			depthActiveBool: false,
+			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
+			selectedDepthReconstructionModeKey: "edgeAware",
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: "distance",
 			usableDepthAvailableBool: false,
@@ -804,6 +807,7 @@ const createMenuController = function(options) {
 			passthroughControls: passthroughControls,
 			hoveredMixModeKey: state.hoveredMixModeKey,
 			hoveredPassthroughToggle: state.hoveredPassthroughToggle,
+			hoveredDepthReconstructionAction: state.hoveredPassthroughDepthReconstructionAction,
 			hoveredDepthModeAction: state.hoveredPassthroughDepthModeAction,
 			hoveredEchoReactiveControlKey: state.hoveredPassthroughEchoReactiveControlKey,
 			eyeDistanceMeters: state.eyeDistanceMeters,
@@ -874,6 +878,7 @@ const createMenuController = function(options) {
 		state.floorAlphaHoverBool = false;
 		state.hoveredMenuSliderControlKeys = {};
 		state.hoveredPassthroughToggle = "";
+		state.hoveredPassthroughDepthReconstructionAction = "";
 		state.hoveredPassthroughDepthModeAction = "";
 		state.hoveredPassthroughEchoReactiveControlKey = "";
 		state.hoveredSceneLightingModeAction = "";
@@ -936,6 +941,7 @@ const createMenuController = function(options) {
 			state.hoveredMenuSliderControlKeys = {};
 			setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
 			state.hoveredPassthroughToggle = "";
+			state.hoveredPassthroughDepthReconstructionAction = "";
 			state.hoveredPassthroughDepthModeAction = "";
 			state.hoveredPassthroughEchoReactiveControlKey = "";
 			state.hoveredSceneLightingModeAction = "";
@@ -959,6 +965,7 @@ const createMenuController = function(options) {
 		state.hoveredPassthroughToggle =
 			hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 			(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : "");
+		state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : "";
 		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
@@ -1063,6 +1070,7 @@ const createMenuController = function(options) {
 				state.hoveredPassthroughToggle =
 					hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 					(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" : state.hoveredPassthroughToggle);
+				state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : state.hoveredPassthroughDepthReconstructionAction;
 				state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : state.hoveredPassthroughDepthModeAction;
 				state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : state.hoveredPassthroughEchoReactiveControlKey;
 				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
@@ -1252,6 +1260,9 @@ const createMenuController = function(options) {
 			if (hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
 				passthroughController.toggleDepth();
 			}
+			if (hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
+				passthroughController.cycleDepthReconstructionMode(hit.moduleCycleAction === "prev" ? -1 : 1);
+			}
 			if (hit.moduleChoiceControlKey === "depthEchoReactiveRow" && hit.moduleChoiceItemKey && passthroughController && passthroughController.toggleDepthEchoReactive) {
 				passthroughController.toggleDepthEchoReactive(hit.moduleChoiceItemKey);
 			}
@@ -1405,6 +1416,9 @@ const createMenuController = function(options) {
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
 					passthroughController.toggleDepth();
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
+					passthroughController.cycleDepthReconstructionMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "depthEchoReactiveRow" && ray.hit.moduleChoiceItemKey && passthroughController && passthroughController.toggleDepthEchoReactive) {
 					passthroughController.toggleDepthEchoReactive(ray.hit.moduleChoiceItemKey);

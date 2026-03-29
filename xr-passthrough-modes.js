@@ -16,6 +16,12 @@ const passthroughDepthModeDefinitions = [
 	{key: "echo", label: "Echo"}
 ];
 
+const passthroughDepthReconstructionModeDefinitions = [
+	{key: "raw", label: "Raw"},
+	{key: "edgeAware", label: "Edge-aware"},
+	{key: "surfaceFit", label: "Surface-fit"}
+];
+
 const findModeIndexByKey = function(definitions, key) {
 	for (let i = 0; i < definitions.length; i += 1) {
 		if (definitions[i].key === key) {

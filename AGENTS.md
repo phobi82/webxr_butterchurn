@@ -149,6 +149,7 @@ Recommended structure order:
 - In PowerShell `shell_command` calls, never use `&&`; run commands separately unless a PowerShell-safe separator is explicitly required.
 - Before implementing UI or module changes, decide the target architecture and grouping first, record the work as a detailed task list, and then implement in small verified steps instead of patching isolated examples.
 - Before claiming menu or layout work is done, inspect the actual local menu preview in the browser and verify the affected states visually.
+- Before any Chrome DevTools MCP reload, console check, snapshot, or interaction, verify that the selected page is the real app page and not `about:blank`; if `about:blank` exists, close it or explicitly select the app page first.
 
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.
