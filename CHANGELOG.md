@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-03-29
+
 ### Changed
 - Changed the default passthrough `Flashlight` tuning to `Radius 15%` and `Softness 5%`, and changed the `Echo` depth-mode default `MR Blend` to `95%` without changing the startup depth mode.
 - Added a shared full-resolution depth reconstruction prepass for immersive AR, so low-resolution sensor depth is rebuilt once per eye and then reused by passthrough punch, passthrough overlay, and VR world masking instead of being sampled directly in each layer.
-- Replaced the passthrough `Depth` upsampling controls with a `Reconstruction` cycler (`Raw`, `Edge-aware`, `Surface-fit`) directly under the `Depth` toggle, and removed the earlier `Median` and `Temporal` options.
-- Moved the shared depth reconstruction pipeline out of `xr-world.js` into `xr-depth-processing.js`, and made `Edge-aware` and `Surface-fit` use more clearly separated reconstruction logic instead of near-identical tuning.
+- Replaced the passthrough `Depth` upsampling controls with a `Reconstruction` cycler (`Raw`, `Edge-aware`, `Heightmap`) directly under the `Depth` toggle, and removed the earlier `Median` and `Temporal` options.
+- Moved the shared depth reconstruction pipeline out of `xr-world.js` into `xr-depth-processing.js`, and made `Edge-aware` and `Heightmap` use clearly separated reconstruction logic.
+- Changed the default reconstruction mode from `Edge-aware` to `Heightmap`, and rebuilt `Heightmap` as a dedicated two-pass smoothing plus spline reconstruction path for smoother height-map-style gradients at lower cost than the earlier full-res nested smoothing version.
 
 ### Fixed
 - Changed the passthrough overlay alpha accumulation so the global `Visualizer -> Modified Reality` transition no longer leaves an extra bright direct-passthrough seam between those two layers, while explicit `MR Blend = 0%` and punch/depth openings can still reveal true direct passthrough where intended.

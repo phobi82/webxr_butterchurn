@@ -1592,7 +1592,7 @@ const createSceneRenderer = function(options) {
 					depthInfo: args.rawPassthroughDepthInfo,
 					depthFrameKind: args.depthFrameKind || "",
 					depthProfile: args.depthProfile,
-					processingConfig: args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : {reconstructionKey: "edgeAware", edgeAwareBool: true, surfaceFitBool: false},
+					processingConfig: args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : {reconstructionKey: "heightmap", edgeAwareBool: false, heightmapBool: true},
 					outputFramebuffer: args.baseLayer.framebuffer
 				}) : null;
 				args.processedDepthFrameKind = args.processedDepthInfo ? "gpu-texture" : "";

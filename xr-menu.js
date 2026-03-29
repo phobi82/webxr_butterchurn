@@ -689,7 +689,7 @@ const createMenuController = function(options) {
 			flashlightActiveBool: false,
 			depthActiveBool: false,
 			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
-			selectedDepthReconstructionModeKey: "edgeAware",
+			selectedDepthReconstructionModeKey: "heightmap",
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: "distance",
 			usableDepthAvailableBool: false,

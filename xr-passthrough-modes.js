@@ -19,7 +19,7 @@ const passthroughDepthModeDefinitions = [
 const passthroughDepthReconstructionModeDefinitions = [
 	{key: "raw", label: "Raw"},
 	{key: "edgeAware", label: "Edge-aware"},
-	{key: "surfaceFit", label: "Surface-fit"}
+	{key: "heightmap", label: "Heightmap"}
 ];
 
 const findModeIndexByKey = function(definitions, key) {

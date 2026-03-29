@@ -506,7 +506,7 @@ const createPassthroughController = function(options) {
 		depthThreshold: 0.80,
 		depthFade: 0.20,
 		depthDistanceMrRetain: 0.3,
-		depthReconstructionModeKey: options.initialDepthReconstructionModeKey || "edgeAware",
+		depthReconstructionModeKey: options.initialDepthReconstructionModeKey || "heightmap",
 		depthEchoPhase: 0,
 		depthEchoWavelength: 3,
 		depthEchoDutyCycle: 0.25,
@@ -812,7 +812,7 @@ const createPassthroughController = function(options) {
 			return {
 				reconstructionKey: state.depthReconstructionModeKey,
 				edgeAwareBool: state.depthReconstructionModeKey === "edgeAware",
-				surfaceFitBool: state.depthReconstructionModeKey === "surfaceFit",
+				heightmapBool: state.depthReconstructionModeKey === "heightmap",
 				label: state.depthReconstructionModeKey
 			};
 		},

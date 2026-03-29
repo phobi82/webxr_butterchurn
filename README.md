@@ -30,7 +30,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - background mix modes: `manual`, `sound-reactive`
-- passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Surface-fit`) and `Distance`/`Echo` modes in immersive AR
+- passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Heightmap`) and `Distance`/`Echo` modes in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR (only Quest 3 in Quest-Browser for now)
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
@@ -49,7 +49,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-visualizer-modes.js`: visualizer mode catalog
 - `xr-passthrough-modes.js`: background mix, passthrough, and lighting control definitions
 - `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
-- `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and surface-fit depth processing
+- `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and heightmap depth processing
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
@@ -154,7 +154,7 @@ The current menu exposes:
 - `Passthrough` section:
   - `Flashlight` toggle with `Radius` and `Softness`
   - when usable depth data exists: `Depth` toggle, then a `Reconstruction` cycler and a `Depth Mode` cycler
-  - `Reconstruction`: `Raw`, `Edge-aware`, `Surface-fit`
+  - `Reconstruction`: `Raw`, `Edge-aware`, `Heightmap` (default)
   - `Distance`: `Distance`, `Fade`, `MR Blend`
   - `Echo`: `Sound-reactive` row for `Phase` and `Duty`, then `Phase`, `Phase-Speed`, `Wavelength`, `DutyCycle`, `Fade`, `MR Blend`
   - in `Echo`, the modified-reality/passthrough bands and the VR-world masking do not use the same blend rule: passthrough still follows the depth band mask, while the VR world stays proportionally present according to `MR Blend`
@@ -184,7 +184,7 @@ The current menu exposes:
 
 ### Depth Reconstruction
 
-The runtime first converts the raw low-resolution WebXR sensor depth into one shared full-resolution processed depth texture per eye/view in `xr-depth-processing.js`. `Raw` keeps the native block structure as a diagnostic baseline, `Edge-aware` reconstructs a denser depth field while resisting depth bleeding across real discontinuities, and `Surface-fit` performs a broader local plane fit so larger walls, floors, and tabletops can read as smoother surfaces instead of stepped blocks.
+The runtime first converts the raw low-resolution WebXR sensor depth into one shared full-resolution processed depth texture per eye/view in `xr-depth-processing.js`. `Raw` keeps the native block structure as a diagnostic baseline, `Edge-aware` reconstructs a denser depth field while resisting depth bleeding across real discontinuities, and `Heightmap` runs a dedicated two-pass smoothing plus spline reconstruction path so larger walls, floors, and tabletops read as smoother continuous gradients instead of stepped blocks.
 
 That processed depth is reused by the passthrough opening, the modified-reality world mask, and the passthrough overlay logic so those paths no longer each sample the low-resolution sensor depth independently.
 

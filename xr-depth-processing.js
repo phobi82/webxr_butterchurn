@@ -8,12 +8,21 @@ const createDepthProcessingRenderer = function(options) {
 	let texture2dLocs = null;
 	let gpuArrayProgram = null;
 	let gpuArrayLocs = null;
+	let smoothTexture2dProgram = null;
+	let smoothTexture2dLocs = null;
+	let smoothGpuArrayProgram = null;
+	let smoothGpuArrayLocs = null;
+	let smoothNormalizedProgram = null;
+	let smoothNormalizedLocs = null;
+	let heightmapProgram = null;
+	let heightmapLocs = null;
 	let cpuDepthTexture = null;
 	let cpuUploadBuffer = null;
 	const depthUvTransform = new Float32Array(16);
 	const identityUvTransform = identityMatrix();
 	const processedDepthMaxMeters = 16;
-	const targetsByView = [];
+	const processedTargetsByView = [];
+	const surfaceTargetsByView = [];
 	const vertexSource = [
 		"attribute vec2 position;",
 		"varying vec2 vScreenUv;",
@@ -96,44 +105,9 @@ const createDepthProcessingRenderer = function(options) {
 		"}",
 		"return weightSum>0.0001?depthSum/weightSum:centerMeters;",
 		"}",
-		"float sampleSurfaceFitDepthMeters(vec2 depthUv){",
-		"vec2 sourcePos=getSourcePixelPos(depthUv);",
-		"float centerMeters=sampleBilinearDepthMeters(depthUv);",
-		"if(centerMeters<=0.001){return centerMeters;}",
-		"float edgeMeters=max(0.06,centerMeters*0.06);",
-		"float sW=0.0,sX=0.0,sY=0.0,sXX=0.0,sYY=0.0,sXY=0.0,sZ=0.0,sXZ=0.0,sYZ=0.0;",
-		"int validSamples=0;",
-		"for(int iy=-2;iy<=2;iy+=1){",
-		"for(int ix=-2;ix<=2;ix+=1){",
-		"vec2 sampleCoord=floor(sourcePos)+vec2(float(ix),float(iy));",
-		"float sampleMeters=sampleTexelDepthMeters(sampleCoord);",
-		"if(sampleMeters<=0.001){continue;}",
-		"float edgeWeight=max(0.0,1.0-abs(sampleMeters-centerMeters)/(edgeMeters*1.25));",
-		"if(edgeWeight<=0.0001){continue;}",
-		"vec2 delta=sampleCoord-sourcePos;",
-		"float spatialWeight=1.0/(1.0+dot(delta*0.75,delta*0.75));",
-		"float w=spatialWeight*edgeWeight;",
-		"float x=delta.x;",
-		"float y=delta.y;",
-		"sW+=w; sX+=w*x; sY+=w*y; sXX+=w*x*x; sYY+=w*y*y; sXY+=w*x*y; sZ+=w*sampleMeters; sXZ+=w*x*sampleMeters; sYZ+=w*y*sampleMeters;",
-		"validSamples+=1;",
-		"}",
-		"}",
-		"if(validSamples<6){return centerMeters;}",
-		"float det=sXX*(sYY*sW-sY*sY)-sXY*(sXY*sW-sY*sX)+sX*(sXY*sY-sYY*sX);",
-		"if(abs(det)<=0.0001){return centerMeters;}",
-		"float detC=sXX*(sYY*sZ-sY*sYZ)-sXY*(sXY*sZ-sY*sXZ)+sX*(sXY*sYZ-sYY*sXZ);",
-		"float planeMeters=detC/det;",
-		"return abs(planeMeters-centerMeters)<=edgeMeters*2.0?planeMeters:centerMeters;",
-		"}",
-		"float sampleReconstructedDepthMeters(vec2 depthUv){",
-		"if(reconstructionMode>1.5){return sampleSurfaceFitDepthMeters(depthUv);}",
-		"if(reconstructionMode>0.5){return sampleEdgeAwareDepthMeters(depthUv);}",
-		"return sampleNearestDepthMeters(depthUv);",
-		"}",
 		"void main(){",
 		"vec2 depthUv=getDepthUvFromScreenUv(vScreenUv);",
-		"float depthMeters=sampleReconstructedDepthMeters(depthUv);",
+		"float depthMeters=reconstructionMode>0.5?sampleEdgeAwareDepthMeters(depthUv):sampleNearestDepthMeters(depthUv);",
 		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
 		"gl_FragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
 		"}"
@@ -225,49 +199,164 @@ const createDepthProcessingRenderer = function(options) {
 		"}",
 		"return weightSum>0.0001?depthSum/weightSum:centerMeters;",
 		"}",
-		"float sampleSurfaceFitDepthMeters(vec2 depthUv){",
-		"vec2 sourcePos=getSourcePixelPos(depthUv);",
-		"float centerMeters=sampleBilinearDepthMeters(depthUv);",
-		"if(centerMeters<=0.001){return centerMeters;}",
-		"float edgeMeters=max(0.06,centerMeters*0.06);",
-		"float sW=0.0,sX=0.0,sY=0.0,sXX=0.0,sYY=0.0,sXY=0.0,sZ=0.0,sXZ=0.0,sYZ=0.0;",
-		"int validSamples=0;",
-		"for(int iy=-2;iy<=2;iy+=1){",
-		"for(int ix=-2;ix<=2;ix+=1){",
-		"vec2 sampleCoord=floor(sourcePos)+vec2(float(ix),float(iy));",
-		"float sampleMeters=sampleTexelDepthMeters(sampleCoord);",
-		"if(sampleMeters<=0.001){continue;}",
-		"float edgeWeight=max(0.0,1.0-abs(sampleMeters-centerMeters)/(edgeMeters*1.25));",
-		"if(edgeWeight<=0.0001){continue;}",
-		"vec2 delta=sampleCoord-sourcePos;",
-		"float spatialWeight=1.0/(1.0+dot(delta*0.75,delta*0.75));",
-		"float w=spatialWeight*edgeWeight;",
-		"float x=delta.x;",
-		"float y=delta.y;",
-		"sW+=w; sX+=w*x; sY+=w*y; sXX+=w*x*x; sYY+=w*y*y; sXY+=w*x*y; sZ+=w*sampleMeters; sXZ+=w*x*sampleMeters; sYZ+=w*y*sampleMeters;",
-		"validSamples+=1;",
-		"}",
-		"}",
-		"if(validSamples<6){return centerMeters;}",
-		"float det=sXX*(sYY*sW-sY*sY)-sXY*(sXY*sW-sY*sX)+sX*(sXY*sY-sYY*sX);",
-		"if(abs(det)<=0.0001){return centerMeters;}",
-		"float detC=sXX*(sYY*sZ-sY*sYZ)-sXY*(sXY*sZ-sY*sXZ)+sX*(sXY*sYZ-sYY*sXZ);",
-		"float planeMeters=detC/det;",
-		"return abs(planeMeters-centerMeters)<=edgeMeters*2.0?planeMeters:centerMeters;",
-		"}",
-		"float sampleReconstructedDepthMeters(vec2 depthUv){",
-		"if(reconstructionMode>1.5){return sampleSurfaceFitDepthMeters(depthUv);}",
-		"if(reconstructionMode>0.5){return sampleEdgeAwareDepthMeters(depthUv);}",
-		"return sampleNearestDepthMeters(depthUv);",
-		"}",
 		"void main(){",
 		"vec2 depthUv=getDepthUvFromScreenUv(vScreenUv);",
-		"float depthMeters=sampleReconstructedDepthMeters(depthUv);",
+		"float depthMeters=reconstructionMode>0.5?sampleEdgeAwareDepthMeters(depthUv):sampleNearestDepthMeters(depthUv);",
 		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
 		"fragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
 		"}"
 	].join("");
-	const buildLocs = function(program, gpuArrayBool) {
+	const smoothTexture2dFragmentSource = [
+		"precision mediump float;",
+		"uniform sampler2D sourceDepthTexture;",
+		"uniform vec2 sourceTexelSize;",
+		"uniform vec2 blurAxis;",
+		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
+		"varying vec2 vScreenUv;",
+		"float decodeRawDepthMeters(float rawDepth){",
+		"return depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
+		"}",
+		"float sampleMeters(vec2 depthUv){",
+		"float rawDepth=texture2D(sourceDepthTexture,depthUv).r;",
+		"return rawDepth<=0.001?0.0:decodeRawDepthMeters(rawDepth);",
+		"}",
+		"void main(){",
+		"float depthSum=0.0;",
+		"float weightSum=0.0;",
+		"for(int i=-2;i<=2;i+=1){",
+		"float offset=float(i);",
+		"float sampleMetersValue=sampleMeters(vScreenUv+blurAxis*sourceTexelSize*offset);",
+		"if(sampleMetersValue<=0.001){continue;}",
+		"float weight=offset==0.0?6.0:(abs(offset)<1.5?4.0:1.0);",
+		"depthSum+=sampleMetersValue*weight;",
+		"weightSum+=weight;",
+		"}",
+		"float depthMeters=weightSum>0.0001?depthSum/weightSum:0.0;",
+		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
+		"gl_FragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
+		"}"
+	].join("");
+	const smoothGpuArrayFragmentSource = [
+		"#version 300 es\n",
+		"precision mediump float;",
+		"precision mediump sampler2DArray;",
+		"uniform sampler2DArray sourceDepthTexture;",
+		"uniform int sourceDepthLayer;",
+		"uniform vec2 sourceTexelSize;",
+		"uniform vec2 blurAxis;",
+		"uniform float rawValueToMeters;",
+		"uniform float depthNearZ;",
+		"in vec2 vScreenUv;",
+		"out vec4 fragColor;",
+		"float decodeRawDepthMeters(float rawDepth){",
+		"return depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
+		"}",
+		"float sampleMeters(vec2 depthUv){",
+		"float rawDepth=texture(sourceDepthTexture,vec3(depthUv,float(sourceDepthLayer))).r;",
+		"return rawDepth<=0.001?0.0:decodeRawDepthMeters(rawDepth);",
+		"}",
+		"void main(){",
+		"float depthSum=0.0;",
+		"float weightSum=0.0;",
+		"for(int i=-2;i<=2;i+=1){",
+		"float offset=float(i);",
+		"float sampleMetersValue=sampleMeters(vScreenUv+blurAxis*sourceTexelSize*offset);",
+		"if(sampleMetersValue<=0.001){continue;}",
+		"float weight=offset==0.0?6.0:(abs(offset)<1.5?4.0:1.0);",
+		"depthSum+=sampleMetersValue*weight;",
+		"weightSum+=weight;",
+		"}",
+		"float depthMeters=weightSum>0.0001?depthSum/weightSum:0.0;",
+		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
+		"fragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
+		"}"
+	].join("");
+	const smoothNormalizedFragmentSource = [
+		"precision mediump float;",
+		"uniform sampler2D sourceDepthTexture;",
+		"uniform vec2 sourceTexelSize;",
+		"uniform vec2 blurAxis;",
+		"varying vec2 vScreenUv;",
+		"float sampleMeters(vec2 depthUv){",
+		"return texture2D(sourceDepthTexture,depthUv).r*" + processedDepthMaxMeters.toFixed(1) + ";",
+		"}",
+		"void main(){",
+		"float depthSum=0.0;",
+		"float weightSum=0.0;",
+		"for(int i=-2;i<=2;i+=1){",
+		"float offset=float(i);",
+		"float sampleMetersValue=sampleMeters(vScreenUv+blurAxis*sourceTexelSize*offset);",
+		"if(sampleMetersValue<=0.001){continue;}",
+		"float weight=offset==0.0?6.0:(abs(offset)<1.5?4.0:1.0);",
+		"depthSum+=sampleMetersValue*weight;",
+		"weightSum+=weight;",
+		"}",
+		"float depthMeters=weightSum>0.0001?depthSum/weightSum:0.0;",
+		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
+		"gl_FragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
+		"}"
+	].join("");
+	const heightmapFragmentSource = [
+		"precision mediump float;",
+		"uniform sampler2D sourceDepthTexture;",
+		"uniform vec2 sourceTexelSize;",
+		"uniform mat4 depthUvTransform;",
+		"varying vec2 vScreenUv;",
+		"vec2 getSourcePixelPos(vec2 depthUv){",
+		"vec2 texel=max(sourceTexelSize,vec2(0.0001));",
+		"return depthUv/texel-0.5;",
+		"}",
+		"vec2 getDepthUvFromScreenUv(vec2 screenUv){",
+		"return (depthUvTransform*vec4(screenUv,0.0,1.0)).xy;",
+		"}",
+		"float sampleTexelDepthMeters(vec2 texelCoord){",
+		"vec2 texel=max(sourceTexelSize,vec2(0.0001));",
+		"vec2 sampleUv=(max(vec2(0.0),texelCoord)+0.5)*texel;",
+		"return texture2D(sourceDepthTexture,sampleUv).r*" + processedDepthMaxMeters.toFixed(1) + ";",
+		"}",
+		"float sampleBilinearDepthMeters(vec2 depthUv){",
+		"vec2 sourcePos=getSourcePixelPos(depthUv);",
+		"vec2 base=floor(sourcePos);",
+		"vec2 frac=clamp(sourcePos-base,0.0,1.0);",
+		"float d00=sampleTexelDepthMeters(base);",
+		"float d10=sampleTexelDepthMeters(base+vec2(1.0,0.0));",
+		"float d01=sampleTexelDepthMeters(base+vec2(0.0,1.0));",
+		"float d11=sampleTexelDepthMeters(base+vec2(1.0,1.0));",
+		"return mix(mix(d00,d10,frac.x),mix(d01,d11,frac.x),frac.y);",
+		"}",
+		"float bsplineWeight(float x){",
+		"x=abs(x);",
+		"if(x<1.0){return (4.0-6.0*x*x+3.0*x*x*x)/6.0;}",
+		"if(x<2.0){float t=2.0-x;return t*t*t/6.0;}",
+		"return 0.0;",
+		"}",
+		"float sampleSurfaceFitDepthMeters(vec2 depthUv){",
+		"vec2 sourcePos=getSourcePixelPos(depthUv);",
+		"vec2 base=floor(sourcePos);",
+		"float depthSum=0.0;",
+		"float weightSum=0.0;",
+		"for(int iy=-1;iy<=2;iy+=1){",
+		"for(int ix=-1;ix<=2;ix+=1){",
+		"vec2 sampleCoord=base+vec2(float(ix),float(iy));",
+		"float sampleMeters=sampleTexelDepthMeters(sampleCoord);",
+		"if(sampleMeters<=0.001){continue;}",
+		"vec2 delta=sourcePos-sampleCoord;",
+		"float weight=bsplineWeight(delta.x)*bsplineWeight(delta.y);",
+		"depthSum+=sampleMeters*weight;",
+		"weightSum+=weight;",
+		"}",
+		"}",
+		"return weightSum>0.0001?depthSum/weightSum:sampleBilinearDepthMeters(depthUv);",
+		"}",
+		"void main(){",
+		"vec2 depthUv=getDepthUvFromScreenUv(vScreenUv);",
+		"float depthMeters=sampleSurfaceFitDepthMeters(depthUv);",
+		"float normalizedDepth=clamp(depthMeters/" + processedDepthMaxMeters.toFixed(1) + ",0.0,1.0);",
+		"gl_FragColor=vec4(normalizedDepth,normalizedDepth,normalizedDepth,1.0);",
+		"}"
+	].join("");
+	const buildDirectLocs = function(program, gpuArrayBool) {
 		return {
 			position: gl.getAttribLocation(program, "position"),
 			sourceDepthTexture: gl.getUniformLocation(program, "sourceDepthTexture"),
@@ -279,12 +368,35 @@ const createDepthProcessingRenderer = function(options) {
 			depthUvTransform: gl.getUniformLocation(program, "depthUvTransform")
 		};
 	};
-	const ensureTargets = function(viewIndex, width, height) {
-		let targetState = targetsByView[viewIndex];
-		if (!targetState) {
-			targetState = {width: 0, height: 0, texture: null, framebuffer: null};
-			targetsByView[viewIndex] = targetState;
-		}
+	const buildSmoothRawLocs = function(program, gpuArrayBool) {
+		return {
+			position: gl.getAttribLocation(program, "position"),
+			sourceDepthTexture: gl.getUniformLocation(program, "sourceDepthTexture"),
+			sourceDepthLayer: gpuArrayBool ? gl.getUniformLocation(program, "sourceDepthLayer") : null,
+			sourceTexelSize: gl.getUniformLocation(program, "sourceTexelSize"),
+			blurAxis: gl.getUniformLocation(program, "blurAxis"),
+			rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(program, "depthNearZ")
+		};
+	};
+	const buildSmoothNormalizedLocs = function(program) {
+		return {
+			position: gl.getAttribLocation(program, "position"),
+			sourceDepthTexture: gl.getUniformLocation(program, "sourceDepthTexture"),
+			sourceTexelSize: gl.getUniformLocation(program, "sourceTexelSize"),
+			blurAxis: gl.getUniformLocation(program, "blurAxis")
+		};
+	};
+	const buildHeightmapLocs = function(program) {
+		return {
+			position: gl.getAttribLocation(program, "position"),
+			sourceDepthTexture: gl.getUniformLocation(program, "sourceDepthTexture"),
+			sourceTexelSize: gl.getUniformLocation(program, "sourceTexelSize"),
+			depthUvTransform: gl.getUniformLocation(program, "depthUvTransform")
+		};
+	};
+	const ensureRenderTarget = function(targetState, width, height) {
+		targetState = targetState || {width: 0, height: 0, texture: null, framebuffer: null};
 		if (targetState.width === width && targetState.height === height && targetState.texture && targetState.framebuffer) {
 			return targetState;
 		}
@@ -304,6 +416,20 @@ const createDepthProcessingRenderer = function(options) {
 		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, targetState.framebuffer);
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetState.texture, 0);
+		return targetState;
+	};
+	const ensureProcessedTarget = function(viewIndex, width, height) {
+		processedTargetsByView[viewIndex] = ensureRenderTarget(processedTargetsByView[viewIndex], width, height);
+		return processedTargetsByView[viewIndex];
+	};
+	const ensureSurfaceTargets = function(viewIndex, width, height) {
+		let targetState = surfaceTargetsByView[viewIndex];
+		if (!targetState) {
+			targetState = {temp: null, smooth: null};
+			surfaceTargetsByView[viewIndex] = targetState;
+		}
+		targetState.temp = ensureRenderTarget(targetState.temp, width, height);
+		targetState.smooth = ensureRenderTarget(targetState.smooth, width, height);
 		return targetState;
 	};
 	const uploadCpuDepthTexture = function(depthInfo) {
@@ -334,6 +460,149 @@ const createDepthProcessingRenderer = function(options) {
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 		return true;
 	};
+	const bindFullscreenTriangle = function(positionLoc) {
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.enableVertexAttribArray(positionLoc);
+		gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+	};
+	const prepareSourceTexture = function(args) {
+		if (args.depthFrameKind === "cpu") {
+			if (!uploadCpuDepthTexture(args.depthInfo)) {
+				return false;
+			}
+			gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
+			return true;
+		}
+		if (args.depthFrameKind === "gpu-array" && webgl2Bool && args.depthInfo.texture) {
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, args.depthInfo.texture);
+			return true;
+		}
+		if (args.depthInfo.texture) {
+			gl.bindTexture(gl.TEXTURE_2D, args.depthInfo.texture);
+			return true;
+		}
+		return false;
+	};
+	const setDepthUvTransform = function(depthInfo) {
+		if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
+			depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
+		} else if (depthInfo.normDepthBufferFromNormView) {
+			depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
+		} else {
+			depthUvTransform.set(identityUvTransform);
+		}
+	};
+	const runDirectPass = function(args, targetState, processingConfig) {
+		let program = null;
+		let locs = null;
+		gl.activeTexture(gl.TEXTURE0);
+		if (!prepareSourceTexture(args)) {
+			return false;
+		}
+		if (args.depthFrameKind === "gpu-array" && webgl2Bool && args.depthInfo.texture) {
+			if (!gpuArrayProgram) {
+				gpuArrayProgram = createProgram(gl, gpuArrayVertexSource, gpuArrayFragmentSource, "Processed depth gpu-array");
+				gpuArrayLocs = buildDirectLocs(gpuArrayProgram, true);
+			}
+			program = gpuArrayProgram;
+			locs = gpuArrayLocs;
+		} else {
+			if (!texture2dProgram) {
+				texture2dProgram = createProgram(gl, vertexSource, texture2dFragmentSource, "Processed depth texture2d");
+				texture2dLocs = buildDirectLocs(texture2dProgram, false);
+			}
+			program = texture2dProgram;
+			locs = texture2dLocs;
+		}
+		gl.bindFramebuffer(gl.FRAMEBUFFER, targetState.framebuffer);
+		gl.viewport(0, 0, targetState.width, targetState.height);
+		gl.useProgram(program);
+		gl.uniform1i(locs.sourceDepthTexture, 0);
+		if (locs.sourceDepthLayer) {
+			gl.uniform1i(locs.sourceDepthLayer, args.depthInfo.imageIndex != null ? args.depthInfo.imageIndex : (args.depthInfo.textureLayer || 0));
+		}
+		gl.uniform2f(locs.sourceTexelSize, args.depthInfo.width > 0 ? 1 / args.depthInfo.width : 0, args.depthInfo.height > 0 ? 1 / args.depthInfo.height : 0);
+		gl.uniform1f(locs.reconstructionMode, processingConfig.edgeAwareBool ? 1 : 0);
+		gl.uniform1f(locs.rawValueToMeters, args.depthProfile ? args.depthProfile.linearScale : (args.depthInfo.rawValueToMeters || 0.001));
+		gl.uniform1f(locs.depthNearZ, args.depthProfile ? args.depthProfile.nearZ : 0);
+		setDepthUvTransform(args.depthInfo);
+		gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
+		bindFullscreenTriangle(locs.position);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		return true;
+	};
+	const runRawSmoothPass = function(args, surfaceTarget, axisX, axisY) {
+		let program = null;
+		let locs = null;
+		gl.activeTexture(gl.TEXTURE0);
+		if (!prepareSourceTexture(args)) {
+			return false;
+		}
+		if (args.depthFrameKind === "gpu-array" && webgl2Bool && args.depthInfo.texture) {
+			if (!smoothGpuArrayProgram) {
+				smoothGpuArrayProgram = createProgram(gl, gpuArrayVertexSource, smoothGpuArrayFragmentSource, "Smoothed raw depth gpu-array");
+				smoothGpuArrayLocs = buildSmoothRawLocs(smoothGpuArrayProgram, true);
+			}
+			program = smoothGpuArrayProgram;
+			locs = smoothGpuArrayLocs;
+		} else {
+			if (!smoothTexture2dProgram) {
+				smoothTexture2dProgram = createProgram(gl, vertexSource, smoothTexture2dFragmentSource, "Smoothed raw depth texture2d");
+				smoothTexture2dLocs = buildSmoothRawLocs(smoothTexture2dProgram, false);
+			}
+			program = smoothTexture2dProgram;
+			locs = smoothTexture2dLocs;
+		}
+		gl.bindFramebuffer(gl.FRAMEBUFFER, surfaceTarget.framebuffer);
+		gl.viewport(0, 0, surfaceTarget.width, surfaceTarget.height);
+		gl.useProgram(program);
+		gl.uniform1i(locs.sourceDepthTexture, 0);
+		if (locs.sourceDepthLayer) {
+			gl.uniform1i(locs.sourceDepthLayer, args.depthInfo.imageIndex != null ? args.depthInfo.imageIndex : (args.depthInfo.textureLayer || 0));
+		}
+		gl.uniform2f(locs.sourceTexelSize, args.depthInfo.width > 0 ? 1 / args.depthInfo.width : 0, args.depthInfo.height > 0 ? 1 / args.depthInfo.height : 0);
+		gl.uniform2f(locs.blurAxis, axisX, axisY);
+		gl.uniform1f(locs.rawValueToMeters, args.depthProfile ? args.depthProfile.linearScale : (args.depthInfo.rawValueToMeters || 0.001));
+		gl.uniform1f(locs.depthNearZ, args.depthProfile ? args.depthProfile.nearZ : 0);
+		bindFullscreenTriangle(locs.position);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		return true;
+	};
+	const runNormalizedSmoothPass = function(sourceTexture, sourceWidth, sourceHeight, surfaceTarget, axisX, axisY) {
+		if (!smoothNormalizedProgram) {
+			smoothNormalizedProgram = createProgram(gl, vertexSource, smoothNormalizedFragmentSource, "Smoothed normalized depth");
+			smoothNormalizedLocs = buildSmoothNormalizedLocs(smoothNormalizedProgram);
+		}
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, surfaceTarget.framebuffer);
+		gl.viewport(0, 0, surfaceTarget.width, surfaceTarget.height);
+		gl.useProgram(smoothNormalizedProgram);
+		gl.uniform1i(smoothNormalizedLocs.sourceDepthTexture, 0);
+		gl.uniform2f(smoothNormalizedLocs.sourceTexelSize, sourceWidth > 0 ? 1 / sourceWidth : 0, sourceHeight > 0 ? 1 / sourceHeight : 0);
+		gl.uniform2f(smoothNormalizedLocs.blurAxis, axisX, axisY);
+		bindFullscreenTriangle(smoothNormalizedLocs.position);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		return true;
+	};
+	const runHeightmapPass = function(args, targetState, smoothTarget) {
+		if (!heightmapProgram) {
+			heightmapProgram = createProgram(gl, vertexSource, heightmapFragmentSource, "Processed depth heightmap");
+			heightmapLocs = buildHeightmapLocs(heightmapProgram);
+		}
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, smoothTarget.texture);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, targetState.framebuffer);
+		gl.viewport(0, 0, targetState.width, targetState.height);
+		gl.useProgram(heightmapProgram);
+		gl.uniform1i(heightmapLocs.sourceDepthTexture, 0);
+		gl.uniform2f(heightmapLocs.sourceTexelSize, smoothTarget.width > 0 ? 1 / smoothTarget.width : 0, smoothTarget.height > 0 ? 1 / smoothTarget.height : 0);
+		setDepthUvTransform(args.depthInfo);
+		gl.uniformMatrix4fv(heightmapLocs.depthUvTransform, false, depthUvTransform);
+		bindFullscreenTriangle(heightmapLocs.position);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		return true;
+	};
 	return {
 		init: function() {
 			buffer = createFullscreenTriangleBuffer(gl);
@@ -343,67 +612,21 @@ const createDepthProcessingRenderer = function(options) {
 				return null;
 			}
 			const depthInfo = args.depthInfo;
-			const targetState = ensureTargets(args.viewIndex || 0, Math.max(1, args.viewport.width | 0), Math.max(1, args.viewport.height | 0));
-			const processingConfig = args.processingConfig || {edgeAwareBool: true, surfaceFitBool: false, reconstructionKey: "edgeAware"};
-			let program = null;
-			let locs = null;
-			gl.activeTexture(gl.TEXTURE0);
-			if (args.depthFrameKind === "cpu") {
-				if (!uploadCpuDepthTexture(depthInfo)) {
-					return null;
-				}
-				if (!texture2dProgram) {
-					texture2dProgram = createProgram(gl, vertexSource, texture2dFragmentSource, "Processed depth texture2d");
-					texture2dLocs = buildLocs(texture2dProgram, false);
-				}
-				program = texture2dProgram;
-				locs = texture2dLocs;
-				gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
-			} else if (args.depthFrameKind === "gpu-array" && webgl2Bool && depthInfo.texture) {
-				if (!gpuArrayProgram) {
-					gpuArrayProgram = createProgram(gl, gpuArrayVertexSource, gpuArrayFragmentSource, "Processed depth gpu-array");
-					gpuArrayLocs = buildLocs(gpuArrayProgram, true);
-				}
-				program = gpuArrayProgram;
-				locs = gpuArrayLocs;
-				gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
-			} else if (depthInfo.texture) {
-				if (!texture2dProgram) {
-					texture2dProgram = createProgram(gl, vertexSource, texture2dFragmentSource, "Processed depth texture2d");
-					texture2dLocs = buildLocs(texture2dProgram, false);
-				}
-				program = texture2dProgram;
-				locs = texture2dLocs;
-				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-			} else {
-				return null;
-			}
-			gl.bindFramebuffer(gl.FRAMEBUFFER, targetState.framebuffer);
-			gl.viewport(0, 0, targetState.width, targetState.height);
+			const targetState = ensureProcessedTarget(args.viewIndex || 0, Math.max(1, args.viewport.width | 0), Math.max(1, args.viewport.height | 0));
+			const processingConfig = args.processingConfig || {edgeAwareBool: false, heightmapBool: true, reconstructionKey: "heightmap"};
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
 			gl.disable(gl.BLEND);
-			gl.useProgram(program);
-			gl.uniform1i(locs.sourceDepthTexture, 0);
-			if (locs.sourceDepthLayer) {
-				gl.uniform1i(locs.sourceDepthLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
+			if (processingConfig.heightmapBool) {
+				const surfaceState = ensureSurfaceTargets(args.viewIndex || 0, Math.max(1, depthInfo.width | 0), Math.max(1, depthInfo.height | 0));
+				if (!runRawSmoothPass(args, surfaceState.temp, 1, 0)) {
+					return null;
+				}
+				runNormalizedSmoothPass(surfaceState.temp.texture, surfaceState.temp.width, surfaceState.temp.height, surfaceState.smooth, 0, 1);
+				runHeightmapPass(args, targetState, surfaceState.smooth);
+			} else if (!runDirectPass(args, targetState, processingConfig)) {
+				return null;
 			}
-			gl.uniform2f(locs.sourceTexelSize, depthInfo.width > 0 ? 1 / depthInfo.width : 0, depthInfo.height > 0 ? 1 / depthInfo.height : 0);
-			gl.uniform1f(locs.reconstructionMode, processingConfig.surfaceFitBool ? 2 : (processingConfig.edgeAwareBool ? 1 : 0));
-			gl.uniform1f(locs.rawValueToMeters, args.depthProfile ? args.depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001));
-			gl.uniform1f(locs.depthNearZ, args.depthProfile ? args.depthProfile.nearZ : 0);
-			if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
-				depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
-			} else if (depthInfo.normDepthBufferFromNormView) {
-				depthUvTransform.set(depthInfo.normDepthBufferFromNormView);
-			} else {
-				depthUvTransform.set(identityUvTransform);
-			}
-			gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
-			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-			gl.enableVertexAttribArray(locs.position);
-			gl.vertexAttribPointer(locs.position, 2, gl.FLOAT, false, 0, 0);
-			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			gl.bindFramebuffer(gl.FRAMEBUFFER, args.outputFramebuffer || null);
 			gl.activeTexture(gl.TEXTURE0);
 			return {

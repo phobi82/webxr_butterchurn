@@ -314,7 +314,7 @@ const createPassthroughMenuSectionState = function(args) {
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthReconstruction",
 			label: "Reconstruction",
-			valueText: getMenuModeLabelByKey(uiState.depthReconstructionModes, uiState.selectedDepthReconstructionModeKey, "Edge-aware"),
+			valueText: getMenuModeLabelByKey(uiState.depthReconstructionModes, uiState.selectedDepthReconstructionModeKey, "Heightmap"),
 			hoveredAction: args.hoveredDepthReconstructionAction || ""
 		}));
 		controls.push(createCyclerMenuControlState({
