@@ -33,6 +33,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Heightmap`) and `Distance`/`Echo` modes in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR (only Quest 3 in Quest-Browser for now)
+- experimental WebXR projection-layer rendering with automatic fallback to `XRWebGLLayer`, plus runtime diagnostics that show whether the session is using the compositor-backed projection path or the legacy base-layer path
 - visualizer modes: `Toroidal`, `Skysphere`, `Sky Toroid`
 - audio input from shared display/tab audio, microphone, `YT Synth`, `YT House/Disco`, Suno Live Radio, or synthetic `Debug Audio`
 - separate [`TestLab.html`](./TestLab.html) page for isolated single-effect lighting tests on desktop and in VR
@@ -95,6 +96,26 @@ That launcher:
 - prints the `https://...:8443/` URLs to open from the Quest on the same LAN
 
 If the Quest Browser shows a certificate warning, continue manually once for local development.
+
+### Quest Debugging Over Wi-Fi
+
+For longer Quest debugging sessions, switch `adb` from USB to Wi-Fi after the headset is authorized once over USB.
+
+1. Connect the Quest once over USB and confirm USB debugging on the headset.
+2. Run `adb tcpip 5555`.
+3. Read the Quest Wi-Fi address, for example with `adb shell ip addr show wlan0`.
+4. Connect over Wi-Fi with `adb connect <quest-ip>:5555`.
+5. Verify that `adb devices` lists the Quest on `<quest-ip>:5555`, then unplug USB if needed.
+
+For Quest Browser remote debugging, forward the DevTools socket and inspect the target list:
+
+- `adb forward tcp:9222 localabstract:chrome_devtools_remote`
+- open `http://127.0.0.1:9222/json/list`
+
+Notes:
+
+- Quest Browser page targets can change after reloads or crashes, so refresh `json/list` before attaching again.
+- Remote reload is useful, but `Enter VR` usually still needs a real headset-side user interaction; a remote button click is not a reliable WebXR user gesture on Quest.
 
 ## Audio Sources
 

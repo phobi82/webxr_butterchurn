@@ -100,10 +100,10 @@ Recommended structure order:
 
 - Follow the user's description **literally and precisely**.
 - If there is any relevant ambiguity or uncertainty, ask a focused clarifying question before implementing instead of guessing.
-- Before starting implementation, ask targeted clarifying questions to confirm exactly what the user wants.
-- Follow-up questions must take previous answers into account so the clarification adapts to the current result instead of repeating a fixed checklist.
+- Before starting implementation, **ask targeted clarifying questions to confirm exactly what the user wants**.
+- **Follow-up questions must take previous answers into account so the clarification adapts to the current result** instead of repeating a fixed checklist.
 - Use clarification not only to confirm the request, but also to reveal better, simpler, or safer implementation options when relevant.
-- Prefer at most 1 to 3 focused clarification questions per round.
+- Prefer at 1 to 3 focused clarification questions per round.
 - After each answer, reassess what is still unknown before asking the next question.
 - Stop asking once the remaining uncertainty no longer affects implementation or verification.
 - When working on WebXR movement, prefer small, testable iterations over large rewrites so walking/jumping behavior stays easy to verify against the current baseline.
@@ -122,6 +122,9 @@ Recommended structure order:
 - when Chrome DevTools MCP is available, use it to its full extent for manual verification (console, network, storage, performance, screenshots, viewport/device emulation, and interaction automation as applicable).
 - If required to inspect external web content, prefer Chrome DevTools MCP.
 - When Chrome DevTools MCP opens a blank `about:blank` page alongside the local app page during verification, close the blank page immediately so only the relevant project pages remain open.
+- For longer Quest XR debugging after USB authorization, prefer `adb` over Wi-Fi so the headset can stay on power while the data connection stays available.
+- For Quest Browser remote debugging, forward `tcp:9222` to `localabstract:chrome_devtools_remote` and refresh `http://127.0.0.1:9222/json/list` after reloads or crashes before reattaching.
+- Remote Quest Browser reload is acceptable for debugging, but do not assume a remote-triggered `Enter VR` click will satisfy WebXR user-gesture requirements.
 - To inspect the in-VR menu without changing repository code, prefer a temporary Chrome DevTools script injection that opens the existing `menuCanvas` as a large DOM overlay or refreshes an `img` from `menuCanvas.toDataURL(...)`; use this only for manual verification and reload afterward instead of committing preview-only helpers.
 - When the user wants to judge one specific feature in isolation, prefer a temporary Chrome DevTools script injection that isolates the relevant runtime path in the running page and also sets the relevant runtime conditions as completely as possible; make the active test conditions explicit in the temporary UI or status text so the user can tell what is currently being evaluated, and keep this test harness temporary and restorable by reload instead of committing it.
 - For logic changes, add temporary console diagnostics during development and remove before commit; document manual test steps in the PR.
