@@ -153,6 +153,9 @@ Recommended structure order:
 - Before implementing UI or module changes, decide the target architecture and grouping first, record the work as a detailed task list, and then implement in small verified steps instead of patching isolated examples.
 - Before claiming menu or layout work is done, inspect the actual local menu preview in the browser and verify the affected states visually.
 - Before any Chrome DevTools MCP reload, console check, snapshot, or interaction, verify that the selected page is the real app page and not `about:blank`; if `about:blank` exists, close it or explicitly select the app page first.
+- For local HTTPS debugging, if browser automation is blocked by an untrusted certificate, state that explicitly before drawing conclusions from local page-load attempts.
+- For Quest Browser tab cleanup, never infer the visible tab strip from DevTools target lists, Android task state, or `am force-stop`; verify the visible tabs with a fresh `uiautomator dump` first.
+- Before closing any Quest Browser tab, identify the exact tab label and matching `Tab schließen` bounds from the current UI dump; never close a tab-strip button by guesswork.
 
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.

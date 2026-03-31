@@ -397,36 +397,6 @@ const createDepthProcessingRenderer = function(options) {
 		};
 	};
 	// Keep processed depth off 8-bit targets when the runtime can render into float textures.
-	const canUseRenderTargetConfig = function(config) {
-		if (!config) {
-			return false;
-		}
-		const testTexture = gl.createTexture();
-		const testFramebuffer = gl.createFramebuffer();
-		let completeBool = false;
-		try {
-			gl.bindTexture(gl.TEXTURE_2D, testTexture);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-			gl.texImage2D(gl.TEXTURE_2D, 0, config.internalFormat, 4, 4, 0, config.format, config.type, null);
-			gl.bindFramebuffer(gl.FRAMEBUFFER, testFramebuffer);
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, testTexture, 0);
-			completeBool = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
-		} catch (error) {
-			completeBool = false;
-		}
-		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-		gl.bindTexture(gl.TEXTURE_2D, null);
-		if (testFramebuffer) {
-			gl.deleteFramebuffer(testFramebuffer);
-		}
-		if (testTexture) {
-			gl.deleteTexture(testTexture);
-		}
-		return completeBool;
-	};
 	const selectProcessedTargetConfig = function() {
 		const fallbackConfig = {
 			internalFormat: gl.RGBA,
@@ -435,26 +405,27 @@ const createDepthProcessingRenderer = function(options) {
 			label: "RGBA8"
 		};
 		if (webgl2Bool && gl.getExtension("EXT_color_buffer_float")) {
-			const halfFloatConfig = {
+			return {
 				internalFormat: gl.RGBA16F,
 				format: gl.RGBA,
 				type: gl.HALF_FLOAT,
 				label: "RGBA16F"
 			};
-			if (canUseRenderTargetConfig(halfFloatConfig)) {
-				return halfFloatConfig;
-			}
-			const floatConfig = {
-				internalFormat: gl.RGBA32F,
-				format: gl.RGBA,
-				type: gl.FLOAT,
-				label: "RGBA32F"
-			};
-			if (canUseRenderTargetConfig(floatConfig)) {
-				return floatConfig;
-			}
 		}
 		return fallbackConfig;
+	};
+	const allocateRenderTargetStorage = function(targetConfig, width, height) {
+		gl.texImage2D(
+			gl.TEXTURE_2D,
+			0,
+			targetConfig.internalFormat,
+			width,
+			height,
+			0,
+			targetConfig.format,
+			targetConfig.type,
+			null
+		);
 	};
 	const ensureRenderTarget = function(targetState, width, height) {
 		targetState = targetState || {width: 0, height: 0, texture: null, framebuffer: null};
@@ -474,17 +445,22 @@ const createDepthProcessingRenderer = function(options) {
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		gl.texImage2D(
-			gl.TEXTURE_2D,
-			0,
-			processedTargetConfig.internalFormat,
-			width,
-			height,
-			0,
-			processedTargetConfig.format,
-			processedTargetConfig.type,
-			null
-		);
+		try {
+			allocateRenderTargetStorage(processedTargetConfig, width, height);
+		} catch (error) {
+			if (processedTargetConfig.label !== "RGBA8") {
+				console.warn("[DepthProcessing] render target fallback to RGBA8:", error);
+				processedTargetConfig = {
+					internalFormat: gl.RGBA,
+					format: gl.RGBA,
+					type: gl.UNSIGNED_BYTE,
+					label: "RGBA8"
+				};
+				allocateRenderTargetStorage(processedTargetConfig, width, height);
+			} else {
+				throw error;
+			}
+		}
 		gl.bindFramebuffer(gl.FRAMEBUFFER, targetState.framebuffer);
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetState.texture, 0);
 		return targetState;
