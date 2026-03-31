@@ -1167,7 +1167,7 @@ const createSceneRenderer = function(options) {
 			"}"
 		].join("");
 		const worldCompositeTexture2dFragSource = [
-			"precision mediump float;",
+			"precision highp float;",
 			"uniform sampler2D worldTexture;",
 			"uniform sampler2D depthTexture;",
 			"uniform float depthMode;",
@@ -1220,7 +1220,7 @@ const createSceneRenderer = function(options) {
 		].join("");
 		const worldCompositeGpuArrayFragSource = [
 			"#version 300 es\n",
-			"precision mediump float;",
+			"precision highp float;",
 			"precision mediump sampler2DArray;",
 			"uniform sampler2D worldTexture;",
 			"uniform sampler2DArray depthTexture;",

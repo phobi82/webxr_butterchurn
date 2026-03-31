@@ -1033,7 +1033,7 @@ const createPassthroughOverlayRenderer = function() {
 	].join("");
 
 	const fragmentSource = [
-		"precision mediump float;",
+		"precision highp float;",
 		"uniform float darkAlpha;",
 		"uniform float visibleShare;",
 		"uniform float maskCount;",
@@ -1132,7 +1132,7 @@ const createPassthroughOverlayRenderer = function() {
 		"}"
 	].join("");
 	const depthTexture2dFragmentSource = [
-		"precision mediump float;",
+		"precision highp float;",
 		"uniform float darkAlpha;",
 		"uniform float visibleShare;",
 		"uniform float maskCount;",
@@ -1197,7 +1197,7 @@ const createPassthroughOverlayRenderer = function() {
 	].join("");
 	const depthGpuArrayFragmentSource = [
 		"#version 300 es\n",
-		"precision mediump float;",
+		"precision highp float;",
 		"precision mediump sampler2DArray;",
 		"uniform float darkAlpha;",
 		"uniform float visibleShare;",
@@ -1515,7 +1515,7 @@ const createPunchRenderer = function() {
 
 	// WebGL1 (CPU/gpu-texture) fragment shader
 	const texture2dFragSource = [
-		"precision mediump float;",
+		"precision highp float;",
 		"uniform sampler2D depthTexture;",
 		"uniform float depthMode;",
 		"uniform float depthThreshold;",
@@ -1570,7 +1570,7 @@ const createPunchRenderer = function() {
 	].join("");
 	const gpuArrayFragSource = [
 		"#version 300 es\n",
-		"precision mediump float;",
+		"precision highp float;",
 		"precision mediump sampler2DArray;",
 		"uniform sampler2DArray depthTexture;",
 		"uniform int depthTextureLayer;",
@@ -1617,7 +1617,7 @@ const createPunchRenderer = function() {
 	].join("");
 
 	const flashlightFragSource = [
-		"precision mediump float;",
+		"precision highp float;",
 		"uniform float maskCount;",
 		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
 		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",

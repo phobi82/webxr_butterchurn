@@ -7,10 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-03-31
+
 ### Changed
-- Added an experimental WebXR projection-layer render path with automatic fallback to the previous `XRWebGLLayer` path, so runtimes that expose compositor-backed layers can present the main scene through per-view subimages instead of only the legacy eye-buffer framebuffer.
-- XR session startup now requests `layers` and `space-warp` as optional features when available, tracks whether projection layers became active, and reports the active XR render path in the runtime status text.
 - Documented Quest debugging over Wi-Fi in the README, including `adb tcpip`, DevTools port forwarding, target reattachment after reloads, and the note that remote `Enter VR` clicks are not a reliable Quest WebXR user gesture.
+- Changed the shared processed-depth render targets to prefer float color attachments plus `highp` depth-composite shaders when supported, reducing visible banding in depth-derived modified-reality and passthrough masks on large flat real-world surfaces.
 
 ## [0.8.4] - 2026-03-29
 

@@ -50,7 +50,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-visualizer-modes.js`: visualizer mode catalog
 - `xr-passthrough-modes.js`: background mix, passthrough, and lighting control definitions
 - `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
-- `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and heightmap depth processing
+- `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and heightmap depth processing, preferring float render targets to avoid 8-bit mask banding when the browser supports them
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
 - `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
@@ -205,7 +205,7 @@ The current menu exposes:
 
 ### Depth Reconstruction
 
-The runtime first converts the raw low-resolution WebXR sensor depth into one shared full-resolution processed depth texture per eye/view in `xr-depth-processing.js`. `Raw` keeps the native block structure as a diagnostic baseline, `Edge-aware` reconstructs a denser depth field while resisting depth bleeding across real discontinuities, and `Heightmap` runs a dedicated two-pass smoothing plus spline reconstruction path so larger walls, floors, and tabletops read as smoother continuous gradients instead of stepped blocks.
+The runtime first converts the raw low-resolution WebXR sensor depth into one shared full-resolution processed depth texture per eye/view in `xr-depth-processing.js`. When possible, that processed depth now stays on float render targets instead of being quantized to `RGBA8`, which reduces visible contour banding in the depth-derived modified-reality and passthrough masks. `Raw` keeps the native block structure as a diagnostic baseline, `Edge-aware` reconstructs a denser depth field while resisting depth bleeding across real discontinuities, and `Heightmap` runs a dedicated two-pass smoothing plus spline reconstruction path so larger walls, floors, and tabletops read as smoother continuous gradients instead of stepped blocks.
 
 That processed depth is reused by the passthrough opening, the modified-reality world mask, and the passthrough overlay logic so those paths no longer each sample the low-resolution sensor depth independently.
 
