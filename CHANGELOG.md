@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Declared the repository itself as MIT-licensed and added the matching `LICENSE` file plus README licensing guidance for downstream reuse.
+- Added `THIRD_PARTY_LICENSES.md` so the bundled Butterchurn assets now have an explicit upstream licensing reference inside the repository.
+
 ### Changed
 - Added a `Sound-reactive` checkbox plus a bipolar `Intensity` slider to passthrough `Depth -> Distance`, so the near-depth threshold can now respond to audio with optional inversion.
 - Added one shared bipolar `Intensity` slider for passthrough `Depth -> Echo` whenever any Echo sound-reactive checkbox is active, so the active Echo audio modulation can be scaled or inverted without adding per-checkbox sliders.

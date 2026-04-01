@@ -254,12 +254,13 @@ Parts of this project are derived from or based on Butterchurn, and this reposit
 
 ## License
 
-No license has been declared for this repository itself yet.
+This repository is licensed under the [MIT License](./LICENSE).
 
 Bundled third-party components:
 
 - `butterchurn.min.js` is derived from or based on `jberg/butterchurn` and is covered by the MIT License
 - `butterchurnPresets.min.js` is derived from or based on `jberg/butterchurn-presets`, which is published on GitHub as MIT-licensed
+- bundled third-party licensing details are collected in [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)
 
 If you redistribute or modify the bundled Butterchurn files, keep the upstream copyright and permission notices with them and verify the current upstream license files during release review:
 
