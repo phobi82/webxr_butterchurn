@@ -1128,6 +1128,8 @@ const createSceneRenderer = function(options) {
 				depthPhaseOffset: gl.getUniformLocation(program, "depthPhaseOffset"),
 				rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
 				depthNearZ: gl.getUniformLocation(program, "depthNearZ"),
+				depthMetricMode: gl.getUniformLocation(program, "depthMetricMode"),
+				depthProjectionParams: gl.getUniformLocation(program, "depthProjectionParams"),
 				depthUvTransform: gl.getUniformLocation(program, "depthUvTransform")
 			};
 		};
@@ -1179,6 +1181,8 @@ const createSceneRenderer = function(options) {
 			"uniform float depthPhaseOffset;",
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
+			"uniform float depthMetricMode;",
+			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"varying vec2 vScreenUv;",
 			"float computeDepthVisibility(float depthMeters){",
@@ -1199,13 +1203,19 @@ const createSceneRenderer = function(options) {
 			"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 			"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
 			"}",
+			"float resolveDepthMetric(float depthMeters){",
+			"if(depthMetricMode<0.5){return depthMeters;}",
+			"vec2 ndc=vScreenUv*2.0-1.0;",
+			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
+			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
+			"}",
 			"void main(){",
 			"vec4 worldColor=texture2D(worldTexture,vScreenUv);",
 			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture2D(depthTexture,depthUv).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
-			"float visibility=valid>0.0?computeDepthVisibility(depthMeters):1.0;",
+			"float visibility=valid>0.0?computeDepthVisibility(resolveDepthMetric(depthMeters)):1.0;",
 			"gl_FragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
 			"}"
 		].join("");
@@ -1234,6 +1244,8 @@ const createSceneRenderer = function(options) {
 			"uniform float depthPhaseOffset;",
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
+			"uniform float depthMetricMode;",
+			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"in vec2 vScreenUv;",
 			"out vec4 fragColor;",
@@ -1255,13 +1267,19 @@ const createSceneRenderer = function(options) {
 			"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 			"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
 			"}",
+			"float resolveDepthMetric(float depthMeters){",
+			"if(depthMetricMode<0.5){return depthMeters;}",
+			"vec2 ndc=vScreenUv*2.0-1.0;",
+			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
+			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
+			"}",
 			"void main(){",
 			"vec4 worldColor=texture(worldTexture,vScreenUv);",
 			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
-			"float visibility=valid>0.0?computeDepthVisibility(depthMeters):1.0;",
+			"float visibility=valid>0.0?computeDepthVisibility(resolveDepthMetric(depthMeters)):1.0;",
 			"fragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
 			"}"
 		].join("");
@@ -1358,6 +1376,14 @@ const createSceneRenderer = function(options) {
 				gl.uniform1f(locs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
 				gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 				gl.uniform1f(locs.depthNearZ, profile.nearZ);
+				gl.uniform1f(locs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
+				gl.uniform4f(
+					locs.depthProjectionParams,
+					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xScale : 1,
+					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.yScale : 1,
+					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xOffset : 0,
+					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.yOffset : 0
+				);
 				if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
 					depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
 				} else if (depthInfo.normDepthBufferFromNormView) {
@@ -1425,6 +1451,7 @@ const createSceneRenderer = function(options) {
 			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
 				viewMatrix: passthroughViewMatrix,
 				projMatrix: passthroughProjMatrix,
+				depthProjMatrix: currentProj,
 				controllerRays: controllerRays,
 				sceneLightingState: sceneLightingState,
 				depthInfo: args.rawPassthroughDepthInfo || null
@@ -1586,17 +1613,20 @@ const createSceneRenderer = function(options) {
 				args.rawPassthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[i] ? args.passthroughDepthInfoByView[i] : null;
 				args.outputFramebuffer = args.baseLayer.framebuffer;
 				args.targetViewport = viewport;
-				args.processedDepthInfo = processedDepthRenderer && args.rawPassthroughDepthInfo ? processedDepthRenderer.process({
+				const depthProcessingConfig = args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : null;
+				args.processedDepthInfo = processedDepthRenderer && args.rawPassthroughDepthInfo && depthProcessingConfig ? processedDepthRenderer.process({
 					viewIndex: i,
 					viewport: viewport,
 					depthInfo: args.rawPassthroughDepthInfo,
 					depthFrameKind: args.depthFrameKind || "",
 					depthProfile: args.depthProfile,
-					processingConfig: args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : {reconstructionKey: "heightmap", edgeAwareBool: false, heightmapBool: true},
+					processingConfig: depthProcessingConfig,
 					outputFramebuffer: args.baseLayer.framebuffer
 				}) : null;
 				args.processedDepthFrameKind = args.processedDepthInfo ? "gpu-texture" : "";
 				args.processedDepthProfile = args.processedDepthInfo ? {linearScale: args.processedDepthInfo.rawValueToMeters || 16, nearZ: 0} : null;
+				gl.bindFramebuffer(gl.FRAMEBUFFER, args.baseLayer.framebuffer);
+				gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 				if (args.visualizerEngine) {
 					args.visualizerEngine.setRenderView(currentView, currentProj);
 				}

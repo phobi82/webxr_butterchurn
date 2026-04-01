@@ -105,7 +105,7 @@ const getPassthroughControlDefinitions = function(state) {
 			);
 			echoReactiveControls.push(
 				{key: "depthEchoPhaseReactive", label: "Phase", checkedBool: !!state.depthEchoPhaseReactiveBool},
-				{key: "depthEchoDutyCycleReactive", label: "Duty", checkedBool: !!state.depthEchoDutyCycleReactiveBool}
+				{key: "depthEchoDutyCycleReactive", label: "DutyCycle", checkedBool: !!state.depthEchoDutyCycleReactiveBool}
 			);
 		} else {
 			controls.push(

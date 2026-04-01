@@ -503,6 +503,7 @@ const createPassthroughController = function(options) {
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.15 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
 		depthModeKey: options.initialDepthModeKey || "distance",
+		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
 		depthDistanceMrRetain: 0.3,
@@ -531,6 +532,16 @@ const createPassthroughController = function(options) {
 
 	const getDepthMrRetainForMode = function(depthModeKey) {
 		return depthModeKey === "echo" ? state.depthEchoMrRetain : state.depthDistanceMrRetain;
+	};
+
+	const buildDepthProjectionParams = function(projMatrix) {
+		const rayParams = extractProjectionRayParams(projMatrix);
+		return {
+			xScale: rayParams.xScale,
+			yScale: rayParams.yScale,
+			xOffset: rayParams.xOffset,
+			yOffset: rayParams.yOffset
+		};
 	};
 
 	state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
@@ -574,15 +585,13 @@ const createPassthroughController = function(options) {
 			depthEchoDutyCycle: effectiveDutyCycle,
 			depthEchoFade: effectiveFade,
 			depthPhaseOffset: effectivePhase,
-			depthMrRetain: state.depthMrRetain
+			depthMrRetain: state.depthMrRetain,
+			depthRadialBool: state.depthRadialBool
 		};
 	};
 
-	const buildDepthRenderState = function() {
-		if (state.depthModeKey === "echo") {
-			return getEffectiveEchoDepthState();
-		}
-		return {
+	const buildDepthRenderState = function(args) {
+		const baseState = state.depthModeKey === "echo" ? getEffectiveEchoDepthState() : {
 			depthMode: getDepthModeFloat(state.depthModeKey),
 			depthThreshold: state.depthThreshold,
 			depthFade: state.depthFade,
@@ -590,8 +599,11 @@ const createPassthroughController = function(options) {
 			depthEchoDutyCycle: state.depthEchoDutyCycle,
 			depthEchoFade: state.depthEchoFade,
 			depthPhaseOffset: wrapEchoPhase(state.depthEchoPhase + state.depthEchoPhaseOffset, state.depthEchoWavelength),
-			depthMrRetain: state.depthMrRetain
+			depthMrRetain: state.depthMrRetain,
+			depthRadialBool: state.depthRadialBool
 		};
+		baseState.depthProjectionParams = buildDepthProjectionParams(args && (args.depthProjMatrix || args.projMatrix));
+		return baseState;
 	};
 
 	const getFlashlightMasks = function(args) {
@@ -782,6 +794,7 @@ const createPassthroughController = function(options) {
 				backgroundControls: bgControlState.controls || [],
 				flashlightActiveBool: state.flashlightActiveBool,
 				depthActiveBool: state.depthActiveBool,
+				depthRadialBool: state.depthRadialBool,
 				depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
 				selectedDepthReconstructionModeKey: state.depthReconstructionModeKey,
 				depthModes: passthroughDepthModeDefinitions,
@@ -801,6 +814,7 @@ const createPassthroughController = function(options) {
 		},
 		toggleFlashlight: function() { state.flashlightActiveBool = !state.flashlightActiveBool; },
 		toggleDepth: function() { state.depthActiveBool = !state.depthActiveBool; },
+		toggleDepthRadial: function() { state.depthRadialBool = !state.depthRadialBool; },
 		cycleDepthReconstructionMode: function(direction) {
 			state.depthReconstructionModeKey = cycleModeKey(passthroughDepthReconstructionModeDefinitions, state.depthReconstructionModeKey, direction < 0 ? -1 : 1);
 		},
@@ -809,6 +823,9 @@ const createPassthroughController = function(options) {
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 		},
 		getDepthProcessingConfig: function() {
+			if (!state.depthActiveBool) {
+				return null;
+			}
 			return {
 				reconstructionKey: state.depthReconstructionModeKey,
 				edgeAwareBool: state.depthReconstructionModeKey === "edgeAware",
@@ -931,8 +948,8 @@ const createPassthroughController = function(options) {
 			var flashlight = null;
 			var worldMask = null;
 			if (state.depthActiveBool) {
-				depth = buildDepthRenderState();
-				worldMask = buildDepthRenderState();
+				depth = buildDepthRenderState(args);
+				worldMask = buildDepthRenderState(args);
 			}
 			if (state.flashlightActiveBool) {
 				var masks = getFlashlightMasks(args || {});
@@ -961,7 +978,7 @@ const createPassthroughController = function(options) {
 				visibleShare: visibleShare,
 				maskCount: 0,
 				masks: [],
-				depth: state.depthActiveBool ? buildDepthRenderState() : null,
+				depth: state.depthActiveBool ? buildDepthRenderState(args) : null,
 				darkAlpha: 1 - darkness,
 				additiveColor: lightingColor,
 				additiveStrength: additiveStrength,
@@ -1118,6 +1135,14 @@ const createPassthroughOverlayRenderer = function() {
 		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
 		"}",
+		"float resolveDepthMetric(float depthMeters){",
+		"if(depthMetricMode<0.5){",
+		"return depthMeters;",
+		"}",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
+		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
+		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
+		"}",
 		"float computeDepthRetainShare(float baseVisibleShare){",
 		"if(depthMrRetain<=0.0001){",
 		"return baseVisibleShare;",
@@ -1126,7 +1151,7 @@ const createPassthroughOverlayRenderer = function() {
 		"float rawDepth=sampleDepth(depthUv);",
 		"float valid=step(0.001,rawDepth);",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
-		"float mask=computeDepthMask(depthMeters);",
+		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
 		"float localRetain=depthMrRetain*(1.0-mask)*valid;",
 		"return max(baseVisibleShare,localRetain);",
 		"}"
@@ -1159,6 +1184,8 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
+		"uniform float depthMetricMode;",
+		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){float radius=max(params.x,0.0001);float softness=max(params.y,0.0001);float inner=max(0.0,radius-softness);return 1.0-smoothstep(inner,radius,distance(uv,center));}",
@@ -1226,6 +1253,8 @@ const createPassthroughOverlayRenderer = function() {
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
+		"uniform float depthMetricMode;",
+		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"in vec2 vScreenUv;",
 		"out vec4 fragColor;",
@@ -1284,6 +1313,8 @@ const createPassthroughOverlayRenderer = function() {
 			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(targetProgram, "depthNearZ"),
+			depthMetricMode: gl.getUniformLocation(targetProgram, "depthMetricMode"),
+			depthProjectionParams: gl.getUniformLocation(targetProgram, "depthProjectionParams"),
 			depthUvTransform: gl.getUniformLocation(targetProgram, "depthUvTransform")
 		};
 	};
@@ -1467,6 +1498,14 @@ const createPassthroughOverlayRenderer = function() {
 				gl.uniform1f(activeLocs.depthMrRetain, renderState.depth.depthMrRetain || 0);
 				gl.uniform1f(activeLocs.rawValueToMeters, depthProfile && depthInfo ? (depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001)) : (depthInfo && depthInfo.rawValueToMeters || 0.001));
 				gl.uniform1f(activeLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
+				gl.uniform1f(activeLocs.depthMetricMode, renderState.depth.depthRadialBool ? 1 : 0);
+				gl.uniform4f(
+					activeLocs.depthProjectionParams,
+					renderState.depth.depthProjectionParams ? renderState.depth.depthProjectionParams.xScale : 1,
+					renderState.depth.depthProjectionParams ? renderState.depth.depthProjectionParams.yScale : 1,
+					renderState.depth.depthProjectionParams ? renderState.depth.depthProjectionParams.xOffset : 0,
+					renderState.depth.depthProjectionParams ? renderState.depth.depthProjectionParams.yOffset : 0
+				);
 				gl.activeTexture(gl.TEXTURE1);
 				if (cpuTextureBoundBool) {
 					// already bound above
@@ -1527,6 +1566,8 @@ const createPunchRenderer = function() {
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
+		"uniform float depthMetricMode;",
+		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
 		"float computeDepthMask(float depthMeters){",
@@ -1547,12 +1588,18 @@ const createPunchRenderer = function() {
 		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
 		"}",
+		"float resolveDepthMetric(float depthMeters){",
+		"if(depthMetricMode<0.5){return depthMeters;}",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
+		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
+		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
+		"}",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture2D(depthTexture,depthUv).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
-		"float mask=computeDepthMask(depthMeters);",
+		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
 		"float punchMask=mix(1.0,mask,valid);",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -1584,6 +1631,8 @@ const createPunchRenderer = function() {
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
+		"uniform float depthMetricMode;",
+		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"in vec2 vScreenUv;",
 		"out vec4 fragColor;",
@@ -1605,12 +1654,18 @@ const createPunchRenderer = function() {
 		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
 		"}",
+		"float resolveDepthMetric(float depthMeters){",
+		"if(depthMetricMode<0.5){return depthMeters;}",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
+		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
+		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
+		"}",
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
-		"float mask=computeDepthMask(depthMeters);",
+		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
 		"float punchMask=mix(1.0,mask,valid);",
 		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -1650,6 +1705,8 @@ const createPunchRenderer = function() {
 			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
+			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
+			depthProjectionParams: gl.getUniformLocation(prog, "depthProjectionParams"),
 			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
 		};
 	};
@@ -1764,6 +1821,14 @@ const createPunchRenderer = function() {
 		gl.uniform1f(locs.depthMrRetain, punchState.depthMrRetain || 0);
 		gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 		gl.uniform1f(locs.depthNearZ, profile.nearZ);
+		gl.uniform1f(locs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
+		gl.uniform4f(
+			locs.depthProjectionParams,
+			punchState.depthProjectionParams ? punchState.depthProjectionParams.xScale : 1,
+			punchState.depthProjectionParams ? punchState.depthProjectionParams.yScale : 1,
+			punchState.depthProjectionParams ? punchState.depthProjectionParams.xOffset : 0,
+			punchState.depthProjectionParams ? punchState.depthProjectionParams.yOffset : 0
+		);
 		if (depthInfo.normDepthBufferFromNormView && depthInfo.normDepthBufferFromNormView.matrix) {
 			depthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
 		} else if (depthInfo.normDepthBufferFromNormView) {

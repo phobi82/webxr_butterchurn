@@ -30,7 +30,7 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - audio-reactive floor colors and shared scene lighting
 - lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - background mix modes: `manual`, `sound-reactive`
-- passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Heightmap`) and `Distance`/`Echo` modes in immersive AR
+- passthrough controls: `Flashlight` plus optional `Depth` with shared full-resolution `Reconstruction` (`Raw`, `Edge-aware`, `Heightmap`), a `Radial` toggle for equal-range depth masking, and `Distance`/`Echo` modes in immersive AR
 - passthrough lighting modes: `None`, `Uniform`, `Spots`, `Club`
 - optional WebXR depth sensing for depth-aware passthrough lighting and depth punch controls in immersive AR (only Quest 3 in Quest-Browser for now)
 - experimental WebXR projection-layer rendering with automatic fallback to `XRWebGLLayer`, plus runtime diagnostics that show whether the session is using the compositor-backed projection path or the legacy base-layer path
