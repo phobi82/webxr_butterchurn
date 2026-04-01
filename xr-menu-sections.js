@@ -311,6 +311,13 @@ const createPassthroughMenuSectionState = function(args) {
 		}));
 	}
 	if (uiState.usableDepthAvailableBool && uiState.depthActiveBool) {
+		controls.push(createCheckboxMenuControlState({
+			key: "passthroughDepthRadialToggle",
+			label: "real Distance Metric",
+			valueText: uiState.depthRadialBool ? "radial" : "planar",
+			checkedBool: !!uiState.depthRadialBool,
+			hoveredBool: args.hoveredPassthroughToggle === "depthRadial"
+		}));
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthReconstruction",
 			label: "Reconstruction",

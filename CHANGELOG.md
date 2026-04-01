@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-04-01
+
+### Changed
+- Added a `Radial` checkbox under the passthrough `Depth` controls, so depth masking can switch between the WebXR camera-plane depth metric and a reconstructed equal-range radial distance metric without changing the existing default behavior.
+
+### Fixed
+- Restored the immersive-AR per-eye viewport after processed-depth reconstruction and skipped processed-depth work entirely when `Depth` is off, fixing the depth-toggle regression where one eye could show a warped VR image while the other still showed passthrough.
+
 ## [0.8.5] - 2026-03-31
 
 ### Changed

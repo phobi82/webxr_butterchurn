@@ -161,6 +161,15 @@ const extractProjectionFov = function(projectionMatrix) {
 	};
 };
 
+const extractProjectionRayParams = function(projectionMatrix) {
+	return {
+		xScale: projectionMatrix && Math.abs(projectionMatrix[0] || 0) > 0.0001 ? projectionMatrix[0] : 1,
+		yScale: projectionMatrix && Math.abs(projectionMatrix[5] || 0) > 0.0001 ? projectionMatrix[5] : 1,
+		xOffset: projectionMatrix ? (projectionMatrix[8] || 0) : 0,
+		yOffset: projectionMatrix ? (projectionMatrix[9] || 0) : 0
+	};
+};
+
 // pre-allocated to avoid per-frame garbage in hot paths
 const reusableCameraPosition = {x: 0, y: 0, z: 0};
 const extractCameraPositionFromViewMatrix = function(viewMatrix) {
