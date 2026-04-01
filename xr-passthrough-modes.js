@@ -87,7 +87,9 @@ const getBackgroundControlDefinitions = function(state) {
 
 const getPassthroughControlDefinitions = function(state) {
 	var controls = [];
+	var distanceReactiveControl = null;
 	var echoReactiveControls = [];
+	var echoReactiveIntensityVisibleBool = false;
 	if (state.flashlightActiveBool) {
 		controls.push(
 			{key: "flashlightRadius", label: "Radius", value: state.flashlightRadius, min: 0.05, max: 0.45, minLabel: "Tight", maxLabel: "Wide"},
@@ -107,7 +109,43 @@ const getPassthroughControlDefinitions = function(state) {
 				{key: "depthEchoPhaseReactive", label: "Phase", checkedBool: !!state.depthEchoPhaseReactiveBool},
 				{key: "depthEchoDutyCycleReactive", label: "DutyCycle", checkedBool: !!state.depthEchoDutyCycleReactiveBool}
 			);
+			echoReactiveIntensityVisibleBool = !!(
+				state.depthEchoPhaseReactiveBool ||
+				state.depthEchoPhaseSpeedReactiveBool ||
+				state.depthEchoWavelengthReactiveBool ||
+				state.depthEchoDutyCycleReactiveBool ||
+				state.depthEchoFadeReactiveBool
+			);
+			if (echoReactiveIntensityVisibleBool) {
+				controls.push({
+					key: "depthEchoReactiveIntensity",
+					label: "Intensity",
+					value: state.depthEchoReactiveIntensity,
+					min: -1,
+					max: 1,
+					minLabel: "-100%",
+					maxLabel: "100%",
+					valueText: Math.round(state.depthEchoReactiveIntensity * 100) + "%"
+				});
+			}
 		} else {
+			distanceReactiveControl = {
+				key: "depthDistanceReactiveToggle",
+				label: "Sound-reactive",
+				checkedBool: !!state.depthDistanceReactiveBool
+			};
+			if (state.depthDistanceReactiveBool) {
+				controls.push({
+					key: "depthDistanceReactiveIntensity",
+					label: "Intensity",
+					value: state.depthDistanceReactiveIntensity,
+					min: -1,
+					max: 1,
+					minLabel: "-100%",
+					maxLabel: "100%",
+					valueText: Math.round(state.depthDistanceReactiveIntensity * 100) + "%"
+				});
+			}
 			controls.push(
 				{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 8, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(2) + "m"},
 				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
@@ -117,7 +155,12 @@ const getPassthroughControlDefinitions = function(state) {
 			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
 		);
 	}
-	return {controls: controls, echoReactiveControls: echoReactiveControls};
+	return {
+		controls: controls,
+		distanceReactiveControl: distanceReactiveControl,
+		echoReactiveControls: echoReactiveControls,
+		echoReactiveIntensityVisibleBool: echoReactiveIntensityVisibleBool
+	};
 };
 
 const getPassthroughLightingControlDefinitions = function(state) {

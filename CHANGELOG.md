@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Added a `Sound-reactive` checkbox plus a bipolar `Intensity` slider to passthrough `Depth -> Distance`, so the near-depth threshold can now respond to audio with optional inversion.
+- Added one shared bipolar `Intensity` slider for passthrough `Depth -> Echo` whenever any Echo sound-reactive checkbox is active, so the active Echo audio modulation can be scaled or inverted without adding per-checkbox sliders.
+
 ## [0.8.6] - 2026-04-01
 
 ### Changed

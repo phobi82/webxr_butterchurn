@@ -695,6 +695,9 @@ const createMenuController = function(options) {
 			selectedDepthModeKey: "distance",
 			usableDepthAvailableBool: false,
 			passthroughControls: [],
+			distanceReactiveControl: null,
+			echoReactiveControls: [],
+			echoReactiveIntensityVisibleBool: false,
 			lightingModes: passthroughLightingModeDefinitions,
 			selectedLightingModeKey: "uniform",
 			lightingControls: [],
@@ -966,7 +969,8 @@ const createMenuController = function(options) {
 		state.hoveredPassthroughToggle =
 			hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 			(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" :
-			(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" : ""));
+			(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" :
+			(hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" ? "depthDistanceReactive" : "")));
 		state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : "";
 		state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : "";
@@ -1072,7 +1076,8 @@ const createMenuController = function(options) {
 				state.hoveredPassthroughToggle =
 					hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
 					(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" :
-					(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" : state.hoveredPassthroughToggle));
+					(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" :
+					(hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" ? "depthDistanceReactive" : state.hoveredPassthroughToggle)));
 				state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : state.hoveredPassthroughDepthReconstructionAction;
 				state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : state.hoveredPassthroughDepthModeAction;
 				state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : state.hoveredPassthroughEchoReactiveControlKey;
@@ -1266,6 +1271,9 @@ const createMenuController = function(options) {
 			if (hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" && passthroughController && passthroughController.toggleDepthRadial) {
 				passthroughController.toggleDepthRadial();
 			}
+			if (hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" && passthroughController && passthroughController.toggleDepthDistanceReactive) {
+				passthroughController.toggleDepthDistanceReactive();
+			}
 			if (hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
 				passthroughController.cycleDepthReconstructionMode(hit.moduleCycleAction === "prev" ? -1 : 1);
 			}
@@ -1425,6 +1433,9 @@ const createMenuController = function(options) {
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" && passthroughController && passthroughController.toggleDepthRadial) {
 					passthroughController.toggleDepthRadial();
+				}
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" && passthroughController && passthroughController.toggleDepthDistanceReactive) {
+					passthroughController.toggleDepthDistanceReactive();
 				}
 				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
 					passthroughController.cycleDepthReconstructionMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);

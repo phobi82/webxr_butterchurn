@@ -345,6 +345,9 @@ const createPassthroughMenuSectionState = function(args) {
 				};
 			})
 		}));
+		if (uiState.echoReactiveIntensityVisibleBool) {
+			appendDepthSliderControlByKey("depthEchoReactiveIntensity");
+		}
 		appendDepthSliderControlByKey("depthEchoPhase");
 		appendDepthSliderControlByKey("depthEchoPhaseSpeed");
 		appendDepthSliderControlByKey("depthEchoWavelength");
@@ -352,7 +355,21 @@ const createPassthroughMenuSectionState = function(args) {
 		appendDepthSliderControlByKey("depthEchoFade");
 		appendDepthSliderControlByKey("depthMrRetain");
 	} else {
-		appendSliderMenuControls(controls, depthSliderControls);
+		if (uiState.depthActiveBool && uiState.selectedDepthModeKey === "distance" && uiState.distanceReactiveControl) {
+			controls.push(createCheckboxMenuControlState({
+				key: "depthDistanceReactiveToggle",
+				label: uiState.distanceReactiveControl.label || "Sound-reactive",
+				valueText: uiState.distanceReactiveControl.checkedBool ? "On" : "Off",
+				checkedBool: !!uiState.distanceReactiveControl.checkedBool,
+				hoveredBool: args.hoveredPassthroughToggle === "depthDistanceReactive"
+			}));
+			appendDepthSliderControlByKey("depthDistanceReactiveIntensity");
+			appendDepthSliderControlByKey("depthThreshold");
+			appendDepthSliderControlByKey("depthFade");
+			appendDepthSliderControlByKey("depthMrRetain");
+		} else {
+			appendSliderMenuControls(controls, depthSliderControls);
+		}
 	}
 	return createMenuSectionState({
 		key: "passthrough",

@@ -176,8 +176,8 @@ The current menu exposes:
   - `Flashlight` toggle with `Radius` and `Softness`
   - when usable depth data exists: `Depth` toggle, then a `Reconstruction` cycler and a `Depth Mode` cycler
   - `Reconstruction`: `Raw`, `Edge-aware`, `Heightmap` (default)
-  - `Distance`: `Distance`, `Fade`, `MR Blend`
-  - `Echo`: `Sound-reactive` row for `Phase` and `Duty`, then `Phase`, `Phase-Speed`, `Wavelength`, `DutyCycle`, `Fade`, `MR Blend`
+  - `Distance`: `Sound-reactive`, optional bipolar `Intensity`, `Distance`, `Fade`, `MR Blend`
+  - `Echo`: `Sound-reactive` row for `Phase` and `DutyCycle`, shared optional bipolar `Intensity`, then `Phase`, `Phase-Speed`, `Wavelength`, `DutyCycle`, `Fade`, `MR Blend`
   - in `Echo`, the modified-reality/passthrough bands and the VR-world masking do not use the same blend rule: passthrough still follows the depth band mask, while the VR world stays proportionally present according to `MR Blend`
 - `Scene Lighting` section:
   - `Lighting Mode` cycler: `None`, `Uniform`, `Spots`, `Club`
@@ -211,11 +211,11 @@ That processed depth is reused by the passthrough opening, the modified-reality 
 
 ### Depth Mode: Distance
 
-`Distance` is the direct near-depth cutout mode. Geometry closer than the configured `Distance` is opened toward passthrough, `Fade` softens that edge in meters, and `MR Blend` controls how much modified reality remains in the opened region instead of switching to pure passthrough immediately.
+`Distance` is the direct near-depth cutout mode. Geometry closer than the configured `Distance` is opened toward passthrough, `Fade` softens that edge in meters, and `MR Blend` controls how much modified reality remains in the opened region instead of switching to pure passthrough immediately. An optional `Sound-reactive` toggle can modulate the depth distance threshold, and its bipolar `Intensity` slider controls both strength and inversion of that modulation.
 
 ### Depth Mode: Echo
 
-`Echo` creates repeating depth bands that alternate between passthrough-heavy and modified-reality-heavy regions. It supports a manual phase offset, a moving phase, and selective sound-reactivity for the `Phase` and `DutyCycle` controls.
+`Echo` creates repeating depth bands that alternate between passthrough-heavy and modified-reality-heavy regions. It supports a manual phase offset, a moving phase, and selective sound-reactivity for the `Phase` and `DutyCycle` controls. When any Echo sound-reactive checkbox is active, one shared bipolar `Intensity` slider scales or inverts the active Echo modulation.
 
 | Parameter | Meaning |
 |---|---|
