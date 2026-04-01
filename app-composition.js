@@ -114,7 +114,10 @@ const createApp = function(projectConfig) {
 		passthrough: Object.assign({}, appConfig.passthrough, projectConfig.passthrough || {}),
 		lighting: Object.assign({}, appConfig.lighting, projectConfig.lighting || {}),
 		runtime: Object.assign({}, appConfig.runtime, projectConfig.runtime || {}),
-		scene: Object.assign({}, appConfig.scene, projectConfig.scene || {})
+		scene: Object.assign({}, appConfig.scene, projectConfig.scene || {}),
+		renderPolicy: Object.assign({
+			visualizerBackgroundEnabledBool: true
+		}, projectConfig.renderPolicy || {})
 	};
 	let assetStoreRef = null;
 	const menuViewFactory = projectConfig.createMenuView || createMenuView;
@@ -200,16 +203,15 @@ const createApp = function(projectConfig) {
 			});
 			return assetStoreRef;
 		},
-		createVisualizerEngine: function(gl) {
-			const engine = createVisualizerEngine({
-				createSourceBackend: function() {
-					return createButterchurnSource({windowRef: window, documentRef: document});
-				},
+		createVisualizerSourceBackend: function() {
+			return createButterchurnSource({windowRef: window, documentRef: document});
+		},
+		createVisualizerEngine: function() {
+			return createVisualizerEngine({
 				modes: visualizerModeDefinitions
 			});
-			engine.init({gl: gl});
-			return engine;
 		},
+		renderPolicy: config.renderPolicy,
 		sceneGlbAssets: config.scene.sceneGlbAssets,
 		inputConfig: config.runtime,
 		tabSources: {

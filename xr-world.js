@@ -1423,6 +1423,7 @@ const createSceneRenderer = function(options) {
 		const menuController = args.menuController || emptyMenuController;
 		const menuState = menuController.getState();
 		const passthroughController = args.passthroughController || null;
+		const visualizerBackgroundEnabledBool = args.visualizerBackgroundEnabledBool !== false;
 		const controllerRays = menuController.getControllerRays();
 		const sceneLightingState = args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null;
 		const passthroughViewMatrix = args.passthroughViewMatrix || currentView;
@@ -1434,10 +1435,10 @@ const createSceneRenderer = function(options) {
 		}) : null;
 		const worldMaskActiveBool = !!(worldMaskCompositeRenderer && punchState && punchState.worldMask && args.processedDepthInfo && (args.transparentBackgroundBool || args.passthroughFallbackBool));
 		// Layer 1: Visualizer Background
-		if (args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
+		if (visualizerBackgroundEnabledBool && args.visualizerEngine && passthroughController && passthroughController.getBackgroundCompositeState) {
 			applyVisualizerBackgroundComposite(args.visualizerEngine, passthroughController.getBackgroundCompositeState());
 		}
-		if (args.visualizerEngine) {
+		if (visualizerBackgroundEnabledBool && args.visualizerEngine) {
 			if (worldMaskActiveBool) {
 				drawDepthMaskedLayer(args, punchState.worldMask, function() {
 					args.visualizerEngine.drawPreScene();

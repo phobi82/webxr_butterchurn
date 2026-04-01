@@ -56,10 +56,14 @@ const createRuntime = function(options) {
 	const sceneRenderer = options.sceneRenderer;
 	const sceneLighting = options.sceneLighting;
 	const createGlbAssetStore = options.createGlbAssetStore;
+	const createVisualizerSourceBackend = options.createVisualizerSourceBackend;
 	const createVisualizerEngine = options.createVisualizerEngine;
 	const getFloorColors = options.getReactiveFloorColors || null;
 	const sceneGlbAssets = options.sceneGlbAssets || [];
 	const inputConfig = options.inputConfig || {};
+	const renderPolicy = Object.assign({
+		visualizerBackgroundEnabledBool: true
+	}, options.renderPolicy || {});
 	const tabSources = options.tabSources || {};
 	const runtimeEventRegistry = createEventListenerRegistry();
 	const xrMovementState = locomotion.createXrState();
@@ -97,6 +101,7 @@ const createRuntime = function(options) {
 		previewLastRenderTime: 0,
 		sceneTimeSeconds: 0,
 		glbAssetStore: null,
+		visualizerSourceBackend: null,
 		visualizerEngine: null
 	};
 	const desktopInput = createDesktopInput({
@@ -111,7 +116,7 @@ const createRuntime = function(options) {
 		}
 	});
 	const getAudioMetrics = function() {
-		return state.visualizerEngine && state.visualizerEngine.getAudioMetrics ? state.visualizerEngine.getAudioMetrics() : emptyAudioMetrics;
+		return state.visualizerSourceBackend && state.visualizerSourceBackend.getAudioMetrics ? state.visualizerSourceBackend.getAudioMetrics() : emptyAudioMetrics;
 	};
 	const getVisualizerSelectionState = function() {
 		return state.visualizerEngine && state.visualizerEngine.getSelectionState ? state.visualizerEngine.getSelectionState() : null;
@@ -188,29 +193,6 @@ const createRuntime = function(options) {
 			environmentBlendMode: state.xrEnvironmentBlendMode
 		});
 	};
-	const cycleSelection = function(controller, getSelectionState, namesKey, indexKey, selectFn, direction) {
-		if (!controller) {
-			return;
-		}
-		const selectionState = getSelectionState();
-		const count = selectionState ? selectionState[namesKey].length : 0;
-		if (!count) {
-			return;
-		}
-		selectFn.call(controller, (selectionState[indexKey] + direction + count) % count);
-	};
-	const cyclePreset = function(direction) {
-		cycleSelection(state.visualizerEngine, getVisualizerSelectionState, "presetNames", "currentPresetIndex", function(i) { this.selectPreset(i); }, direction);
-	};
-	const cycleShaderMode = function(direction) {
-		cycleSelection(state.visualizerEngine, getVisualizerSelectionState, "modeNames", "currentModeIndex", function(i) { this.selectMode(i); }, direction);
-	};
-	const toggleHorizontalMirror = function() {
-		if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
-			return Promise.resolve();
-		}
-		return state.visualizerEngine.toggleHorizontalMirror();
-	};
 	const cycleLightingPreset = function(direction) {
 		if (!sceneLighting || !sceneLighting.selectPreset) {
 			return Promise.resolve();
@@ -234,40 +216,118 @@ const createRuntime = function(options) {
 		}
 		return sceneLighting.cycleVariant(direction < 0 ? -1 : 1);
 	};
-	const xrMenuActionCallbacks = {
-		onShaderModeAction: cycleShaderMode,
-		onHorizontalMirrorToggle: toggleHorizontalMirror,
-		onLightPresetAction: cycleLightingEffect,
-		onLightPresetVariantAction: cycleLightingVariant,
-		onEffectSemanticModeAction: function(direction) {
-			const semanticState = getEffectSemanticModeState();
-			const currentIndex = semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 1 : (semanticState.key === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 2 : 0);
-			const nextIndex = (currentIndex + (direction < 0 ? -1 : 1) + passthroughEffectSemanticModeDefinitions.length) % passthroughEffectSemanticModeDefinitions.length;
-			if (passthroughController && passthroughController.selectEffectSemanticMode) {
-				passthroughController.selectEffectSemanticMode(passthroughEffectSemanticModeDefinitions[nextIndex].key);
+	const getMenuActionHandlers = function() {
+		return {
+			"session.exit": function() {
+				if (state.xrSession) {
+					state.xrSession.end();
+				}
+			},
+			"jumpMode.set": function(action) {
+				if (action && menuController && menuController.setJumpMode) {
+					menuController.setJumpMode(action.mode);
+				}
+			},
+			"backgroundMixMode.select": function(action) {
+				if (action && passthroughController && passthroughController.selectMixMode) {
+					passthroughController.selectMixMode(action.key);
+				}
+			},
+			"passthroughFlashlight.toggle": function() {
+				if (passthroughController && passthroughController.toggleFlashlight) {
+					passthroughController.toggleFlashlight();
+				}
+			},
+			"passthroughDepth.toggle": function() {
+				if (passthroughController && passthroughController.toggleDepth) {
+					passthroughController.toggleDepth();
+				}
+			},
+			"passthroughDepthRadial.toggle": function() {
+				if (passthroughController && passthroughController.toggleDepthRadial) {
+					passthroughController.toggleDepthRadial();
+				}
+			},
+			"passthroughDepthReconstruction.cycle": function(action) {
+				if (action && passthroughController && passthroughController.cycleDepthReconstructionMode) {
+					passthroughController.cycleDepthReconstructionMode(action.direction);
+				}
+			},
+			"passthroughDepthMode.cycle": function(action) {
+				if (action && passthroughController && passthroughController.cycleDepthMode) {
+					passthroughController.cycleDepthMode(action.direction);
+				}
+			},
+			"depthEchoReactive.toggle": function(action) {
+				if (action && passthroughController && passthroughController.toggleDepthEchoReactive) {
+					passthroughController.toggleDepthEchoReactive(action.key);
+				}
+			},
+			"depthDistanceReactive.toggle": function() {
+				if (passthroughController && passthroughController.toggleDepthDistanceReactive) {
+					passthroughController.toggleDepthDistanceReactive();
+				}
+			},
+			"sceneLightingMode.cycle": function(action) {
+				if (action && passthroughController && passthroughController.cycleLightingMode) {
+					passthroughController.cycleLightingMode(action.direction);
+				}
+			},
+			"sceneLightPreset.cycle": function(action) {
+				if (action) {
+					cycleLightingEffect(action.direction);
+				}
+			},
+			"visualizerMode.cycle": function(action) {
+				if (!action || !state.visualizerEngine) {
+					return Promise.resolve();
+				}
+				const selectionState = getVisualizerSelectionState();
+				const count = selectionState ? selectionState.modeNames.length : 0;
+				if (!count) {
+					return Promise.resolve();
+				}
+				return state.visualizerEngine.selectMode(selectionState.currentModeIndex + (action.direction < 0 ? -1 : 1));
+			},
+			"visualizerHorizontalMirror.toggle": function() {
+				if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
+					return Promise.resolve();
+				}
+				return state.visualizerEngine.toggleHorizontalMirror();
+			},
+			"butterchurnPreset.cycle": function(action) {
+				if (!action || !state.visualizerEngine) {
+					return Promise.resolve();
+				}
+				const selectionState = getVisualizerSelectionState();
+				const count = selectionState ? selectionState.presetNames.length : 0;
+				if (!count) {
+					return Promise.resolve();
+				}
+				return state.visualizerEngine.selectPreset((selectionState.currentPresetIndex + (action.direction < 0 ? -1 : 1) + count) % count);
 			}
-		},
-		onPresetAction: cyclePreset,
-		onExitVrAction: function() {
-			if (state.xrSession) {
-				state.xrSession.end();
-			}
+		};
+	};
+	const dispatchMenuAction = function(action) {
+		if (!action || !action.type) {
+			return;
 		}
+		const actionHandler = getMenuActionHandlers()[action.type];
+		if (!actionHandler) {
+			console.warn("[MenuAction] unknown type:", action.type);
+			return;
+		}
+		return actionHandler(action);
+	};
+	const xrMenuActionCallbacks = {
+		dispatchMenuAction: dispatchMenuAction
 	};
 	const desktopMenuActionCallbacks = {
-		onShaderModeAction: cycleShaderMode,
-		onHorizontalMirrorToggle: toggleHorizontalMirror,
-		onLightPresetAction: cycleLightingEffect,
-		onLightPresetVariantAction: cycleLightingVariant,
-		onEffectSemanticModeAction: xrMenuActionCallbacks.onEffectSemanticModeAction,
-		onPresetAction: function(direction) {
-			audioController.activate();
-			cyclePreset(direction);
-		},
-		onExitVrAction: function() {
-			if (state.xrSession) {
-				state.xrSession.end();
+		dispatchMenuAction: function(action) {
+			if (action && action.type === "butterchurnPreset.cycle") {
+				audioController.activate();
 			}
+			dispatchMenuAction(action);
 		}
 	};
 	const pickAxes = function(gamepad, preferSecondaryBool) {
@@ -421,7 +481,7 @@ const createRuntime = function(options) {
 			state.visualizerEngine.update(time * 0.001);
 		}
 		updateSceneLighting(time * 0.001);
-		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, depthFrameKind: state.depthFrameKind || "", depthProfile: state.depthProfile, pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool});
+		sceneRenderer.renderXrViews({baseLayer: state.xrSession.renderState.baseLayer, depthFrameKind: state.depthFrameKind || "", depthProfile: state.depthProfile, pose: renderPose, passthroughPose: passthroughPose || renderPose, passthroughDepthInfoByView: passthroughDepthInfoByView, eyeDistanceMeters: menuController.getState().eyeDistanceMeters, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, transparentBackgroundBool: state.passthroughAvailableBool, passthroughFallbackBool: !state.passthroughAvailableBool, visualizerBackgroundEnabledBool: !!renderPolicy.visualizerBackgroundEnabledBool});
 		const frameElapsedMs = performance.now() - frameStartMs;
 		frameBudgetFrameCount += 1;
 		if (frameElapsedMs > 13.9) { frameBudgetOverCount += 1; }
@@ -444,7 +504,7 @@ const createRuntime = function(options) {
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
 		}
-		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, passthroughFallbackBool: true});
+		sceneRenderer.renderPreviewFrame({previewTimeSeconds: previewTimeSeconds, desktopMovementState: desktopMovementState, visualizerEngine: state.visualizerEngine, glbAssetStore: state.glbAssetStore, sceneLighting: sceneLighting, menuController: menuController, passthroughController: passthroughController, menuContentState: getMenuContentState(), getReactiveFloorColors: resolveFloorColors, passthroughFallbackBool: true, visualizerBackgroundEnabledBool: !!renderPolicy.visualizerBackgroundEnabledBool});
 		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};
@@ -632,10 +692,16 @@ const createRuntime = function(options) {
 					shell.setStatus(error.message || "glb init failed");
 				}
 			}
+			state.visualizerSourceBackend = createVisualizerSourceBackend ? createVisualizerSourceBackend() : null;
 			state.visualizerEngine = createVisualizerEngine ? createVisualizerEngine(state.gl) : null;
 			if (state.visualizerEngine) {
-				audioController.setAudioBackend(state.visualizerEngine);
+				state.visualizerEngine.init({gl: state.gl, sourceBackend: state.visualizerSourceBackend || null});
+			}
+			if (state.visualizerSourceBackend) {
+				audioController.setAudioBackend(state.visualizerSourceBackend);
 				audioController.activate().catch(function() {});
+			}
+			if (state.visualizerEngine) {
 				applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
 			}
 			if (!sessionBridge.isAvailable()) {

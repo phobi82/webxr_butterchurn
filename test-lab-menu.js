@@ -32,7 +32,11 @@ const createTestLabMenuSections = function(args) {
 			label: "Active Effect",
 			valueText: args.currentLightPresetEffectName || args.currentLightPresetName || "Soft Wash",
 			metaText: args.currentLightPresetEffectDescription || args.currentLightPresetDescription || "",
-			hoveredAction: args.hoveredLightPresetAction || ""
+			hoveredAction: getHoveredCyclerAction(args, "sceneLightPreset:prev", "sceneLightPreset:next"),
+			prevAction: {type: "sceneLightPreset.cycle", direction: -1},
+			nextAction: {type: "sceneLightPreset.cycle", direction: 1},
+			prevHoverKey: "sceneLightPreset:prev",
+			nextHoverKey: "sceneLightPreset:next"
 		})
 	];
 	if (args.passthroughUiState && args.passthroughUiState.usableDepthAvailableBool) {
@@ -41,7 +45,9 @@ const createTestLabMenuSections = function(args) {
 			label: "use Depth",
 			valueText: args.passthroughUiState.depthActiveBool ? "using Depth" : "using fallback",
 			checkedBool: !!args.passthroughUiState.depthActiveBool,
-			hoveredBool: args.hoveredPassthroughToggle === "depth"
+			hoveredBool: hasHoveredActionKey(args, "passthroughDepthToggle:toggle"),
+			action: {type: "passthroughDepth.toggle"},
+			hoverKey: "passthroughDepthToggle:toggle"
 		}));
 	}
 	const effectReviewSliderControls = (args.sceneLightingControls || []).concat(args.effectSemanticControls || []);
@@ -58,7 +64,9 @@ const createTestLabMenuSections = function(args) {
 			minLabel: sliderControl.control.minLabel,
 			maxLabel: sliderControl.control.maxLabel,
 			hoveredBool: !!sliderControl.hoveredBool,
-			activeBool: !!sliderControl.activeBool
+			activeBool: !!sliderControl.activeBool,
+			sliderKey: sliderControl.control.key,
+			hoverKey: sliderControl.control.key
 		}));
 	}
 	return [
@@ -77,7 +85,7 @@ const createTestLabMenuSections = function(args) {
 		}),
 		createSessionMenuSectionState({
 			xrSessionActiveBool: !!args.xrSessionActiveBool,
-			hoveredExitVrBool: !!args.hoveredExitVrBool
+			hoveredActionKeys: args.hoveredActionKeys
 		})
 	].filter(Boolean);
 };

@@ -175,6 +175,9 @@
 				shell: appShell,
 				floorReceivesSceneLightingBool: false,
 				getReactiveFloorColors: getStaticTestLabFloorColors,
+				renderPolicy: {
+					visualizerBackgroundEnabledBool: false
+				},
 				locomotion: {
 					desktopStartZ: 5.8,
 					desktopStartPitch: 0.18
@@ -186,7 +189,6 @@
 					buildModuleSections: createTestLabMenuSections
 				},
 				passthrough: {
-					backgroundLayerModeKey: "hidden",
 					initialBlendModeKey: "uniform",
 					initialUniformBlendModeKey: "manual",
 					initialManualMix: 1,

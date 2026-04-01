@@ -8,6 +8,14 @@ const formatMenuPercentText = function(value) {
 	return Math.round(value * 100) + "%";
 };
 
+const hasHoveredActionKey = function(args, hoverKey) {
+	return !!(hoverKey && args && args.hoveredActionKeys && args.hoveredActionKeys[hoverKey]);
+};
+
+const getHoveredCyclerAction = function(args, prevHoverKey, nextHoverKey) {
+	return hasHoveredActionKey(args, prevHoverKey) ? "prev" : (hasHoveredActionKey(args, nextHoverKey) ? "next" : "");
+};
+
 const createMenuSectionState = function(args) {
 	args = args || {};
 	return {
@@ -28,7 +36,11 @@ const createCyclerMenuControlState = function(args) {
 		label: args.label || "",
 		valueText: args.valueText || "",
 		metaText: args.metaText || "",
-		hoveredAction: args.hoveredAction || ""
+		hoveredAction: args.hoveredAction || "",
+		prevAction: args.prevAction || null,
+		nextAction: args.nextAction || null,
+		prevHoverKey: args.prevHoverKey || "",
+		nextHoverKey: args.nextHoverKey || ""
 	};
 };
 
@@ -51,7 +63,9 @@ const createCheckboxMenuControlState = function(args) {
 		label: args.label || "",
 		valueText: args.valueText || "",
 		checkedBool: !!args.checkedBool,
-		hoveredBool: !!args.hoveredBool
+		hoveredBool: !!args.hoveredBool,
+		action: args.action || null,
+		hoverKey: args.hoverKey || ""
 	};
 };
 
@@ -74,7 +88,9 @@ const createSessionMenuSectionState = function(args) {
 						label: "Exit VR",
 						metaText: "End session",
 						selectedBool: true,
-						hoveredBool: !!args.hoveredExitVrBool
+						hoveredBool: hasHoveredActionKey(args, "exitVr"),
+						action: {type: "session.exit"},
+						hoverKey: "exitVr"
 					}
 				]
 			})
@@ -93,7 +109,9 @@ const createSliderMenuControlState = function(args) {
 		minLabel: args.minLabel || "",
 		maxLabel: args.maxLabel || "",
 		hoveredBool: !!args.hoveredBool,
-		activeBool: !!args.activeBool
+		activeBool: !!args.activeBool,
+		sliderKey: args.sliderKey || args.key || "",
+		hoverKey: args.hoverKey || args.key || ""
 	};
 };
 
@@ -112,7 +130,9 @@ const appendSliderMenuControls = function(targetControls, sliderControls) {
 			minLabel: sliderControl.control.minLabel,
 			maxLabel: sliderControl.control.maxLabel,
 			hoveredBool: !!sliderControl.hoveredBool,
-			activeBool: !!sliderControl.activeBool
+			activeBool: !!sliderControl.activeBool,
+			sliderKey: sliderControl.control.key,
+			hoverKey: sliderControl.control.key
 		}));
 	}
 };
@@ -132,14 +152,18 @@ const createJumpModeMenuSectionState = function(args) {
 						label: "Double",
 						metaText: "2 jumps total",
 						selectedBool: args.selectedJumpMode === "double",
-						hoveredBool: args.hoveredJumpMode === "double"
+						hoveredBool: hasHoveredActionKey(args, "jumpMode:double"),
+						action: {type: "jumpMode.set", mode: "double"},
+						hoverKey: "jumpMode:double"
 					},
 					{
 						key: "multi",
 						label: "Multi",
 						metaText: "Unlimited jumps",
 						selectedBool: args.selectedJumpMode === "multi",
-						hoveredBool: args.hoveredJumpMode === "multi"
+						hoveredBool: hasHoveredActionKey(args, "jumpMode:multi"),
+						action: {type: "jumpMode.set", mode: "multi"},
+						hoverKey: "jumpMode:multi"
 					}
 				]
 			})
@@ -162,7 +186,9 @@ const createWorldOpacityMenuSectionState = function(args) {
 				minLabel: "Invisible",
 				maxLabel: "Solid",
 				hoveredBool: !!args.hoveredBool,
-				activeBool: !!args.activeBool
+				activeBool: !!args.activeBool,
+				sliderKey: "floorAlpha",
+				hoverKey: "floorAlpha"
 			})
 		]
 	});
@@ -183,7 +209,9 @@ const createEyeDistanceMenuSectionState = function(args) {
 				minLabel: Math.round((args.min || 0) * 1000) + " mm",
 				maxLabel: Math.round((args.max || 0) * 1000) + " mm",
 				hoveredBool: !!args.hoveredBool,
-				activeBool: !!args.activeBool
+				activeBool: !!args.activeBool,
+				sliderKey: "eyeDistance",
+				hoverKey: "eyeDistance"
 			})
 		]
 	});
@@ -200,14 +228,20 @@ const createVisualizerModeMenuSectionState = function(args) {
 				label: "",
 				valueText: args.valueText || "",
 				metaText: args.metaText || "",
-				hoveredAction: args.hoveredAction || ""
+				hoveredAction: getHoveredCyclerAction(args, "visualizerMode:prev", "visualizerMode:next"),
+				prevAction: {type: "visualizerMode.cycle", direction: -1},
+				nextAction: {type: "visualizerMode.cycle", direction: 1},
+				prevHoverKey: "visualizerMode:prev",
+				nextHoverKey: "visualizerMode:next"
 			}),
 			createCheckboxMenuControlState({
 				key: "visualizerHorizontalMirror",
 				label: "Horiz. Mirror (Kaleidoscope-Mode)",
 				valueText: args.checkboxValueText || "",
 				checkedBool: !!args.horizontalMirrorBool,
-				hoveredBool: !!args.hoveredHorizontalMirrorBool
+				hoveredBool: hasHoveredActionKey(args, "visualizerHorizontalMirror:toggle"),
+				action: {type: "visualizerHorizontalMirror.toggle"},
+				hoverKey: "visualizerHorizontalMirror:toggle"
 			})
 		]
 	});
@@ -224,7 +258,11 @@ const createButterchurnPresetMenuSectionState = function(args) {
 				label: "",
 				valueText: args.valueText || "",
 				metaText: args.metaText || "",
-				hoveredAction: args.hoveredAction || ""
+				hoveredAction: getHoveredCyclerAction(args, "butterchurnPreset:prev", "butterchurnPreset:next"),
+				prevAction: {type: "butterchurnPreset.cycle", direction: -1},
+				nextAction: {type: "butterchurnPreset.cycle", direction: 1},
+				prevHoverKey: "butterchurnPreset:prev",
+				nextHoverKey: "butterchurnPreset:next"
 			})
 		]
 	});
@@ -242,7 +280,9 @@ const createBackgroundMenuSectionState = function(args) {
 				key: item.key,
 				label: item.label,
 				selectedBool: item.key === uiState.selectedMixModeKey,
-				hoveredBool: item.key === args.hoveredMixModeKey
+				hoveredBool: hasHoveredActionKey(args, "backgroundMixMode:" + item.key),
+				action: {type: "backgroundMixMode.select", key: item.key},
+				hoverKey: "backgroundMixMode:" + item.key
 			};
 		})
 	}));
@@ -298,7 +338,9 @@ const createPassthroughMenuSectionState = function(args) {
 		label: "Flashlight",
 		valueText: uiState.flashlightActiveBool ? "On" : "Off",
 		checkedBool: !!uiState.flashlightActiveBool,
-		hoveredBool: args.hoveredPassthroughToggle === "flashlight"
+		hoveredBool: hasHoveredActionKey(args, "passthroughFlashlightToggle:toggle"),
+		action: {type: "passthroughFlashlight.toggle"},
+		hoverKey: "passthroughFlashlightToggle:toggle"
 	}));
 	appendSliderMenuControls(controls, flashlightSliderControls);
 	if (uiState.usableDepthAvailableBool) {
@@ -307,7 +349,9 @@ const createPassthroughMenuSectionState = function(args) {
 			label: "Depth",
 			valueText: uiState.depthActiveBool ? "On" : "Off",
 			checkedBool: !!uiState.depthActiveBool,
-			hoveredBool: args.hoveredPassthroughToggle === "depth"
+			hoveredBool: hasHoveredActionKey(args, "passthroughDepthToggle:toggle"),
+			action: {type: "passthroughDepth.toggle"},
+			hoverKey: "passthroughDepthToggle:toggle"
 		}));
 	}
 	if (uiState.usableDepthAvailableBool && uiState.depthActiveBool) {
@@ -316,19 +360,29 @@ const createPassthroughMenuSectionState = function(args) {
 			label: "real Distance Metric",
 			valueText: uiState.depthRadialBool ? "radial" : "planar",
 			checkedBool: !!uiState.depthRadialBool,
-			hoveredBool: args.hoveredPassthroughToggle === "depthRadial"
+			hoveredBool: hasHoveredActionKey(args, "passthroughDepthRadialToggle:toggle"),
+			action: {type: "passthroughDepthRadial.toggle"},
+			hoverKey: "passthroughDepthRadialToggle:toggle"
 		}));
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthReconstruction",
 			label: "Reconstruction",
 			valueText: getMenuModeLabelByKey(uiState.depthReconstructionModes, uiState.selectedDepthReconstructionModeKey, "Heightmap"),
-			hoveredAction: args.hoveredDepthReconstructionAction || ""
+			hoveredAction: getHoveredCyclerAction(args, "passthroughDepthReconstruction:prev", "passthroughDepthReconstruction:next"),
+			prevAction: {type: "passthroughDepthReconstruction.cycle", direction: -1},
+			nextAction: {type: "passthroughDepthReconstruction.cycle", direction: 1},
+			prevHoverKey: "passthroughDepthReconstruction:prev",
+			nextHoverKey: "passthroughDepthReconstruction:next"
 		}));
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthMode",
 			label: "Depth Mode",
 			valueText: getMenuModeLabelByKey(uiState.depthModes, uiState.selectedDepthModeKey, "Distance"),
-			hoveredAction: args.hoveredDepthModeAction || ""
+			hoveredAction: getHoveredCyclerAction(args, "passthroughDepthMode:prev", "passthroughDepthMode:next"),
+			prevAction: {type: "passthroughDepthMode.cycle", direction: -1},
+			nextAction: {type: "passthroughDepthMode.cycle", direction: 1},
+			prevHoverKey: "passthroughDepthMode:prev",
+			nextHoverKey: "passthroughDepthMode:next"
 		}));
 	}
 	if (uiState.depthActiveBool && uiState.selectedDepthModeKey === "echo") {
@@ -341,7 +395,9 @@ const createPassthroughMenuSectionState = function(args) {
 					key: item.key,
 					label: item.label,
 					checkedBool: !!item.checkedBool,
-					hoveredBool: args.hoveredEchoReactiveControlKey === item.key
+					hoveredBool: hasHoveredActionKey(args, "depthEchoReactive:" + item.key),
+					action: {type: "depthEchoReactive.toggle", key: item.key},
+					hoverKey: "depthEchoReactive:" + item.key
 				};
 			})
 		}));
@@ -361,7 +417,9 @@ const createPassthroughMenuSectionState = function(args) {
 				label: uiState.distanceReactiveControl.label || "Sound-reactive",
 				valueText: uiState.distanceReactiveControl.checkedBool ? "On" : "Off",
 				checkedBool: !!uiState.distanceReactiveControl.checkedBool,
-				hoveredBool: args.hoveredPassthroughToggle === "depthDistanceReactive"
+				hoveredBool: hasHoveredActionKey(args, "depthDistanceReactiveToggle:toggle"),
+				action: {type: "depthDistanceReactive.toggle"},
+				hoverKey: "depthDistanceReactiveToggle:toggle"
 			}));
 			appendDepthSliderControlByKey("depthDistanceReactiveIntensity");
 			appendDepthSliderControlByKey("depthThreshold");
@@ -387,14 +445,22 @@ const createSceneLightingMenuSectionState = function(args) {
 			key: "sceneLightingMode",
 			label: "Lighting Mode",
 			valueText: getMenuModeLabelByKey(args.lightingModes, args.selectedLightingModeKey, "Uniform"),
-			hoveredAction: args.hoveredLightingModeAction || ""
+			hoveredAction: getHoveredCyclerAction(args, "sceneLightingMode:prev", "sceneLightingMode:next"),
+			prevAction: {type: "sceneLightingMode.cycle", direction: -1},
+			nextAction: {type: "sceneLightingMode.cycle", direction: 1},
+			prevHoverKey: "sceneLightingMode:prev",
+			nextHoverKey: "sceneLightingMode:next"
 		}),
 		createCyclerMenuControlState({
 			key: "sceneLightPreset",
 			label: "Light Preset",
 			valueText: args.currentLightPresetName || "Aurora Drift",
 			metaText: args.currentLightPresetDescription || "",
-			hoveredAction: args.hoveredLightPresetAction || ""
+			hoveredAction: getHoveredCyclerAction(args, "sceneLightPreset:prev", "sceneLightPreset:next"),
+			prevAction: {type: "sceneLightPreset.cycle", direction: -1},
+			nextAction: {type: "sceneLightPreset.cycle", direction: 1},
+			prevHoverKey: "sceneLightPreset:prev",
+			nextHoverKey: "sceneLightPreset:next"
 		})
 	];
 	appendSliderMenuControls(controls, args.sliderControls);
@@ -411,7 +477,7 @@ const createLowerMenuSections = function(args) {
 	return [
 		createJumpModeMenuSectionState({
 			selectedJumpMode: args.selectedJumpMode,
-			hoveredJumpMode: args.hoveredJumpMode
+			hoveredActionKeys: args.hoveredActionKeys
 		}),
 		createEyeDistanceMenuSectionState({
 			value: args.eyeDistanceMeters,
@@ -429,41 +495,37 @@ const createLowerMenuSections = function(args) {
 		}),
 		createBackgroundMenuSectionState({
 			uiState: args.passthroughUiState,
-			hoveredMixModeKey: args.hoveredMixModeKey,
+			hoveredActionKeys: args.hoveredActionKeys,
 			sliderControls: args.backgroundControls
 		}),
 		createPassthroughMenuSectionState({
 			uiState: args.passthroughUiState,
-			hoveredPassthroughToggle: args.hoveredPassthroughToggle,
-			hoveredDepthReconstructionAction: args.hoveredDepthReconstructionAction,
-			hoveredDepthModeAction: args.hoveredDepthModeAction,
+			hoveredActionKeys: args.hoveredActionKeys,
 			sliderControls: args.passthroughControls
 		}),
 		createSceneLightingMenuSectionState({
 			lightingModes: args.lightingModes,
 			selectedLightingModeKey: args.selectedLightingModeKey,
-			hoveredLightingModeAction: args.hoveredSceneLightingModeAction,
+			hoveredActionKeys: args.hoveredActionKeys,
 			currentLightPresetName: args.currentLightPresetName,
 			currentLightPresetDescription: args.currentLightPresetDescription,
-			hoveredLightPresetAction: args.hoveredLightPresetAction,
 			sliderControls: args.sceneLightingControls
 		}),
 		createVisualizerModeMenuSectionState({
 			valueText: args.currentShaderModeName,
 			metaText: args.shaderModeMetaText,
-			hoveredAction: args.hoveredShaderModeAction,
+			hoveredActionKeys: args.hoveredActionKeys,
 			horizontalMirrorBool: args.horizontalMirrorBool,
-			checkboxValueText: args.horizontalMirrorBool ? "On" : "Off",
-			hoveredHorizontalMirrorBool: args.hoveredHorizontalMirrorBool
+			checkboxValueText: args.horizontalMirrorBool ? "On" : "Off"
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,
 			metaText: args.presetMetaText,
-			hoveredAction: args.hoveredPresetAction
+			hoveredActionKeys: args.hoveredActionKeys
 		}),
 		createSessionMenuSectionState({
 			xrSessionActiveBool: !!args.xrSessionActiveBool,
-			hoveredExitVrBool: !!args.hoveredExitVrBool
+			hoveredActionKeys: args.hoveredActionKeys
 		})
 	].filter(Boolean);
 };

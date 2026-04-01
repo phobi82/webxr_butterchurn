@@ -490,7 +490,6 @@ const createPassthroughController = function(options) {
 		fallbackBool: true,
 		supportedBool: false,
 		statusText: "Passthrough unsupported, using black fallback",
-		backgroundLayerModeKey: options.backgroundLayerModeKey || "mixControlled",
 		mixModeKey: options.initialMixModeKey || "manual",
 		flashlightActiveBool: false,
 		depthActiveBool: false,
@@ -1008,13 +1007,6 @@ const createPassthroughController = function(options) {
 			return {depth: depth, flashlight: flashlight, worldMask: worldMask};
 		},
 		getBackgroundCompositeState: function() {
-			if (state.backgroundLayerModeKey === "hidden") {
-				return {
-					alpha: 0,
-					maskCount: 0,
-					masks: []
-				};
-			}
 			return {
 				alpha: clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
 				maskCount: 0,

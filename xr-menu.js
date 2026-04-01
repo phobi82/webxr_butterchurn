@@ -221,10 +221,8 @@ const createMenuView = function(options) {
 		menuCtx.fillText(text, centerX, topY);
 	};
 	const getSectionInteraction = function(layout, x, y) {
-		let moduleCycleControlKey = "";
-		let moduleCycleAction = "";
-		let moduleChoiceControlKey = "";
-		let moduleChoiceItemKey = "";
+		let action = null;
+		let hoverKey = "";
 		let moduleSliderControlKey = "";
 		for (let i = 0; i < layout.menuSections.length; i += 1) {
 			const section = layout.menuSections[i];
@@ -237,11 +235,11 @@ const createMenuView = function(options) {
 				const control = section.controls[j];
 				if (control.type === "cycler" && y >= controlLayout.arrowButtonTop && y <= controlLayout.arrowButtonTop + controlLayout.arrowButtonHeight) {
 					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
-						moduleCycleControlKey = control.key;
-						moduleCycleAction = "prev";
+						action = control.prevAction || null;
+						hoverKey = control.prevHoverKey || "";
 					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
-						moduleCycleControlKey = control.key;
-						moduleCycleAction = "next";
+						action = control.nextAction || null;
+						hoverKey = control.nextHoverKey || "";
 					}
 				}
 				if (control.type === "choiceRow" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight) {
@@ -255,35 +253,27 @@ const createMenuView = function(options) {
 					for (let k = 0; k < items.length; k += 1) {
 						const itemX = rowStartX + k * (buttonWidth + gap);
 						if (x >= itemX && x <= itemX + buttonWidth) {
-							moduleChoiceControlKey = control.key;
-							moduleChoiceItemKey = items[k].key;
+							action = items[k].action || null;
+							hoverKey = items[k].hoverKey || "";
 						}
 					}
 				}
 				if (control.type === "checkbox" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight && x >= layout.prevX && x <= layout.nextX + layout.nextWidth) {
-					moduleChoiceControlKey = control.key;
-					moduleChoiceItemKey = "toggle";
+					action = control.action || null;
+					hoverKey = control.hoverKey || "";
 				}
 				if (control.type === "slider" && y >= controlLayout.hitTop && y <= controlLayout.hitBottom && x >= layout.contentLeft + 20 && x <= layout.contentRight - 20) {
-					moduleSliderControlKey = control.key;
+					moduleSliderControlKey = control.sliderKey || control.key;
+					hoverKey = control.hoverKey || moduleSliderControlKey;
 				}
 			}
 		}
 		if (moduleSliderControlKey) {
-			moduleCycleControlKey = "";
-			moduleCycleAction = "";
-			moduleChoiceControlKey = "";
-			moduleChoiceItemKey = "";
-		}
-		if (moduleChoiceControlKey) {
-			moduleCycleControlKey = "";
-			moduleCycleAction = "";
+			action = null;
 		}
 		return {
-			moduleCycleControlKey: moduleCycleControlKey,
-			moduleCycleAction: moduleCycleAction,
-			moduleChoiceControlKey: moduleChoiceControlKey,
-			moduleChoiceItemKey: moduleChoiceItemKey,
+			action: action,
+			hoverKey: hoverKey,
 			moduleSliderControlKey: moduleSliderControlKey
 		};
 	};
@@ -297,14 +287,7 @@ const createMenuView = function(options) {
 			const layout = getLayoutMetrics(moduleSections);
 			const x = u * menuLayoutWidth;
 			const y = v * layout.canvasHeight;
-			const sectionHit = getSectionInteraction(layout, x, y);
-			return {
-				moduleCycleControlKey: sectionHit.moduleCycleControlKey,
-				moduleCycleAction: sectionHit.moduleCycleAction,
-				moduleChoiceControlKey: sectionHit.moduleChoiceControlKey,
-				moduleChoiceItemKey: sectionHit.moduleChoiceItemKey,
-				moduleSliderControlKey: sectionHit.moduleSliderControlKey
-			};
+			return getSectionInteraction(layout, x, y);
 		},
 		render: function(renderState) {
 			renderState = renderState || {};
@@ -632,21 +615,8 @@ const createMenuController = function(options) {
 		activeMenuSliderControlKeyByHand: {},
 		eyeDistanceHoverBool: false,
 		floorAlphaHoverBool: false,
+		hoveredActionKeys: {},
 		hoveredMenuSliderControlKeys: {},
-		hoveredPassthroughToggle: "",
-		hoveredPassthroughDepthReconstructionAction: "",
-		hoveredPassthroughDepthModeAction: "",
-		hoveredPassthroughEchoReactiveControlKey: "",
-		hoveredSceneLightingModeAction: "",
-		hoveredMixModeKey: "",
-		hoveredJumpMode: "",
-		hoveredExitVrBool: false,
-		hoveredShaderModeAction: "",
-		hoveredHorizontalMirrorBool: false,
-		hoveredLightPresetAction: "",
-		hoveredLightPresetVariantAction: "",
-		hoveredEffectSemanticModeAction: "",
-		hoveredPresetAction: "",
 		xrSessionActiveBool: false,
 		desktopPreviewVisibleBool: options.initialDesktopPreviewVisibleBool !== false,
 		desktopPointerActiveBool: false,
@@ -773,6 +743,11 @@ const createMenuController = function(options) {
 			state.hoveredMenuSliderControlKeys[controlKey] = true;
 		}
 	};
+	const setHoveredActionKey = function(hoverKey) {
+		if (hoverKey) {
+			state.hoveredActionKeys[hoverKey] = true;
+		}
+	};
 	// The controller only gathers runtime state and delegates section creation.
 	const getModuleSections = function(externalState) {
 		updateCachedSceneLightingState(externalState);
@@ -800,8 +775,7 @@ const createMenuController = function(options) {
 		const effectSemanticControls = (passthroughUiState.effectSemanticControls || []).map(createMenuSliderState);
 		return buildModuleSections({
 			selectedJumpMode: state.jumpMode,
-			hoveredJumpMode: state.hoveredJumpMode,
-			hoveredExitVrBool: state.hoveredExitVrBool,
+			hoveredActionKeys: state.hoveredActionKeys,
 			floorAlpha: state.floorAlpha,
 			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
 			floorAlphaHoverBool: state.floorAlphaHoverBool,
@@ -809,11 +783,6 @@ const createMenuController = function(options) {
 			passthroughUiState: passthroughUiState,
 			backgroundControls: backgroundControls,
 			passthroughControls: passthroughControls,
-			hoveredMixModeKey: state.hoveredMixModeKey,
-			hoveredPassthroughToggle: state.hoveredPassthroughToggle,
-			hoveredDepthReconstructionAction: state.hoveredPassthroughDepthReconstructionAction,
-			hoveredDepthModeAction: state.hoveredPassthroughDepthModeAction,
-			hoveredEchoReactiveControlKey: state.hoveredPassthroughEchoReactiveControlKey,
 			eyeDistanceMeters: state.eyeDistanceMeters,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
@@ -823,11 +792,8 @@ const createMenuController = function(options) {
 			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
 			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
 			horizontalMirrorBool: !!externalState.horizontalMirrorBool,
-			hoveredShaderModeAction: state.hoveredShaderModeAction,
-			hoveredHorizontalMirrorBool: state.hoveredHorizontalMirrorBool,
 			lightingModes: passthroughUiState.lightingModes || [],
 			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
-			hoveredSceneLightingModeAction: state.hoveredSceneLightingModeAction,
 			lightPresetNames: lightPresetNames,
 			currentLightPresetIndex: lightPresetIndex,
 			currentLightPresetName: lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
@@ -841,16 +807,12 @@ const createMenuController = function(options) {
 			currentLightPresetVariantCount: lightingState.currentLightPresetVariantCount || 1,
 			currentLightPresetVariantLabel: lightingState.currentLightPresetVariantLabel || "",
 			currentLightPresetSurfaceKey: lightingState.currentLightPresetSurfaceKey || "",
-			hoveredLightPresetAction: state.hoveredLightPresetAction,
-			hoveredLightPresetVariantAction: state.hoveredLightPresetVariantAction,
 			effectSemanticModeKey: lightingState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
 			effectSemanticModeLabel: lightingState.effectSemanticModeLabel || "Current",
-			hoveredEffectSemanticModeAction: state.hoveredEffectSemanticModeAction,
 			sceneLightingControls: sceneLightingControls,
 			effectSemanticControls: effectSemanticControls,
 			currentPresetName: presetNames[currentPresetIndex],
 			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
-			hoveredPresetAction: state.hoveredPresetAction,
 			audioSourceKind: externalState.audioSourceKind || "none",
 			audioSourceName: externalState.audioSourceName || "",
 			xrSessionActiveBool: xrSessionActiveBool
@@ -880,21 +842,8 @@ const createMenuController = function(options) {
 	const clearHoverState = function() {
 		state.eyeDistanceHoverBool = false;
 		state.floorAlphaHoverBool = false;
+		state.hoveredActionKeys = {};
 		state.hoveredMenuSliderControlKeys = {};
-		state.hoveredPassthroughToggle = "";
-		state.hoveredPassthroughDepthReconstructionAction = "";
-		state.hoveredPassthroughDepthModeAction = "";
-		state.hoveredPassthroughEchoReactiveControlKey = "";
-		state.hoveredSceneLightingModeAction = "";
-		state.hoveredMixModeKey = "";
-		state.hoveredJumpMode = "";
-		state.hoveredExitVrBool = false;
-		state.hoveredShaderModeAction = "";
-		state.hoveredHorizontalMirrorBool = false;
-		state.hoveredLightPresetAction = "";
-		state.hoveredLightPresetVariantAction = "";
-		state.hoveredEffectSemanticModeAction = "";
-		state.hoveredPresetAction = "";
 	};
 	const releaseSliderHand = function(hand) {
 		if (state.activeSliderHand === hand) {
@@ -920,14 +869,11 @@ const createMenuController = function(options) {
 			return hit;
 		}
 		const capturedModuleSliderControlKey = getCapturedModuleSliderKey(hand);
-		hit.hoveredModuleSliderControlKey = hit.moduleSliderControlKey || "";
 		hit.capturedModuleSliderControlKey = capturedModuleSliderControlKey;
 		if (capturedModuleSliderControlKey) {
 			hit.moduleSliderControlKey = capturedModuleSliderControlKey;
-			hit.moduleCycleControlKey = "";
-			hit.moduleCycleAction = "";
-			hit.moduleChoiceControlKey = "";
-			hit.moduleChoiceItemKey = "";
+			hit.action = null;
+			hit.hoverKey = capturedModuleSliderControlKey;
 		}
 		return hit;
 	};
@@ -942,48 +888,19 @@ const createMenuController = function(options) {
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
 			state.eyeDistanceHoverBool = state.activeSliderHand === "desktop";
 			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
+			state.hoveredActionKeys = {};
 			state.hoveredMenuSliderControlKeys = {};
 			setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
-			state.hoveredPassthroughToggle = "";
-			state.hoveredPassthroughDepthReconstructionAction = "";
-			state.hoveredPassthroughDepthModeAction = "";
-			state.hoveredPassthroughEchoReactiveControlKey = "";
-			state.hoveredSceneLightingModeAction = "";
-			state.hoveredMixModeKey = "";
-			state.hoveredJumpMode = "";
-			state.hoveredExitVrBool = false;
-			state.hoveredShaderModeAction = "";
-			state.hoveredHorizontalMirrorBool = false;
-			state.hoveredLightPresetAction = "";
-			state.hoveredLightPresetVariantAction = "";
-			state.hoveredEffectSemanticModeAction = "";
-			state.hoveredPresetAction = "";
 			return;
 		}
 		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, moduleSections);
 		state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.activeSliderHand === "desktop";
 		state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.activeFloorAlphaSliderHand === "desktop";
+		state.hoveredActionKeys = {};
 		state.hoveredMenuSliderControlKeys = {};
 		setMenuSliderHover(hit.moduleSliderControlKey);
 		setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
-		state.hoveredPassthroughToggle =
-			hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
-			(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" :
-			(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" :
-			(hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" ? "depthDistanceReactive" : "")));
-		state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : "";
-		state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : "";
-		state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : "";
-		state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : "";
-		state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : "";
-		state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : "";
-		state.hoveredExitVrBool = hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr";
-		state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : "";
-		state.hoveredHorizontalMirrorBool = hit.moduleChoiceControlKey === "visualizerHorizontalMirror";
-		state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : "";
-		state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : "";
-		state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : "";
-		state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : "";
+		setHoveredActionKey(hit.hoverKey);
 		if (state.activeSliderHand === "desktop") {
 			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
 		}
@@ -999,7 +916,6 @@ const createMenuController = function(options) {
 		if (!state.menuOpenBool) {
 			return null;
 		}
-		const passthroughUiState = getPassthroughUiState();
 		const moduleSections = getModuleSections();
 		const planeDimensions = menuView.getPlaneDimensions(moduleSections);
 		const denom = dotVec3(menuPlane.normal.x, menuPlane.normal.y, menuPlane.normal.z, ray.dir.x, ray.dir.y, ray.dir.z);
@@ -1027,12 +943,9 @@ const createMenuController = function(options) {
 				point: point,
 				u: clampNumber(u, 0, 1),
 				v: clampNumber(v, 0, 1),
-				hoveredModuleSliderControlKey: "",
 				capturedModuleSliderControlKey: getCapturedModuleSliderKey(ray.hand),
-				moduleCycleControlKey: "",
-				moduleCycleAction: "",
-				moduleChoiceControlKey: "",
-				moduleChoiceItemKey: "",
+				action: null,
+				hoverKey: getCapturedModuleSliderKey(ray.hand),
 				moduleSliderControlKey: getCapturedModuleSliderKey(ray.hand)
 			};
 		}
@@ -1073,24 +986,7 @@ const createMenuController = function(options) {
 				state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.eyeDistanceHoverBool;
 				state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.floorAlphaHoverBool;
 				setMenuSliderHover(hit.moduleSliderControlKey);
-				state.hoveredPassthroughToggle =
-					hit.moduleChoiceControlKey === "passthroughFlashlightToggle" ? "flashlight" :
-					(hit.moduleChoiceControlKey === "passthroughDepthToggle" ? "depth" :
-					(hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" ? "depthRadial" :
-					(hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" ? "depthDistanceReactive" : state.hoveredPassthroughToggle)));
-				state.hoveredPassthroughDepthReconstructionAction = hit.moduleCycleControlKey === "passthroughDepthReconstruction" ? hit.moduleCycleAction : state.hoveredPassthroughDepthReconstructionAction;
-				state.hoveredPassthroughDepthModeAction = hit.moduleCycleControlKey === "passthroughDepthMode" ? hit.moduleCycleAction : state.hoveredPassthroughDepthModeAction;
-				state.hoveredPassthroughEchoReactiveControlKey = hit.moduleChoiceControlKey === "depthEchoReactiveRow" ? hit.moduleChoiceItemKey : state.hoveredPassthroughEchoReactiveControlKey;
-				state.hoveredSceneLightingModeAction = hit.moduleCycleControlKey === "sceneLightingMode" ? hit.moduleCycleAction : state.hoveredSceneLightingModeAction;
-				state.hoveredMixModeKey = hit.moduleChoiceControlKey === "backgroundMixMode" ? hit.moduleChoiceItemKey : state.hoveredMixModeKey;
-				state.hoveredJumpMode = hit.moduleChoiceControlKey === "jumpMode" ? hit.moduleChoiceItemKey : state.hoveredJumpMode;
-				state.hoveredExitVrBool = (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr") || state.hoveredExitVrBool;
-				state.hoveredShaderModeAction = hit.moduleCycleControlKey === "visualizerMode" ? hit.moduleCycleAction : state.hoveredShaderModeAction;
-				state.hoveredHorizontalMirrorBool = (hit.moduleChoiceControlKey === "visualizerHorizontalMirror") || state.hoveredHorizontalMirrorBool;
-				state.hoveredLightPresetAction = hit.moduleCycleControlKey === "sceneLightPreset" ? hit.moduleCycleAction : state.hoveredLightPresetAction;
-				state.hoveredLightPresetVariantAction = hit.moduleCycleControlKey === "sceneLightVariant" ? hit.moduleCycleAction : state.hoveredLightPresetVariantAction;
-				state.hoveredEffectSemanticModeAction = hit.moduleCycleControlKey === "effectSemanticMode" ? hit.moduleCycleAction : state.hoveredEffectSemanticModeAction;
-				state.hoveredPresetAction = hit.moduleCycleControlKey === "butterchurnPreset" ? hit.moduleCycleAction : state.hoveredPresetAction;
+				setHoveredActionKey(hit.hoverKey);
 			}
 			controllerRays.push(ray);
 		}
@@ -1127,10 +1023,7 @@ const createMenuController = function(options) {
 				sceneTimeSeconds: externalState.sceneTimeSeconds,
 				audioMetrics: externalState.audioMetrics,
 				jumpMode: state.jumpMode,
-				hoveredJumpMode: state.hoveredJumpMode,
-				hoveredExitVrBool: state.hoveredExitVrBool,
-				hoveredShaderModeAction: state.hoveredShaderModeAction,
-				hoveredPresetAction: state.hoveredPresetAction,
+				hoveredActionKeys: state.hoveredActionKeys,
 				floorAlpha: state.floorAlpha,
 				eyeDistanceMeters: state.eyeDistanceMeters,
 				floorAlphaHoverBool: state.floorAlphaHoverBool,
@@ -1150,6 +1043,11 @@ const createMenuController = function(options) {
 		},
 		setPassthroughState: function(args) {
 			applyPassthroughState(args);
+		},
+		setJumpMode: function(jumpMode) {
+			if (jumpMode === "double" || jumpMode === "multi") {
+				state.jumpMode = jumpMode;
+			}
 		},
 		updateMenuPose: function(pose) {
 			if (!pose) {
@@ -1247,56 +1145,8 @@ const createMenuController = function(options) {
 				return false;
 			}
 			const passthroughUiState = getPassthroughUiState();
-			if (hit.moduleChoiceControlKey === "jumpMode" && hit.moduleChoiceItemKey) {
-				state.jumpMode = hit.moduleChoiceItemKey;
-			}
-			if (hit.moduleChoiceControlKey === "sessionAction" && hit.moduleChoiceItemKey === "exitVr" && callbacks.onExitVrAction) {
-				callbacks.onExitVrAction();
-			}
-			if (hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
-				callbacks.onShaderModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleChoiceControlKey === "visualizerHorizontalMirror" && callbacks.onHorizontalMirrorToggle) {
-				callbacks.onHorizontalMirrorToggle();
-			}
-			if (hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
-				callbacks.onPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleChoiceControlKey === "passthroughFlashlightToggle" && passthroughController && passthroughController.toggleFlashlight) {
-				passthroughController.toggleFlashlight();
-			}
-			if (hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
-				passthroughController.toggleDepth();
-			}
-			if (hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" && passthroughController && passthroughController.toggleDepthRadial) {
-				passthroughController.toggleDepthRadial();
-			}
-			if (hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" && passthroughController && passthroughController.toggleDepthDistanceReactive) {
-				passthroughController.toggleDepthDistanceReactive();
-			}
-			if (hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
-				passthroughController.cycleDepthReconstructionMode(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleChoiceControlKey === "depthEchoReactiveRow" && hit.moduleChoiceItemKey && passthroughController && passthroughController.toggleDepthEchoReactive) {
-				passthroughController.toggleDepthEchoReactive(hit.moduleChoiceItemKey);
-			}
-			if (hit.moduleCycleControlKey === "passthroughDepthMode" && passthroughController && passthroughController.cycleDepthMode) {
-				passthroughController.cycleDepthMode(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
-				passthroughController.cycleLightingMode(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
-				callbacks.onLightPresetAction(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleCycleControlKey === "sceneLightVariant" && callbacks.onLightPresetVariantAction) {
-				callbacks.onLightPresetVariantAction(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleCycleControlKey === "effectSemanticMode" && callbacks.onEffectSemanticModeAction) {
-				callbacks.onEffectSemanticModeAction(hit.moduleCycleAction === "prev" ? -1 : 1);
-			}
-			if (hit.moduleChoiceControlKey === "backgroundMixMode" && passthroughController && passthroughController.selectMixMode) {
-				passthroughController.selectMixMode(hit.moduleChoiceItemKey);
+			if (hit.action && callbacks.dispatchMenuAction) {
+				callbacks.dispatchMenuAction(hit.action);
 			}
 			if (hit.moduleSliderControlKey === "eyeDistance") {
 				state.activeSliderHand = "desktop";
@@ -1410,56 +1260,8 @@ const createMenuController = function(options) {
 				const triggerPressedBool = !!(gamepad && gamepad.buttons[0] && gamepad.buttons[0].pressed);
 				const wasTriggerPressedBool = triggerPressedByHand.get(hand) || false;
 				const passthroughUiState = getPassthroughUiState();
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "jumpMode" && ray.hit.moduleChoiceItemKey) {
-					state.jumpMode = ray.hit.moduleChoiceItemKey;
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "sessionAction" && ray.hit.moduleChoiceItemKey === "exitVr" && callbacks.onExitVrAction) {
-					callbacks.onExitVrAction();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "visualizerMode" && callbacks.onShaderModeAction) {
-					callbacks.onShaderModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "visualizerHorizontalMirror" && callbacks.onHorizontalMirrorToggle) {
-					callbacks.onHorizontalMirrorToggle();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "butterchurnPreset" && callbacks.onPresetAction) {
-					callbacks.onPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughFlashlightToggle" && passthroughController && passthroughController.toggleFlashlight) {
-					passthroughController.toggleFlashlight();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthToggle" && passthroughController && passthroughController.toggleDepth) {
-					passthroughController.toggleDepth();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "passthroughDepthRadialToggle" && passthroughController && passthroughController.toggleDepthRadial) {
-					passthroughController.toggleDepthRadial();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "depthDistanceReactiveToggle" && passthroughController && passthroughController.toggleDepthDistanceReactive) {
-					passthroughController.toggleDepthDistanceReactive();
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughDepthReconstruction" && passthroughController && passthroughController.cycleDepthReconstructionMode) {
-					passthroughController.cycleDepthReconstructionMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "depthEchoReactiveRow" && ray.hit.moduleChoiceItemKey && passthroughController && passthroughController.toggleDepthEchoReactive) {
-					passthroughController.toggleDepthEchoReactive(ray.hit.moduleChoiceItemKey);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "passthroughDepthMode" && passthroughController && passthroughController.cycleDepthMode) {
-					passthroughController.cycleDepthMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightingMode" && passthroughController && passthroughController.cycleLightingMode) {
-					passthroughController.cycleLightingMode(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightPreset" && callbacks.onLightPresetAction) {
-					callbacks.onLightPresetAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "sceneLightVariant" && callbacks.onLightPresetVariantAction) {
-					callbacks.onLightPresetVariantAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleCycleControlKey === "effectSemanticMode" && callbacks.onEffectSemanticModeAction) {
-					callbacks.onEffectSemanticModeAction(ray.hit.moduleCycleAction === "prev" ? -1 : 1);
-				}
-				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.moduleChoiceControlKey === "backgroundMixMode" && passthroughController && passthroughController.selectMixMode) {
-					passthroughController.selectMixMode(ray.hit.moduleChoiceItemKey);
+				if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.action && callbacks.dispatchMenuAction) {
+					callbacks.dispatchMenuAction(ray.hit.action);
 				}
 				if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "eyeDistance" && (!wasTriggerPressedBool || state.activeSliderHand === hand)) {
 					state.activeSliderHand = hand;

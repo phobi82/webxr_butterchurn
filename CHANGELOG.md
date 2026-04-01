@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added one shared bipolar `Intensity` slider for passthrough `Depth -> Echo` whenever any Echo sound-reactive checkbox is active, so the active Echo audio modulation can be scaled or inverted without adding per-checkbox sliders.
 - Simplified `TestLab.html` back to one isolated setup per effect, removing the extra variant cycler and replacing it with a focused `use Depth` checkbox that switches between `using Depth` and `using fallback` when sensor depth is available.
 - Changed the `TestLab.html` `use Depth` path so it now only enables the depth sensor plus reconstruction buffers for depth-aware light effects, instead of also activating the shared passthrough `Distance` or `Echo` masking visuals.
-- Separated visualizer-background visibility from passthrough/depth state, so `TestLab.html` can hide Butterchurn as an explicit background-layer policy instead of depending on depth or modified-reality blend side effects.
+- Separated visualizer-background visibility from passthrough/depth state at the app/runtime render-policy level, so `TestLab.html` can exclude Butterchurn from the framegraph without routing that decision through the passthrough controller.
+- Reworked the shared XR menu interaction path to use structured declarative `action` objects plus `hoverKey` metadata, and replaced the runtime string-key `if (...)` chain with one central runtime action registry that maps actions onto the existing domain methods.
 
 ## [0.8.6] - 2026-04-01
 
