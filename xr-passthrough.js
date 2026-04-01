@@ -490,6 +490,7 @@ const createPassthroughController = function(options) {
 		fallbackBool: true,
 		supportedBool: false,
 		statusText: "Passthrough unsupported, using black fallback",
+		backgroundLayerModeKey: options.backgroundLayerModeKey || "mixControlled",
 		mixModeKey: options.initialMixModeKey || "manual",
 		flashlightActiveBool: false,
 		depthActiveBool: false,
@@ -525,6 +526,7 @@ const createPassthroughController = function(options) {
 		depthEchoFadeReactiveBool: false,
 		depthMrRetain: 0,
 		usableDepthAvailableBool: false,
+		depthVisualMaskingEnabledBool: options.depthVisualMaskingEnabledBool == null ? true : !!options.depthVisualMaskingEnabledBool,
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
 	};
@@ -994,7 +996,7 @@ const createPassthroughController = function(options) {
 			var depth = null;
 			var flashlight = null;
 			var worldMask = null;
-			if (state.depthActiveBool) {
+			if (state.depthActiveBool && state.depthVisualMaskingEnabledBool) {
 				depth = buildDepthRenderState(args);
 				worldMask = buildDepthRenderState(args);
 			}
@@ -1006,6 +1008,13 @@ const createPassthroughController = function(options) {
 			return {depth: depth, flashlight: flashlight, worldMask: worldMask};
 		},
 		getBackgroundCompositeState: function() {
+			if (state.backgroundLayerModeKey === "hidden") {
+				return {
+					alpha: 0,
+					maskCount: 0,
+					masks: []
+				};
+			}
 			return {
 				alpha: clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
 				maskCount: 0,
@@ -1025,7 +1034,7 @@ const createPassthroughController = function(options) {
 				visibleShare: visibleShare,
 				maskCount: 0,
 				masks: [],
-				depth: state.depthActiveBool ? buildDepthRenderState(args) : null,
+				depth: state.depthActiveBool && state.depthVisualMaskingEnabledBool ? buildDepthRenderState(args) : null,
 				darkAlpha: 1 - darkness,
 				additiveColor: lightingColor,
 				additiveStrength: additiveStrength,

@@ -35,13 +35,13 @@ const createTestLabMenuSections = function(args) {
 			hoveredAction: args.hoveredLightPresetAction || ""
 		})
 	];
-	if ((args.currentLightPresetVariantCount || 1) > 1) {
-		controls.push(createCyclerMenuControlState({
-			key: "sceneLightVariant",
-			label: "Variant",
-			valueText: args.currentLightPresetVariantLabel || "Base",
-			metaText: "Surface bias: " + (args.currentLightPresetSurfaceKey || "mixed"),
-			hoveredAction: args.hoveredLightPresetVariantAction || ""
+	if (args.passthroughUiState && args.passthroughUiState.usableDepthAvailableBool) {
+		controls.push(createCheckboxMenuControlState({
+			key: "passthroughDepthToggle",
+			label: "use Depth",
+			valueText: args.passthroughUiState.depthActiveBool ? "using Depth" : "using fallback",
+			checkedBool: !!args.passthroughUiState.depthActiveBool,
+			hoveredBool: args.hoveredPassthroughToggle === "depth"
 		}));
 	}
 	const effectReviewSliderControls = (args.sceneLightingControls || []).concat(args.effectSemanticControls || []);
@@ -66,7 +66,7 @@ const createTestLabMenuSections = function(args) {
 			key: "testLabEffect",
 			title: "Effect Review",
 			badgeText: ((args.currentLightPresetEffectIndex || 0) + 1) + " / " + (args.currentLightPresetEffectCount || 1),
-			statusText: "Variant: " + ((args.currentLightPresetVariantIndex || 0) + 1) + " / " + (args.currentLightPresetVariantCount || 1),
+			statusText: args.passthroughUiState && args.passthroughUiState.usableDepthAvailableBool ? (args.passthroughUiState.depthActiveBool ? "using Depth" : "using fallback") : "using fallback",
 			controls: controls
 		}),
 		createMenuSectionState({

@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Added a `Sound-reactive` checkbox plus a bipolar `Intensity` slider to passthrough `Depth -> Distance`, so the near-depth threshold can now respond to audio with optional inversion.
 - Added one shared bipolar `Intensity` slider for passthrough `Depth -> Echo` whenever any Echo sound-reactive checkbox is active, so the active Echo audio modulation can be scaled or inverted without adding per-checkbox sliders.
+- Simplified `TestLab.html` back to one isolated setup per effect, removing the extra variant cycler and replacing it with a focused `use Depth` checkbox that switches between `using Depth` and `using fallback` when sensor depth is available.
+- Changed the `TestLab.html` `use Depth` path so it now only enables the depth sensor plus reconstruction buffers for depth-aware light effects, instead of also activating the shared passthrough `Distance` or `Echo` masking visuals.
+- Separated visualizer-background visibility from passthrough/depth state, so `TestLab.html` can hide Butterchurn as an explicit background-layer policy instead of depending on depth or modified-reality blend side effects.
 
 ## [0.8.6] - 2026-04-01
 
@@ -21,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a `Radial` checkbox under the passthrough `Depth` controls, so depth masking can switch between the WebXR camera-plane depth metric and a reconstructed equal-range radial distance metric without changing the existing default behavior.
 
 ### Fixed
+- Restored `TestLab.html` to the shared depth-processing script loadout used by `index.html`, so immersive AR capability checks and the runtime path for passthrough/depth no longer break there because the extracted `xr-depth-processing.js` module was missing.
 - Restored the immersive-AR per-eye viewport after processed-depth reconstruction and skipped processed-depth work entirely when `Depth` is off, fixing the depth-toggle regression where one eye could show a warped VR image while the other still showed passthrough.
 
 ## [0.8.5] - 2026-03-31

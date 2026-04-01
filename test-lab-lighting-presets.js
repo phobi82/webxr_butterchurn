@@ -220,185 +220,98 @@ const buildTestLabFlashlight = function(state, timeSeconds, audioMetrics, varian
 	applyFixtureGroupsToLightingState(state, 0.08);
 };
 
-const createTestLabVariantDefinition = function(args) {
+const createTestLabEffectDefinition = function(args) {
 	return {
-		variantKey: args.variantKey,
-		variantLabel: args.variantLabel,
+		effectName: args.effectName,
+		effectDescription: args.effectDescription,
 		surfaceKey: args.surfaceKey,
 		buildState: args.buildState
 	};
 };
 
 const testLabLightingEffectDefinitions = [
-	{
+	createTestLabEffectDefinition({
 		effectName: "Soft Wash",
 		effectDescription: "Broad diffuse room-light fill for neutral additive-versus-alpha-blend evaluation.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabSoftWash
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabSoftWash
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "floor",
-				variantLabel: "Floor",
-				surfaceKey: "floor",
-				buildState: buildTestLabSoftWash
-			})
-		]
-	},
-	{
+		surfaceKey: "ceiling",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabSoftWash(state, timeSeconds, audioMetrics, "ceiling");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Shutters",
 		effectDescription: "Structured sliced wash that should read like light shaping rather than glowing panels.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabShutters
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabShutters
-			})
-		]
-	},
-	{
+		surfaceKey: "ceiling",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabShutters(state, timeSeconds, audioMetrics, "ceiling");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Edge Runner",
 		effectDescription: "Directed runner beam intended to travel along room structure instead of filling surfaces broadly.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabEdgeRunner
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabEdgeRunner
-			})
-		]
-	},
-	{
+		surfaceKey: "wall",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabEdgeRunner(state, timeSeconds, audioMetrics, "wall");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Silhouette Cut",
 		effectDescription: "Hard alpha-blend cut that should open the room sharply instead of behaving like a wash.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabSilhouetteCut
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabSilhouetteCut
-			})
-		]
-	},
-	{
+		surfaceKey: "wall",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabSilhouetteCut(state, timeSeconds, audioMetrics, "wall");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Room Window Beat",
 		effectDescription: "Rhythmic window-like alpha-blend opening keyed to beats rather than continuous motion or fill.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabRoomWindowBeat
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabRoomWindowBeat
-			})
-		]
-	},
-	{
+		surfaceKey: "wall",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabRoomWindowBeat(state, timeSeconds, audioMetrics, "wall");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Aurora Curtain",
 		effectDescription: "Ribbon-like drifting bands that should read atmospheric rather than as broad wash blobs.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "ceiling",
-				variantLabel: "Ceiling",
-				surfaceKey: "ceiling",
-				buildState: buildTestLabAuroraCurtain
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "wall",
-				variantLabel: "Wall",
-				surfaceKey: "wall",
-				buildState: buildTestLabAuroraCurtain
-			})
-		]
-	},
-	{
+		surfaceKey: "ceiling",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabAuroraCurtain(state, timeSeconds, audioMetrics, "ceiling");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Floor Halo",
 		effectDescription: "Localized underglow effect that should read as deliberate floor light rather than diffuse spill.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "floor",
-				variantLabel: "Centered",
-				surfaceKey: "floor",
-				buildState: buildTestLabFloorHalo
-			}),
-			createTestLabVariantDefinition({
-				variantKey: "directional",
-				variantLabel: "Directional",
-				surfaceKey: "floor",
-				buildState: buildTestLabFloorHalo
-			})
-		]
-	},
-	{
+		surfaceKey: "floor",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabFloorHalo(state, timeSeconds, audioMetrics, "floor");
+		}
+	}),
+	createTestLabEffectDefinition({
 		effectName: "Flashlight",
-		effectDescription: "Controller-oriented flashlight review mode without fake floor or wall variants.",
-		variants: [
-			createTestLabVariantDefinition({
-				variantKey: "controller",
-				variantLabel: "Controller",
-				surfaceKey: "controller",
-				buildState: buildTestLabFlashlight
-			})
-		]
-	}
+		effectDescription: "Controller-oriented flashlight review mode inside the shared effect pipeline.",
+		surfaceKey: "controller",
+		buildState: function(state, timeSeconds, audioMetrics) {
+			buildTestLabFlashlight(state, timeSeconds, audioMetrics, "controller");
+		}
+	})
 ];
 
 const testLabLightingPresetDefinitions = [];
 
 for (let effectIndex = 0; effectIndex < testLabLightingEffectDefinitions.length; effectIndex += 1) {
 	const effectDefinition = testLabLightingEffectDefinitions[effectIndex];
-	for (let variantIndex = 0; variantIndex < effectDefinition.variants.length; variantIndex += 1) {
-		const variantDefinition = effectDefinition.variants[variantIndex];
-		testLabLightingPresetDefinitions.push({
-			name: effectDefinition.effectName,
-			description: effectDefinition.effectDescription,
-			effectName: effectDefinition.effectName,
-			effectDescription: effectDefinition.effectDescription,
-			effectIndex: effectIndex,
-			effectCount: testLabLightingEffectDefinitions.length,
-			variantKey: variantDefinition.variantKey,
-			variantIndex: variantIndex,
-			variantCount: effectDefinition.variants.length,
-			variantLabel: variantDefinition.variantLabel,
-			surfaceKey: variantDefinition.surfaceKey,
-			buildState: (function(currentVariantDefinition) {
-				return function(state, timeSeconds, audioMetrics) {
-					currentVariantDefinition.buildState(state, timeSeconds, audioMetrics, currentVariantDefinition.variantKey);
-				};
-			})(variantDefinition)
-		});
-	}
+	testLabLightingPresetDefinitions.push({
+		name: effectDefinition.effectName,
+		description: effectDefinition.effectDescription,
+		effectName: effectDefinition.effectName,
+		effectDescription: effectDefinition.effectDescription,
+		effectIndex: effectIndex,
+		effectCount: testLabLightingEffectDefinitions.length,
+		variantKey: "",
+		variantIndex: 0,
+		variantCount: 1,
+		variantLabel: "",
+		surfaceKey: effectDefinition.surfaceKey,
+		buildState: effectDefinition.buildState
+	});
 }

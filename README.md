@@ -132,8 +132,8 @@ Notes:
 - Open [`TestLab.html`](./TestLab.html) when you want to inspect one lighting effect at a time instead of testing full presets.
 - The test lab starts with `Passthrough = Uniform -> Manual -> Mix 100%`, neutral floor/grid colors, and a room-style preview so the active effect stays easy to judge in isolation.
 - Desktop control goes through the mirrored menu, which is visible by default and still toggled with `M`, matching the in-headset interaction path.
-- Effects are organized as `effect -> variants`, and the catalog also includes `Flashlight` inside the shared Club/effect pipeline.
-- The page keeps the normal XR entry path and uses a reduced in-headset menu with `Active Effect`, `Variant`, `Darkness`, `Additive`, `Alpha Blend`, focused audio meters, and `Exit VR`.
+- The catalog cycles one isolated setup per effect, and also includes `Flashlight` inside the shared Club/effect pipeline.
+- The page keeps the normal XR entry path, including the same shared depth/passthrough runtime modules as `index.html`, and uses a reduced in-headset menu with `Active Effect`, `use Depth`, `Darkness`, `Additive`, `Alpha Blend`, focused audio meters, and `Exit VR`. In the test lab, the visualizer background layer is disabled as a separate render-policy decision, and `use Depth` only enables the sensor plus reconstruction pipeline for depth-aware light placement; it does not turn on the separate shared `Distance` or `Echo` passthrough mask visuals.
 
 ## Desktop Preview Controls
 

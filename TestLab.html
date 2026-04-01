@@ -16,6 +16,7 @@
 		<script src="xr-visualizer-modes.js"></script>
 		<script src="xr-passthrough-modes.js"></script>
 		<script src="xr-passthrough.js"></script>
+		<script src="xr-depth-processing.js"></script>
 		<script src="xr-world.js"></script>
 		<script src="xr-menu-sections.js"></script>
 		<script src="test-lab-menu.js"></script>
@@ -57,7 +58,7 @@
 			panel.appendChild(statusLabel);
 
 			const hintLabel = document.createElement("div");
-			hintLabel.textContent = "Use this page to inspect one lighting effect at a time, then compare explicit variants on desktop or in VR. The mirrored menu is visible on desktop by default and can still be toggled with M.";
+			hintLabel.textContent = "Use this page to inspect one lighting effect at a time on desktop or in VR. The mirrored menu is visible on desktop by default and can still be toggled with M.";
 			hintLabel.style.fontSize = "12px";
 			hintLabel.style.color = "#00ff00";
 			panel.appendChild(hintLabel);
@@ -185,11 +186,13 @@
 					buildModuleSections: createTestLabMenuSections
 				},
 				passthrough: {
+					backgroundLayerModeKey: "hidden",
 					initialBlendModeKey: "uniform",
 					initialUniformBlendModeKey: "manual",
 					initialManualMix: 1,
 					initialLightingModeKey: "club",
-					initialLightingDarkness: 0.05
+					initialLightingDarkness: 0.05,
+					depthVisualMaskingEnabledBool: false
 				},
 				lighting: {
 					initialPresetIndex: 0,
