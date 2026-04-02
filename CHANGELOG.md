@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-04-02
+
 ### Added
 - Declared the repository itself as MIT-licensed and added the matching `LICENSE` file plus README licensing guidance for downstream reuse.
 - Added `THIRD_PARTY_LICENSES.md` so the bundled Butterchurn assets now have an explicit upstream licensing reference inside the repository.
@@ -24,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced ~20 ternary fallback chains in `getMenuContentState` with default selection state objects.
 - Removed the dead `createSourceBackend` option from `createVisualizerEngine` since the source backend is now injected externally via `init()`.
 - Deduplicated the slider builder loop in `test-lab-menu.js` by reusing the shared `appendSliderMenuControls` helper.
+- Rewrote `README.md` with grouped features, control tables, requirements table, collapsible project structure and Quest setup sections, in-headset menu screenshot, and removed the verbose `Current Status` section.
 
 ## [0.8.6] - 2026-04-01
 
