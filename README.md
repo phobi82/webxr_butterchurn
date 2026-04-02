@@ -48,6 +48,8 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
 - **Depth Reconstruction**: shared full-resolution prepass with **Raw**, **Edge-aware**, and **Heightmap** modes, preferring float render targets to avoid 8-bit banding
 - **Motion compensation**: enabled by default for depth masking, with a `Compensation Factor` slider to tune how strongly the mask follows recent head yaw, pitch, and translation
+- **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
+- **Depth-bound Soft Wash**: the first wash effect can now fit broad light masks onto real ceiling, wall, and floor surfaces from sensor depth instead of only inflating a screen-space blob
 - Background mix crossfades between visualizer and darkened modified reality via **manual** or **sound-reactive** blend modes
 
 ### Scene Lighting
@@ -55,6 +57,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - Lighting modes: **None**, **Uniform**, **Spots**, **Club** (preset- and audio-driven)
 - Lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - Optional WebXR depth sensing for depth-aware light placement in immersive AR
+- Shared fixture groups drive both passthrough lighting and VR-world scene lighting so color and timing stay synchronized
 
 ### XR Session
 
@@ -110,7 +113,7 @@ The menu exposes these sections:
 - **Eye Distance** and **World Opacity** sliders
 - **Background**: manual or sound-reactive mix mode with blend control
 - **Passthrough**: Flashlight toggle, depth modes (Distance, Echo) with reconstruction selector
-- **Scene Lighting**: lighting mode, light preset, darkness control
+- **Scene Lighting**: lighting mode, light preset, anchor mode, darkness control
 - **Visualizer Mode** selector with horizontal mirror toggle
 - **Butterchurn Preset** selector
 - **Session**: Exit VR button
@@ -178,6 +181,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-foundation.js` | Shared browser, XR, math, and rendering helpers |
 | `xr-audio-controller.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-light-fixture-effects.js` | Shared fixture-effect families and passthrough effect semantics |
+| `xr-light-projection.js` | Real-world and fallback-room light projection helpers for passthrough lighting |
 | `xr-light-presets.js` | Lighting preset catalog, fixture-rig builders, scene-light derivation |
 | `test-lab-lighting-presets.js` | Isolated single-effect preset catalog for TestLab |
 | `xr-visualizer.js` | Visualizer engine, Butterchurn integration, preset lifecycle |

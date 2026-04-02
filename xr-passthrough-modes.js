@@ -11,6 +11,12 @@ const passthroughLightingModeDefinitions = [
 	{key: "club", label: "Club"}
 ];
 
+const passthroughLightingAnchorModeDefinitions = [
+	{key: "auto", label: "Auto"},
+	{key: "vrWorld", label: "VR World"},
+	{key: "realWorld", label: "Real World"}
+];
+
 const passthroughDepthModeDefinitions = [
 	{key: "distance", label: "Distance"},
 	{key: "echo", label: "Echo"}

@@ -26,17 +26,19 @@ const fixtureEffectDefinitions = [
 	{
 		key: FIXTURE_EFFECT_MODE_NONE,
 		shaderType: 0,
-		alphaBlendStrength: 0.46,
+		alphaBlendStrength: 0.52,
 		getState: function() {
 			return {density: 0, amount: 0};
 		},
 		shaderLines: [
-			"float radial=length(localNorm*vec2(0.92,1.08));",
-			"float broad=1.0-smoothstep(0.08,1.0,radial);",
-			"float plumeA=0.5+0.5*sin((localNorm.x*0.8+localNorm.y*0.24+phase)*6.28318);",
-			"float plumeB=0.5+0.5*sin((localNorm.y*0.62-localNorm.x*0.16-phase*0.52)*6.28318);",
-			"float cloud=smoothstep(0.2,0.88,plumeA*0.58+plumeB*0.42);",
-			"return vec2(0.82+cloud*0.18,broad*(0.34+cloud*(0.24+amount*0.08)));"
+			"float radial=length(localNorm*vec2(0.86,1.06));",
+			"float broad=1.0-smoothstep(0.04,1.0,radial);",
+			"float core=1.0-smoothstep(0.0,0.42,radial);",
+			"float plumeA=0.5+0.5*sin((localNorm.x*0.72+localNorm.y*0.18+phase)*6.28318);",
+			"float plumeB=0.5+0.5*sin((localNorm.y*0.48-localNorm.x*0.12-phase*0.38)*6.28318);",
+			"float cloud=smoothstep(0.18,0.9,plumeA*0.52+plumeB*0.48);",
+			"float shoulder=broad*(0.42+cloud*0.26);",
+			"return vec2(0.78+core*0.08+cloud*0.14,max(shoulder*(0.36+amount*0.08),core*(0.3+cloud*0.12)));"
 		]
 	},
 	{

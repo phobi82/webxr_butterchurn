@@ -37,6 +37,17 @@ const createTestLabMenuSections = function(args) {
 			nextAction: {type: "sceneLightPreset.cycle", direction: 1},
 			prevHoverKey: "sceneLightPreset:prev",
 			nextHoverKey: "sceneLightPreset:next"
+		}),
+		createCyclerMenuControlState({
+			key: "sceneLightingAnchorMode",
+			label: "World Anchor",
+			valueText: getMenuModeLabelByKey(args.lightingAnchorModes, args.selectedLightingAnchorModeKey, "Auto"),
+			metaText: getLightingAnchorModeMetaText(args.selectedLightingAnchorModeKey),
+			hoveredAction: getHoveredCyclerAction(args, "sceneLightingAnchorMode:prev", "sceneLightingAnchorMode:next"),
+			prevAction: {type: "sceneLightingAnchorMode.cycle", direction: -1},
+			nextAction: {type: "sceneLightingAnchorMode.cycle", direction: 1},
+			prevHoverKey: "sceneLightingAnchorMode:prev",
+			nextHoverKey: "sceneLightingAnchorMode:next"
 		})
 	];
 	if (args.passthroughUiState && args.passthroughUiState.usableDepthAvailableBool) {

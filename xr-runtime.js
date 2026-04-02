@@ -278,6 +278,11 @@ const createRuntime = function(options) {
 				passthroughController.cycleLightingMode(action.direction);
 			}
 		},
+		"sceneLightingAnchorMode.cycle": function(action) {
+			if (action && passthroughController && passthroughController.cycleLightingAnchorMode) {
+				passthroughController.cycleLightingAnchorMode(action.direction);
+			}
+		},
 		"sceneLightPreset.cycle": function(action) {
 			if (action) {
 				cycleLightingEffect(action.direction);

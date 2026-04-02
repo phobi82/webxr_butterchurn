@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Added a passthrough lighting `Anchor` mode cycler (`Auto`, `VR World`, `Real World`) under `Scene Lighting`, with `Auto` preferring real-world anchoring when usable depth is available and otherwise falling back to VR-world anchoring.
+- Reworked the first shared `Soft Wash` lighting effect so immersive-AR passthrough can fit broad wash masks against real ceiling, wall, and floor surfaces from depth samples instead of only scaling a hypothetical-room UV blob.
+- Changed fallback wash placement so missing depth now uses the same realistic room shell but can be anchored to the VR world, while forced `Real World` keeps the hypothetical room stable in reference-space coordinates.
+- Tuned shared scene-light derivation so broad wash-heavy presets contribute more strongly to VR ambient fill, keeping the virtual world lighting closer to the visible modified-reality wash.
+
 ## [0.8.8] - 2026-04-02
 
 ### Changed

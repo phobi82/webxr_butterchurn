@@ -534,13 +534,18 @@ const applyFixtureGroupsToLightingState = function(state, ambientBaseStrength) {
 	let ambientR = 0;
 	let ambientG = 0;
 	let ambientB = 0;
+	let washWeight = 0;
 	for (let i = 0; i < rankedGroups.length; i += 1) {
 		const group = rankedGroups[i];
-		const weight = Math.max(0, group.intensity) * (group.type === "wash" ? 1 : 0.55);
+		const broadWashBoost = group.type === "wash" && (group.effectMode || "") === FIXTURE_EFFECT_MODE_NONE ? 1.22 : 1;
+		const weight = Math.max(0, group.intensity) * (group.type === "wash" ? broadWashBoost : 0.55);
 		if (weight <= 0.0001) {
 			continue;
 		}
 		ambientWeight += weight;
+		if (group.type === "wash") {
+			washWeight += weight;
+		}
 		ambientR += group.color[0] * weight;
 		ambientG += group.color[1] * weight;
 		ambientB += group.color[2] * weight;
@@ -550,7 +555,7 @@ const applyFixtureGroupsToLightingState = function(state, ambientBaseStrength) {
 		state.ambientColor[1] = clampNumber(ambientG / ambientWeight, 0, 1);
 		state.ambientColor[2] = clampNumber(ambientB / ambientWeight, 0, 1);
 	}
-	state.ambientStrength = clampNumber((ambientBaseStrength == null ? 0.18 : ambientBaseStrength) + ambientWeight * 0.05, 0.08, 0.7);
+	state.ambientStrength = clampNumber((ambientBaseStrength == null ? 0.18 : ambientBaseStrength) + ambientWeight * 0.05 + washWeight * 0.018, 0.08, 0.8);
 };
 
 const createTopLightDirection = function(azimuth, height, ellipseX, ellipseZ) {

@@ -63,6 +63,7 @@ const appConfig = {
 		initialBlendModeKey: "uniform",
 		initialUniformBlendModeKey: "audioReactive",
 		initialLightingModeKey: "club",
+		initialLightingAnchorModeKey: "auto",
 		initialLightingDarkness: 0.05,
 		initialManualMix: 0,
 		initialAudioReactiveIntensity: -1,

@@ -910,6 +910,7 @@ const createSceneRenderer = function(options) {
 		// Layer 2: Modified Reality Overlay
 		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
 			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
+				renderViewMatrix: currentView,
 				viewMatrix: passthroughViewMatrix,
 				projMatrix: passthroughProjMatrix,
 				depthProjMatrix: currentProj,

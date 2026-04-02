@@ -8,6 +8,16 @@ const formatMenuPercentText = function(value) {
 	return Math.round(value * 100) + "%";
 };
 
+const getLightingAnchorModeMetaText = function(key) {
+	if (key === "vrWorld") {
+		return "Fixed to the VR world";
+	}
+	if (key === "realWorld") {
+		return "Fixed to the real room";
+	}
+	return "Auto: depth -> real room, fallback -> VR world";
+};
+
 const hasHoveredActionKey = function(args, hoverKey) {
 	return !!(hoverKey && args && args.hoveredActionKeys && args.hoveredActionKeys[hoverKey]);
 };
@@ -476,6 +486,17 @@ const createSceneLightingMenuSectionState = function(args) {
 			nextAction: {type: "sceneLightPreset.cycle", direction: 1},
 			prevHoverKey: "sceneLightPreset:prev",
 			nextHoverKey: "sceneLightPreset:next"
+		}),
+		createCyclerMenuControlState({
+			key: "sceneLightingAnchorMode",
+			label: "World Anchor",
+			valueText: getMenuModeLabelByKey(args.lightingAnchorModes, args.selectedLightingAnchorModeKey, "Auto"),
+			metaText: getLightingAnchorModeMetaText(args.selectedLightingAnchorModeKey),
+			hoveredAction: getHoveredCyclerAction(args, "sceneLightingAnchorMode:prev", "sceneLightingAnchorMode:next"),
+			prevAction: {type: "sceneLightingAnchorMode.cycle", direction: -1},
+			nextAction: {type: "sceneLightingAnchorMode.cycle", direction: 1},
+			prevHoverKey: "sceneLightingAnchorMode:prev",
+			nextHoverKey: "sceneLightingAnchorMode:next"
 		})
 	];
 	appendSliderMenuControls(controls, args.sliderControls);
@@ -520,7 +541,9 @@ const createLowerMenuSections = function(args) {
 		}),
 		createSceneLightingMenuSectionState({
 			lightingModes: args.lightingModes,
+			lightingAnchorModes: args.lightingAnchorModes,
 			selectedLightingModeKey: args.selectedLightingModeKey,
+			selectedLightingAnchorModeKey: args.selectedLightingAnchorModeKey,
 			hoveredActionKeys: args.hoveredActionKeys,
 			currentLightPresetName: args.currentLightPresetName,
 			currentLightPresetDescription: args.currentLightPresetDescription,
