@@ -355,15 +355,30 @@ const createPassthroughMenuSectionState = function(args) {
 		}));
 	}
 	if (uiState.usableDepthAvailableBool && uiState.depthActiveBool) {
-		controls.push(createCheckboxMenuControlState({
-			key: "passthroughDepthRadialToggle",
-			label: "real Distance Metric",
-			valueText: uiState.depthRadialBool ? "radial" : "planar",
-			checkedBool: !!uiState.depthRadialBool,
-			hoveredBool: hasHoveredActionKey(args, "passthroughDepthRadialToggle:toggle"),
-			action: {type: "passthroughDepthRadial.toggle"},
-			hoverKey: "passthroughDepthRadialToggle:toggle"
+		controls.push(createChoiceRowMenuControlState({
+			key: "passthroughDepthMotionRow",
+			label: "",
+			rowStyle: "checkbox",
+			items: [
+				{
+					key: "passthroughDepthRadialToggle",
+					label: "real Distance Metric",
+					checkedBool: !!uiState.depthRadialBool,
+					hoveredBool: hasHoveredActionKey(args, "passthroughDepthRadialToggle:toggle"),
+					action: {type: "passthroughDepthRadial.toggle"},
+					hoverKey: "passthroughDepthRadialToggle:toggle"
+				},
+				{
+					key: "passthroughDepthMotionCompensationToggle",
+					label: "Motion compensation",
+					checkedBool: !!uiState.depthMotionCompensationBool,
+					hoveredBool: hasHoveredActionKey(args, "passthroughDepthMotionCompensationToggle:toggle"),
+					action: {type: "passthroughDepthMotionCompensation.toggle"},
+					hoverKey: "passthroughDepthMotionCompensationToggle:toggle"
+				}
+			]
 		}));
+		appendDepthSliderControlByKey("depthMotionCompensationFactor");
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthReconstruction",
 			label: "Reconstruction",

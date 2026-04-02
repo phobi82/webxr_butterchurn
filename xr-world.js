@@ -577,6 +577,7 @@ const createSceneRenderer = function(options) {
 				rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
 				depthNearZ: gl.getUniformLocation(program, "depthNearZ"),
 				depthMetricMode: gl.getUniformLocation(program, "depthMetricMode"),
+				depthMotionCompensation: gl.getUniformLocation(program, "depthMotionCompensation"),
 				depthProjectionParams: gl.getUniformLocation(program, "depthProjectionParams"),
 				depthUvTransform: gl.getUniformLocation(program, "depthUvTransform")
 			};
@@ -630,6 +631,7 @@ const createSceneRenderer = function(options) {
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
 			"uniform float depthMetricMode;",
+			"uniform vec2 depthMotionCompensation;",
 			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"varying vec2 vScreenUv;",
@@ -653,13 +655,15 @@ const createSceneRenderer = function(options) {
 			"}",
 			"float resolveDepthMetric(float depthMeters){",
 			"if(depthMetricMode<0.5){return depthMeters;}",
-			"vec2 ndc=vScreenUv*2.0-1.0;",
+			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
+			"vec2 ndc=compensatedScreenUv*2.0-1.0;",
 			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 			"}",
 			"void main(){",
 			"vec4 worldColor=texture2D(worldTexture,vScreenUv);",
-			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
+			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
+			"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture2D(depthTexture,depthUv).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
@@ -693,6 +697,7 @@ const createSceneRenderer = function(options) {
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
 			"uniform float depthMetricMode;",
+			"uniform vec2 depthMotionCompensation;",
 			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"in vec2 vScreenUv;",
@@ -717,13 +722,15 @@ const createSceneRenderer = function(options) {
 			"}",
 			"float resolveDepthMetric(float depthMeters){",
 			"if(depthMetricMode<0.5){return depthMeters;}",
-			"vec2 ndc=vScreenUv*2.0-1.0;",
+			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
+			"vec2 ndc=compensatedScreenUv*2.0-1.0;",
 			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 			"}",
 			"void main(){",
 			"vec4 worldColor=texture(worldTexture,vScreenUv);",
-			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
+			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
+			"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
@@ -825,6 +832,11 @@ const createSceneRenderer = function(options) {
 				gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 				gl.uniform1f(locs.depthNearZ, profile.nearZ);
 				gl.uniform1f(locs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
+				gl.uniform2f(
+					locs.depthMotionCompensation,
+					worldMaskState.depthMotionCompensation ? worldMaskState.depthMotionCompensation.x : 0,
+					worldMaskState.depthMotionCompensation ? worldMaskState.depthMotionCompensation.y : 0
+				);
 				gl.uniform4f(
 					locs.depthProjectionParams,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xScale : 1,
@@ -1019,6 +1031,7 @@ const createSceneRenderer = function(options) {
 			args.processedDepthInfo = null;
 			args.processedDepthFrameKind = "";
 			args.processedDepthProfile = null;
+			args.viewIndex = 0;
 			args.outputFramebuffer = null;
 			args.targetViewport = {x: 0, y: 0, width: canvas.width, height: canvas.height};
 			if (args.visualizerEngine) {
@@ -1060,6 +1073,7 @@ const createSceneRenderer = function(options) {
 				args.passthroughViewMatrix = currentPassthroughView;
 				args.passthroughProjMatrix = currentPassthroughProj;
 				args.rawPassthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[i] ? args.passthroughDepthInfoByView[i] : null;
+				args.viewIndex = i;
 				args.outputFramebuffer = args.baseLayer.framebuffer;
 				args.targetViewport = viewport;
 				const depthProcessingConfig = args.passthroughController && args.passthroughController.getDepthProcessingConfig ? args.passthroughController.getDepthProcessingConfig() : null;

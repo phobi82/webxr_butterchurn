@@ -151,6 +151,18 @@ const getPassthroughControlDefinitions = function(state) {
 				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
 			);
 		}
+		if (state.depthMotionCompensationBool) {
+			controls.push({
+				key: "depthMotionCompensationFactor",
+				label: "Comp.Factor",
+				value: state.depthMotionCompensationFactor,
+				min: 0,
+				max: 5,
+				minLabel: "0.0",
+				maxLabel: "5.0",
+				valueText: state.depthMotionCompensationFactor.toFixed(2)
+			});
+		}
 		controls.push(
 			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
 		);

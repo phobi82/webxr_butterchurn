@@ -248,6 +248,11 @@ const createRuntime = function(options) {
 				passthroughController.toggleDepthRadial();
 			}
 		},
+		"passthroughDepthMotionCompensation.toggle": function() {
+			if (passthroughController && passthroughController.toggleDepthMotionCompensation) {
+				passthroughController.toggleDepthMotionCompensation();
+			}
+		},
 		"passthroughDepthReconstruction.cycle": function(action) {
 			if (action && passthroughController && passthroughController.cycleDepthReconstructionMode) {
 				passthroughController.cycleDepthReconstructionMode(action.direction);
@@ -472,7 +477,7 @@ const createRuntime = function(options) {
 			passthroughController.setDepthAvailability(state.usableDepthAvailableBool);
 		}
 		if (passthroughController && passthroughController.updateFrame) {
-			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics()});
+			passthroughController.updateFrame({delta: delta, audioMetrics: getAudioMetrics(), passthroughPose: passthroughPose || renderPose});
 		}
 		if (state.visualizerEngine) {
 			if (renderPose.transform && renderPose.views.length) {

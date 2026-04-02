@@ -656,6 +656,7 @@ const createMenuController = function(options) {
 			flashlightActiveBool: false,
 			depthActiveBool: false,
 			depthRadialBool: true,
+			depthMotionCompensationBool: false,
 			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
 			selectedDepthReconstructionModeKey: "heightmap",
 			depthModes: passthroughDepthModeDefinitions,
