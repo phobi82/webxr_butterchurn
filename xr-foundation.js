@@ -2,7 +2,7 @@
 // Naming convention: boolean variables use *Bool suffix, boolean-returning methods use is*() prefix.
 // Load order: xr-foundation → xr-audio-controller → xr-light-fixture-effects → xr-light-presets →
 //   xr-passthrough-modes → xr-passthrough → xr-menu-sections → xr-menu → xr-visualizer-modes →
-//   xr-visualizer → xr-world → xr-runtime → app-composition
+//   xr-visualizer → xr-collision → xr-locomotion → xr-world → xr-runtime → app-composition
 const tau = Math.PI * 2; // full circle in radians (tau = 2 * pi)
 
 const clampNumber = function(value, minValue, maxValue) {

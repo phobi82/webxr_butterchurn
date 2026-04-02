@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed the `TestLab.html` `use Depth` path so it now only enables the depth sensor plus reconstruction buffers for depth-aware light effects, instead of also activating the shared passthrough `Distance` or `Echo` masking visuals.
 - Separated visualizer-background visibility from passthrough/depth state at the app/runtime render-policy level, so `TestLab.html` can exclude Butterchurn from the framegraph without routing that decision through the passthrough controller.
 - Reworked the shared XR menu interaction path to use structured declarative `action` objects plus `hoverKey` metadata, and replaced the runtime string-key `if (...)` chain with one central runtime action registry that maps actions onto the existing domain methods.
+- Split `xr-world.js` into `xr-collision.js` (collision world), `xr-locomotion.js` (movement, physics, jumping), and the remaining `xr-world.js` (GLB asset loading and scene renderer).
+- Unified slider hover tracking into the shared `hoveredActionKeys` system, removing the separate `hoveredMenuSliderControlKeys`, `eyeDistanceHoverBool`, and `floorAlphaHoverBool` state paths.
+- Cached the menu action handler registry once at runtime creation instead of rebuilding it on every dispatch call.
+- Replaced ~20 ternary fallback chains in `getMenuContentState` with default selection state objects.
+- Removed the dead `createSourceBackend` option from `createVisualizerEngine` since the source backend is now injected externally via `init()`.
+- Deduplicated the slider builder loop in `test-lab-menu.js` by reusing the shared `appendSliderMenuControls` helper.
 
 ## [0.8.6] - 2026-04-01
 

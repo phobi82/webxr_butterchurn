@@ -52,7 +52,9 @@ Local WebXR prototype built with plain HTML and vanilla JavaScript. The project 
 - `xr-passthrough.js`: passthrough controller, fallback policy, background-composite state, and overlay-lighting compositor
 - `xr-depth-processing.js`: shared full-resolution depth reconstruction prepass for raw, edge-aware, and heightmap depth processing, preferring float render targets to avoid 8-bit mask banding when the browser supports them
 - `xr-menu-sections.js`: generic menu section/control descriptors for lower interactive menu groups
-- `xr-world.js`: collision world, locomotion, GLB loading, and scene renderer
+- `xr-collision.js`: AABB collision world with floor height, horizontal slide, vertical resolution, and step-up logic
+- `xr-locomotion.js`: shared XR and desktop locomotion with walking, jumping, sprinting, crouching, tiptoe, airborne boost, and gravity
+- `xr-world.js`: GLB asset loading and scene renderer
 - `xr-menu.js`: menu canvas rendering, desktop preview, and XR/desktop menu interaction
 - `xr-shell.js`: explicit DOM-shell contract plus reusable shell normalization/builder helpers
 - `xr-runtime.js`: shared runtime orchestration for XR sessions, desktop preview, audio wiring, and render-loop flow
