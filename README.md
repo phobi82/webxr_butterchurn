@@ -47,7 +47,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
 - **Depth Reconstruction**: shared full-resolution prepass with **Raw**, **Edge-aware**, and **Heightmap** modes, preferring float render targets to avoid 8-bit banding
-- **Motion compensation**: optional depth-mask offset driven by recent head yaw, pitch, and translation, with a `Compensation Factor` slider to tune how strongly the mask follows headset motion
+- **Motion compensation**: enabled by default for depth masking, with a `Compensation Factor` slider to tune how strongly the mask follows recent head yaw, pitch, and translation
 - Background mix crossfades between visualizer and darkened modified reality via **manual** or **sound-reactive** blend modes
 
 ### Scene Lighting

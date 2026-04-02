@@ -9,6 +9,7 @@ const PASSTHROUGH_ROOM_FLOOR_Y = 0.08;
 const PASSTHROUGH_ROOM_WALL_Y = 1.35;
 const PASSTHROUGH_DEPTH_MIN_METERS = 0.15;
 const PASSTHROUGH_DEPTH_MAX_METERS = 12;
+const PASSTHROUGH_DEPTH_MOTION_SMOOTHING_SECONDS = 0.05;
 
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT = "current";
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY = "additiveOnly";
@@ -504,7 +505,7 @@ const createPassthroughController = function(options) {
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
 		depthModeKey: options.initialDepthModeKey || "distance",
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
-		depthMotionCompensationBool: options.initialDepthMotionCompensationBool == null ? false : !!options.initialDepthMotionCompensationBool,
+		depthMotionCompensationBool: options.initialDepthMotionCompensationBool == null ? true : !!options.initialDepthMotionCompensationBool,
 		depthMotionCompensationFactor: options.initialDepthMotionCompensationFactor == null ? 2.8 : options.initialDepthMotionCompensationFactor,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
@@ -529,6 +530,7 @@ const createPassthroughController = function(options) {
 		usableDepthAvailableBool: false,
 		depthVisualMaskingEnabledBool: options.depthVisualMaskingEnabledBool == null ? true : !!options.depthVisualMaskingEnabledBool,
 		depthMotionCompensationByView: [],
+		filteredDepthMotionVelocityByView: [],
 		previousDepthMotionPoseByView: [],
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
@@ -567,14 +569,26 @@ const createPassthroughController = function(options) {
 		};
 	};
 
+	const getDepthMotionSmoothingAlpha = function(delta) {
+		const safeDelta = Math.max(1 / 240, delta || 1 / 240);
+		const tau = Math.max(0.001, PASSTHROUGH_DEPTH_MOTION_SMOOTHING_SECONDS);
+		return 1 - Math.exp(-safeDelta / tau);
+	};
+
 	const clearDepthMotionCompensation = function() {
 		state.depthMotionCompensationByView.length = 0;
+	};
+
+	const resetDepthMotionCompensationFilter = function() {
+		clearDepthMotionCompensation();
+		state.filteredDepthMotionVelocityByView.length = 0;
+		state.previousDepthMotionPoseByView.length = 0;
 	};
 
 	const updateDepthMotionCompensation = function(passthroughPose, delta) {
 		clearDepthMotionCompensation();
 		if (!state.depthMotionCompensationBool || !passthroughPose || !passthroughPose.views || !passthroughPose.views.length || !Number.isFinite(delta) || delta <= 0) {
-			state.previousDepthMotionPoseByView.length = 0;
+			resetDepthMotionCompensationFilter();
 			return;
 		}
 		for (let i = 0; i < passthroughPose.views.length; i += 1) {
@@ -585,12 +599,13 @@ const createPassthroughController = function(options) {
 			if (!orientation || !position || !view.projectionMatrix) {
 				state.previousDepthMotionPoseByView[i] = null;
 				state.depthMotionCompensationByView[i] = {x: 0, y: 0};
+				state.filteredDepthMotionVelocityByView[i] = {x: 0, y: 0};
 				continue;
 			}
 			const currentYawPitch = extractForwardYawPitchFromQuaternion(orientation);
 			const previousPose = state.previousDepthMotionPoseByView[i];
-			let compensationX = 0;
-			let compensationY = 0;
+			let velocityX = 0;
+			let velocityY = 0;
 			if (previousPose && previousPose.position && previousPose.orientation) {
 				const previousYaw = previousPose.yaw;
 				const previousPitch = previousPose.pitch;
@@ -610,13 +625,31 @@ const createPassthroughController = function(options) {
 					positionDeltaZ * orientationBasis.up.z;
 				const projectionParams = buildDepthProjectionParams(view.projectionMatrix);
 				const referenceDepth = Math.max(state.depthModeKey === "distance" ? state.depthThreshold : 1, 0.35);
-				compensationX = (yawDelta + (localDeltaX / referenceDepth)) * projectionParams.xScale * 0.5;
-				compensationY = (pitchDelta + (localDeltaY / referenceDepth)) * projectionParams.yScale * 0.5;
+				const safeDelta = Math.max(delta, 1 / 240);
+				velocityX = ((yawDelta + (localDeltaX / referenceDepth)) * projectionParams.xScale * 0.5) / safeDelta;
+				velocityY = ((pitchDelta + (localDeltaY / referenceDepth)) * projectionParams.yScale * 0.5) / safeDelta;
 			}
+			const rawVelocity = {
+				x: clampNumber(velocityX, -7.5, 7.5),
+				y: clampNumber(velocityY, -7.5, 7.5)
+			};
+			const previousFilteredVelocity = state.filteredDepthMotionVelocityByView[i] || {x: 0, y: 0};
+			const velocityAlpha = getDepthMotionSmoothingAlpha(delta);
+			const filteredVelocity = {
+				x: lerpNumber(previousFilteredVelocity.x, rawVelocity.x, velocityAlpha),
+				y: lerpNumber(previousFilteredVelocity.y, rawVelocity.y, velocityAlpha)
+			};
+			if (Math.abs(filteredVelocity.x) < 0.005) {
+				filteredVelocity.x = 0;
+			}
+			if (Math.abs(filteredVelocity.y) < 0.005) {
+				filteredVelocity.y = 0;
+			}
+			state.filteredDepthMotionVelocityByView[i] = filteredVelocity;
 			const compensationScale = clampNumber(state.depthMotionCompensationFactor, 0, 5);
 			state.depthMotionCompensationByView[i] = {
-				x: clampNumber(compensationX * compensationScale, -0.35, 0.35),
-				y: clampNumber(compensationY * compensationScale, -0.35, 0.35)
+				x: clampNumber(filteredVelocity.x * delta * compensationScale, -0.35, 0.35),
+				y: clampNumber(filteredVelocity.y * delta * compensationScale, -0.35, 0.35)
 			};
 			state.previousDepthMotionPoseByView[i] = {
 				position: {x: position.x, y: position.y, z: position.z},
@@ -942,8 +975,7 @@ const createPassthroughController = function(options) {
 		toggleDepthMotionCompensation: function() {
 			state.depthMotionCompensationBool = !state.depthMotionCompensationBool;
 			if (!state.depthMotionCompensationBool) {
-				clearDepthMotionCompensation();
-				state.previousDepthMotionPoseByView.length = 0;
+				resetDepthMotionCompensationFilter();
 			}
 		},
 		cycleDepthReconstructionMode: function(direction) {

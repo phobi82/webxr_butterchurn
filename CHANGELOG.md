@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Corrected the README XR rendering description to match the current implementation: rendering uses `XRWebGLLayer`, while `XRWebGLBinding` is only used for depth queries when available.
 - Added an optional `Motion compensation` checkbox beside `real Distance Metric` for depth-aware masking, plus a `Compensation Factor` slider that shifts the sampled depth mask against recent head yaw, pitch, and translation to reduce visible lag during headset motion.
+- Changed `Motion compensation` to start enabled by default whenever the depth controls are available.
+- Changed the depth motion-compensation filtering to use a fixed linear velocity smoothing step instead of an adaptive response, making the visible lag feel more even during head motion.
 
 ## [0.8.7] - 2026-04-02
 
