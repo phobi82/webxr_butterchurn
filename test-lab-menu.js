@@ -50,25 +50,7 @@ const createTestLabMenuSections = function(args) {
 			hoverKey: "passthroughDepthToggle:toggle"
 		}));
 	}
-	const effectReviewSliderControls = (args.sceneLightingControls || []).concat(args.effectSemanticControls || []);
-	for (let i = 0; i < effectReviewSliderControls.length; i += 1) {
-		const sliderControl = effectReviewSliderControls[i];
-		if (!sliderControl || !sliderControl.control) {
-			continue;
-		}
-		controls.push(createSliderMenuControlState({
-			key: sliderControl.control.key,
-			label: sliderControl.control.label,
-			valueText: formatMenuPercentText(sliderControl.control.value),
-			sliderU: sliderControl.sliderU || 0,
-			minLabel: sliderControl.control.minLabel,
-			maxLabel: sliderControl.control.maxLabel,
-			hoveredBool: !!sliderControl.hoveredBool,
-			activeBool: !!sliderControl.activeBool,
-			sliderKey: sliderControl.control.key,
-			hoverKey: sliderControl.control.key
-		}));
-	}
+	appendSliderMenuControls(controls, (args.sceneLightingControls || []).concat(args.effectSemanticControls || []));
 	return [
 		createMenuSectionState({
 			key: "testLabEffect",

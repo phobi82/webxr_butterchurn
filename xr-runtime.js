@@ -216,103 +216,102 @@ const createRuntime = function(options) {
 		}
 		return sceneLighting.cycleVariant(direction < 0 ? -1 : 1);
 	};
-	const getMenuActionHandlers = function() {
-		return {
-			"session.exit": function() {
-				if (state.xrSession) {
-					state.xrSession.end();
-				}
-			},
-			"jumpMode.set": function(action) {
-				if (action && menuController && menuController.setJumpMode) {
-					menuController.setJumpMode(action.mode);
-				}
-			},
-			"backgroundMixMode.select": function(action) {
-				if (action && passthroughController && passthroughController.selectMixMode) {
-					passthroughController.selectMixMode(action.key);
-				}
-			},
-			"passthroughFlashlight.toggle": function() {
-				if (passthroughController && passthroughController.toggleFlashlight) {
-					passthroughController.toggleFlashlight();
-				}
-			},
-			"passthroughDepth.toggle": function() {
-				if (passthroughController && passthroughController.toggleDepth) {
-					passthroughController.toggleDepth();
-				}
-			},
-			"passthroughDepthRadial.toggle": function() {
-				if (passthroughController && passthroughController.toggleDepthRadial) {
-					passthroughController.toggleDepthRadial();
-				}
-			},
-			"passthroughDepthReconstruction.cycle": function(action) {
-				if (action && passthroughController && passthroughController.cycleDepthReconstructionMode) {
-					passthroughController.cycleDepthReconstructionMode(action.direction);
-				}
-			},
-			"passthroughDepthMode.cycle": function(action) {
-				if (action && passthroughController && passthroughController.cycleDepthMode) {
-					passthroughController.cycleDepthMode(action.direction);
-				}
-			},
-			"depthEchoReactive.toggle": function(action) {
-				if (action && passthroughController && passthroughController.toggleDepthEchoReactive) {
-					passthroughController.toggleDepthEchoReactive(action.key);
-				}
-			},
-			"depthDistanceReactive.toggle": function() {
-				if (passthroughController && passthroughController.toggleDepthDistanceReactive) {
-					passthroughController.toggleDepthDistanceReactive();
-				}
-			},
-			"sceneLightingMode.cycle": function(action) {
-				if (action && passthroughController && passthroughController.cycleLightingMode) {
-					passthroughController.cycleLightingMode(action.direction);
-				}
-			},
-			"sceneLightPreset.cycle": function(action) {
-				if (action) {
-					cycleLightingEffect(action.direction);
-				}
-			},
-			"visualizerMode.cycle": function(action) {
-				if (!action || !state.visualizerEngine) {
-					return Promise.resolve();
-				}
-				const selectionState = getVisualizerSelectionState();
-				const count = selectionState ? selectionState.modeNames.length : 0;
-				if (!count) {
-					return Promise.resolve();
-				}
-				return state.visualizerEngine.selectMode(selectionState.currentModeIndex + (action.direction < 0 ? -1 : 1));
-			},
-			"visualizerHorizontalMirror.toggle": function() {
-				if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
-					return Promise.resolve();
-				}
-				return state.visualizerEngine.toggleHorizontalMirror();
-			},
-			"butterchurnPreset.cycle": function(action) {
-				if (!action || !state.visualizerEngine) {
-					return Promise.resolve();
-				}
-				const selectionState = getVisualizerSelectionState();
-				const count = selectionState ? selectionState.presetNames.length : 0;
-				if (!count) {
-					return Promise.resolve();
-				}
-				return state.visualizerEngine.selectPreset((selectionState.currentPresetIndex + (action.direction < 0 ? -1 : 1) + count) % count);
+	// Action registry built once; handlers close over runtime state so they stay current.
+	const menuActionHandlers = {
+		"session.exit": function() {
+			if (state.xrSession) {
+				state.xrSession.end();
 			}
-		};
+		},
+		"jumpMode.set": function(action) {
+			if (action && menuController && menuController.setJumpMode) {
+				menuController.setJumpMode(action.mode);
+			}
+		},
+		"backgroundMixMode.select": function(action) {
+			if (action && passthroughController && passthroughController.selectMixMode) {
+				passthroughController.selectMixMode(action.key);
+			}
+		},
+		"passthroughFlashlight.toggle": function() {
+			if (passthroughController && passthroughController.toggleFlashlight) {
+				passthroughController.toggleFlashlight();
+			}
+		},
+		"passthroughDepth.toggle": function() {
+			if (passthroughController && passthroughController.toggleDepth) {
+				passthroughController.toggleDepth();
+			}
+		},
+		"passthroughDepthRadial.toggle": function() {
+			if (passthroughController && passthroughController.toggleDepthRadial) {
+				passthroughController.toggleDepthRadial();
+			}
+		},
+		"passthroughDepthReconstruction.cycle": function(action) {
+			if (action && passthroughController && passthroughController.cycleDepthReconstructionMode) {
+				passthroughController.cycleDepthReconstructionMode(action.direction);
+			}
+		},
+		"passthroughDepthMode.cycle": function(action) {
+			if (action && passthroughController && passthroughController.cycleDepthMode) {
+				passthroughController.cycleDepthMode(action.direction);
+			}
+		},
+		"depthEchoReactive.toggle": function(action) {
+			if (action && passthroughController && passthroughController.toggleDepthEchoReactive) {
+				passthroughController.toggleDepthEchoReactive(action.key);
+			}
+		},
+		"depthDistanceReactive.toggle": function() {
+			if (passthroughController && passthroughController.toggleDepthDistanceReactive) {
+				passthroughController.toggleDepthDistanceReactive();
+			}
+		},
+		"sceneLightingMode.cycle": function(action) {
+			if (action && passthroughController && passthroughController.cycleLightingMode) {
+				passthroughController.cycleLightingMode(action.direction);
+			}
+		},
+		"sceneLightPreset.cycle": function(action) {
+			if (action) {
+				cycleLightingEffect(action.direction);
+			}
+		},
+		"visualizerMode.cycle": function(action) {
+			if (!action || !state.visualizerEngine) {
+				return Promise.resolve();
+			}
+			const selectionState = getVisualizerSelectionState();
+			const count = selectionState ? selectionState.modeNames.length : 0;
+			if (!count) {
+				return Promise.resolve();
+			}
+			return state.visualizerEngine.selectMode(selectionState.currentModeIndex + (action.direction < 0 ? -1 : 1));
+		},
+		"visualizerHorizontalMirror.toggle": function() {
+			if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
+				return Promise.resolve();
+			}
+			return state.visualizerEngine.toggleHorizontalMirror();
+		},
+		"butterchurnPreset.cycle": function(action) {
+			if (!action || !state.visualizerEngine) {
+				return Promise.resolve();
+			}
+			const selectionState = getVisualizerSelectionState();
+			const count = selectionState ? selectionState.presetNames.length : 0;
+			if (!count) {
+				return Promise.resolve();
+			}
+			return state.visualizerEngine.selectPreset((selectionState.currentPresetIndex + (action.direction < 0 ? -1 : 1) + count) % count);
+		}
 	};
 	const dispatchMenuAction = function(action) {
 		if (!action || !action.type) {
 			return;
 		}
-		const actionHandler = getMenuActionHandlers()[action.type];
+		const actionHandler = menuActionHandlers[action.type];
 		if (!actionHandler) {
 			console.warn("[MenuAction] unknown type:", action.type);
 			return;
@@ -374,9 +373,11 @@ const createRuntime = function(options) {
 		}
 		return locomotionInput;
 	};
+	const defaultVisualizerSelectionState = {modeNames: ["Toroidal"], currentModeIndex: 0, horizontalMirrorBool: false, presetNames: ["Preset 1"], currentPresetIndex: 0};
+	const defaultLightingSelectionState = {presetNames: ["Aurora Drift"], currentPresetIndex: 0, currentPresetName: "Aurora Drift", currentPresetDescription: "Slow colorful overhead drift", currentPresetEffectName: "Aurora Drift", currentPresetEffectDescription: "Slow colorful overhead drift", currentPresetEffectIndex: 0, currentPresetEffectCount: 1, currentPresetVariantKey: "", currentPresetVariantIndex: 0, currentPresetVariantCount: 1, currentPresetVariantLabel: "", currentPresetSurfaceKey: ""};
 	const getMenuContentState = function() {
-		const visualizerSelectionState = getVisualizerSelectionState();
-		const lightingSelectionState = getLightingSelectionState();
+		const vs = getVisualizerSelectionState() || defaultVisualizerSelectionState;
+		const ls = getLightingSelectionState() || defaultLightingSelectionState;
 		const audioSourceState = getAudioSourceState();
 		const effectSemanticModeState = getEffectSemanticModeState();
 		return {
@@ -384,26 +385,26 @@ const createRuntime = function(options) {
 			audioMetrics: getAudioMetrics(),
 			audioSourceKind: audioSourceState.sourceKind || "none",
 			audioSourceName: audioSourceState.sourceName || "",
-			shaderModeNames: visualizerSelectionState ? visualizerSelectionState.modeNames : ["Toroidal"],
-			currentShaderModeIndex: visualizerSelectionState ? visualizerSelectionState.currentModeIndex : 0,
-			horizontalMirrorBool: visualizerSelectionState ? !!visualizerSelectionState.horizontalMirrorBool : false,
-			lightPresetNames: lightingSelectionState ? lightingSelectionState.presetNames : ["Aurora Drift"],
-			currentLightPresetIndex: lightingSelectionState ? lightingSelectionState.currentPresetIndex : 0,
-			currentLightPresetName: lightingSelectionState ? lightingSelectionState.currentPresetName : "Aurora Drift",
-			currentLightPresetDescription: lightingSelectionState ? lightingSelectionState.currentPresetDescription : "Slow colorful overhead drift",
-			currentLightPresetEffectName: lightingSelectionState ? lightingSelectionState.currentPresetEffectName : "Aurora Drift",
-			currentLightPresetEffectDescription: lightingSelectionState ? lightingSelectionState.currentPresetEffectDescription : "Slow colorful overhead drift",
-			currentLightPresetEffectIndex: lightingSelectionState ? lightingSelectionState.currentPresetEffectIndex : 0,
-			currentLightPresetEffectCount: lightingSelectionState ? lightingSelectionState.currentPresetEffectCount : 1,
-			currentLightPresetVariantKey: lightingSelectionState ? lightingSelectionState.currentPresetVariantKey : "",
-			currentLightPresetVariantIndex: lightingSelectionState ? lightingSelectionState.currentPresetVariantIndex : 0,
-			currentLightPresetVariantCount: lightingSelectionState ? lightingSelectionState.currentPresetVariantCount : 1,
-			currentLightPresetVariantLabel: lightingSelectionState ? lightingSelectionState.currentPresetVariantLabel : "",
-			currentLightPresetSurfaceKey: lightingSelectionState ? lightingSelectionState.currentPresetSurfaceKey : "",
+			shaderModeNames: vs.modeNames,
+			currentShaderModeIndex: vs.currentModeIndex,
+			horizontalMirrorBool: !!vs.horizontalMirrorBool,
+			lightPresetNames: ls.presetNames,
+			currentLightPresetIndex: ls.currentPresetIndex,
+			currentLightPresetName: ls.currentPresetName,
+			currentLightPresetDescription: ls.currentPresetDescription,
+			currentLightPresetEffectName: ls.currentPresetEffectName,
+			currentLightPresetEffectDescription: ls.currentPresetEffectDescription,
+			currentLightPresetEffectIndex: ls.currentPresetEffectIndex,
+			currentLightPresetEffectCount: ls.currentPresetEffectCount,
+			currentLightPresetVariantKey: ls.currentPresetVariantKey,
+			currentLightPresetVariantIndex: ls.currentPresetVariantIndex,
+			currentLightPresetVariantCount: ls.currentPresetVariantCount,
+			currentLightPresetVariantLabel: ls.currentPresetVariantLabel,
+			currentLightPresetSurfaceKey: ls.currentPresetSurfaceKey,
 			effectSemanticModeKey: effectSemanticModeState.key,
 			effectSemanticModeLabel: effectSemanticModeState.label,
-			presetNames: visualizerSelectionState ? visualizerSelectionState.presetNames : ["Preset 1"],
-			currentPresetIndex: visualizerSelectionState ? visualizerSelectionState.currentPresetIndex : 0,
+			presetNames: vs.presetNames,
+			currentPresetIndex: vs.currentPresetIndex,
 			xrSessionActiveBool: !!state.xrSession
 		};
 	};
@@ -445,7 +446,7 @@ const createRuntime = function(options) {
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
 		if (state.depthSensingActiveBool && state.xrSession && state.xrSession.depthActive === false) {
-			try { state.xrSession.resumeDepthSensing(); } catch (e) {}
+			try { state.xrSession.resumeDepthSensing(); } catch (e) { console.warn("[Depth] resumeDepthSensing failed:", e.message || e); }
 		}
 		const passthroughDepthInfoByView = getPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
 		if (!state.usableDepthAvailableBool && passthroughDepthInfoByView.length) {
@@ -697,8 +698,9 @@ const createRuntime = function(options) {
 			if (state.visualizerEngine) {
 				state.visualizerEngine.init({gl: state.gl, sourceBackend: state.visualizerSourceBackend || null});
 			}
-			if (state.visualizerSourceBackend) {
-				audioController.setAudioBackend(state.visualizerSourceBackend);
+			if (state.visualizerEngine) {
+				// Route audio control through the engine so activation and source updates use one stable adapter contract.
+				audioController.setAudioBackend(state.visualizerEngine);
 				audioController.activate().catch(function() {});
 			}
 			if (state.visualizerEngine) {

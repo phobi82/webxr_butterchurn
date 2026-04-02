@@ -613,10 +613,7 @@ const createMenuController = function(options) {
 		activeSliderHand: "",
 		activeFloorAlphaSliderHand: "",
 		activeMenuSliderControlKeyByHand: {},
-		eyeDistanceHoverBool: false,
-		floorAlphaHoverBool: false,
 		hoveredActionKeys: {},
-		hoveredMenuSliderControlKeys: {},
 		xrSessionActiveBool: false,
 		desktopPreviewVisibleBool: options.initialDesktopPreviewVisibleBool !== false,
 		desktopPointerActiveBool: false,
@@ -738,11 +735,6 @@ const createMenuController = function(options) {
 		}
 		return false;
 	};
-	const setMenuSliderHover = function(controlKey) {
-		if (controlKey) {
-			state.hoveredMenuSliderControlKeys[controlKey] = true;
-		}
-	};
 	const setHoveredActionKey = function(hoverKey) {
 		if (hoverKey) {
 			state.hoveredActionKeys[hoverKey] = true;
@@ -765,7 +757,7 @@ const createMenuController = function(options) {
 			return {
 				control: control,
 				sliderU: getControlSliderU(control),
-				hoveredBool: !!state.hoveredMenuSliderControlKeys[control.key],
+				hoveredBool: !!state.hoveredActionKeys[control.key],
 				activeBool: isMenuSliderControlActive(control.key)
 			};
 		};
@@ -778,7 +770,7 @@ const createMenuController = function(options) {
 			hoveredActionKeys: state.hoveredActionKeys,
 			floorAlpha: state.floorAlpha,
 			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
-			floorAlphaHoverBool: state.floorAlphaHoverBool,
+			floorAlphaHoverBool: !!state.hoveredActionKeys["floorAlpha"],
 			floorAlphaActiveBool: !!state.activeFloorAlphaSliderHand,
 			passthroughUiState: passthroughUiState,
 			backgroundControls: backgroundControls,
@@ -787,7 +779,7 @@ const createMenuController = function(options) {
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
 			eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
-			eyeDistanceHoverBool: state.eyeDistanceHoverBool,
+			eyeDistanceHoverBool: !!state.hoveredActionKeys["eyeDistance"],
 			eyeDistanceActiveBool: !!state.activeSliderHand,
 			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
 			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
@@ -840,10 +832,7 @@ const createMenuController = function(options) {
 		return control.min + clampNumber((u - options.menuSliderMinU) / (options.menuSliderMaxU - options.menuSliderMinU), 0, 1) * (control.max - control.min);
 	};
 	const clearHoverState = function() {
-		state.eyeDistanceHoverBool = false;
-		state.floorAlphaHoverBool = false;
 		state.hoveredActionKeys = {};
-		state.hoveredMenuSliderControlKeys = {};
 	};
 	const releaseSliderHand = function(hand) {
 		if (state.activeSliderHand === hand) {
@@ -882,25 +871,24 @@ const createMenuController = function(options) {
 			passthroughController.setSessionState(args);
 		}
 	};
+	const setActiveSliderHoverKeys = function(hand) {
+		if (state.activeSliderHand === hand) { setHoveredActionKey("eyeDistance"); }
+		if (state.activeFloorAlphaSliderHand === hand) { setHoveredActionKey("floorAlpha"); }
+		const activeKey = getActiveMenuSliderControlKey(hand);
+		if (activeKey) { setHoveredActionKey(activeKey); }
+	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
 		const passthroughUiState = getPassthroughUiState();
 		const moduleSections = getModuleSections({xrSessionActiveBool: xrSessionActiveBool});
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
-			state.eyeDistanceHoverBool = state.activeSliderHand === "desktop";
-			state.floorAlphaHoverBool = state.activeFloorAlphaSliderHand === "desktop";
 			state.hoveredActionKeys = {};
-			state.hoveredMenuSliderControlKeys = {};
-			setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
+			setActiveSliderHoverKeys("desktop");
 			return;
 		}
 		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, moduleSections);
-		state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.activeSliderHand === "desktop";
-		state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.activeFloorAlphaSliderHand === "desktop";
 		state.hoveredActionKeys = {};
-		state.hoveredMenuSliderControlKeys = {};
-		setMenuSliderHover(hit.moduleSliderControlKey);
-		setMenuSliderHover(getActiveMenuSliderControlKey("desktop"));
 		setHoveredActionKey(hit.hoverKey);
+		setActiveSliderHoverKeys("desktop");
 		if (state.activeSliderHand === "desktop") {
 			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
 		}
@@ -983,9 +971,6 @@ const createMenuController = function(options) {
 				ray.hitBool = true;
 				ray.hitPoint = hit.point;
 				ray.hit = hit;
-				state.eyeDistanceHoverBool = hit.moduleSliderControlKey === "eyeDistance" || state.eyeDistanceHoverBool;
-				state.floorAlphaHoverBool = hit.moduleSliderControlKey === "floorAlpha" || state.floorAlphaHoverBool;
-				setMenuSliderHover(hit.moduleSliderControlKey);
 				setHoveredActionKey(hit.hoverKey);
 			}
 			controllerRays.push(ray);
@@ -1026,8 +1011,8 @@ const createMenuController = function(options) {
 				hoveredActionKeys: state.hoveredActionKeys,
 				floorAlpha: state.floorAlpha,
 				eyeDistanceMeters: state.eyeDistanceMeters,
-				floorAlphaHoverBool: state.floorAlphaHoverBool,
-				eyeDistanceHoverBool: state.eyeDistanceHoverBool,
+				floorAlphaHoverBool: !!state.hoveredActionKeys["floorAlpha"],
+				eyeDistanceHoverBool: !!state.hoveredActionKeys["eyeDistance"],
 				floorAlphaSliderActiveBool: !!state.activeFloorAlphaSliderHand,
 				eyeDistanceSliderActiveBool: !!state.activeSliderHand,
 				moduleSections: moduleSections,

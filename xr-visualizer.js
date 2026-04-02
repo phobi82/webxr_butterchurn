@@ -115,7 +115,6 @@ const createFullscreenTextureMode = function(spec) {
 
 // core/visualizer/engine.js
 const createVisualizerEngine = function(options) {
-	const createSourceBackend = options.createSourceBackend;
 	const modeDefinitions = options.modes || [];
 	const frameState = {
 		timeSeconds: 0,
@@ -158,7 +157,7 @@ const createVisualizerEngine = function(options) {
 		currentModeIndex: 0,
 		init: function(args) {
 			this.gl = args.gl;
-			this.sourceBackend = args.sourceBackend || createSourceBackend(args.sourceBackendOptions || null);
+			this.sourceBackend = args.sourceBackend;
 			this.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
 			this.modeNames = [];
 			this.modes = {};
