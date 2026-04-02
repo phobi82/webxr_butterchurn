@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deduplicated the slider builder loop in `test-lab-menu.js` by reusing the shared `appendSliderMenuControls` helper.
 - Rewrote `README.md` with grouped features, control tables, requirements table, collapsible project structure and Quest setup sections, in-headset menu screenshot, and removed the verbose `Current Status` section.
 
+### Fixed
+- Restored Butterchurn startup on page load by wiring the audio controller back through the visualizer engine adapter, so the initial activation path reaches the source backend again.
+
 ## [0.8.6] - 2026-04-01
 
 ### Changed

@@ -698,8 +698,9 @@ const createRuntime = function(options) {
 			if (state.visualizerEngine) {
 				state.visualizerEngine.init({gl: state.gl, sourceBackend: state.visualizerSourceBackend || null});
 			}
-			if (state.visualizerSourceBackend) {
-				audioController.setAudioBackend(state.visualizerSourceBackend);
+			if (state.visualizerEngine) {
+				// Route audio control through the engine so activation and source updates use one stable adapter contract.
+				audioController.setAudioBackend(state.visualizerEngine);
 				audioController.activate().catch(function() {});
 			}
 			if (state.visualizerEngine) {
