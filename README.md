@@ -58,7 +58,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 ### XR Session
 
 - Prefers `immersive-ar` with `local-floor`, falls back to `immersive-vr`
-- Experimental WebXR projection-layer rendering with automatic `XRWebGLLayer` fallback
+- WebXR rendering via `XRWebGLLayer`, with `XRWebGLBinding` used for depth queries when available
 - Desktop preview with shared locomotion: walking, jumping, sprinting, crouching, tiptoe, airborne boost
 - Collision world with platforms, structures, and GLB props
 - In-headset menu plus mirrored desktop preview using the same menu system

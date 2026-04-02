@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Corrected the README XR rendering description to match the current implementation: rendering uses `XRWebGLLayer`, while `XRWebGLBinding` is only used for depth queries when available.
+
 ## [0.8.7] - 2026-04-02
 
 ### Added
