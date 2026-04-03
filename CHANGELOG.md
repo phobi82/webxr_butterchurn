@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed effect-specific depth handling from `xr-light-projection`, so named effects no longer own special depth constants or raw-depth branches inside the projection module.
 - Moved MR footprint rules into `xr-light-fixture-effects`, so fixture effect definitions now own both shader semantics and physical light-shape layout.
 - Extracted the MR-lighting renderer into `xr-mr-lighting-renderer.js`, leaving `xr-passthrough` focused on passthrough policy and overlay-state assembly while `xr-world` orchestrates the frame top-down.
+- Rebuilt the live codebase back into a flat root-level architecture with bundled core files (`xr-shared`, `xr-audio`, `xr-lighting`, `xr-passthrough`, `xr-depth`, `xr-menu`, `xr-movement`, `xr-render`, `xr-visualizer`, `xr-runtime`, `xr-app`) so the project no longer depends on a spread-out subdirectory source layout.
 - Tuned shared scene-light derivation so broad wash-heavy presets contribute more strongly to VR ambient fill, keeping the virtual world lighting closer to the visible modified-reality wash.
 - Changed fallback wall placement to respect fixture `vertical`, so wall-bound effects stay on believable wall tracks instead of collapsing to ceiling height.
 

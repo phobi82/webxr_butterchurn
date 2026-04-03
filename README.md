@@ -180,26 +180,17 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 |---|---|
 | `index.html` | Browser entry point, desktop shell, buttons, status labels, canvas |
 | `TestLab.html` | Isolated single-effect lighting test page |
-| `xr-foundation.js` | Shared browser, XR, math, and rendering helpers |
-| `xr-audio-controller.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
-| `xr-light-fixture-effects.js` | Shared fixture-effect families and passthrough effect semantics |
-| `xr-light-projection.js` | Shared MR light-layer builder from fixture state, anchors, and room geometry |
-| `xr-light-presets.js` | Lighting preset catalog, fixture-rig builders, scene-light derivation |
-| `test-lab-lighting-presets.js` | Isolated single-effect preset catalog for TestLab |
-| `xr-visualizer.js` | Visualizer engine, Butterchurn integration, preset lifecycle |
-| `xr-visualizer-modes.js` | Visualizer mode catalog |
-| `xr-passthrough-modes.js` | Background mix, passthrough, and lighting control definitions |
-| `xr-passthrough.js` | Passthrough controller, fallback policy, and overlay-state assembly |
-| `xr-mr-lighting-renderer.js` | MR lighting renderer that consumes shared `lightLayers` and processed depth directly |
-| `xr-depth-processing.js` | Full-resolution depth reconstruction prepass (raw, edge-aware, heightmap) |
-| `xr-menu-sections.js` | Generic menu section/control descriptors |
-| `xr-collision.js` | AABB collision world with floor height, slide, and step-up logic |
-| `xr-locomotion.js` | Shared XR/desktop locomotion (walking, jumping, sprinting, crouching, gravity) |
-| `xr-world.js` | GLB asset loading, scene renderer, and top-level XR frame composition |
-| `xr-menu.js` | Menu canvas rendering, desktop preview, XR/desktop menu interaction |
-| `xr-shell.js` | DOM-shell contract and shell normalization helpers |
-| `xr-runtime.js` | Runtime orchestration for XR sessions, desktop preview, audio, render loop |
-| `app-composition.js` | Default app configuration and shared app composition |
+| `xr-shared.js` | Shared math, DOM, and GL utilities |
+| `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
+| `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
+| `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
+| `xr-depth.js` | Full-resolution depth reconstruction, smoothing, and processed depth metadata |
+| `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
+| `xr-movement.js` | Collision world and locomotion |
+| `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |
+| `xr-visualizer.js` | Visualizer engine and visualizer mode catalog |
+| `xr-runtime.js` | Desktop input, XR session bridge, runtime loop, and frame orchestration |
+| `xr-app.js` | App shell normalization and shared app composition |
 
 </details>
 

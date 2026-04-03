@@ -1,4 +1,231 @@
-// core/visualizer/fullscreen-texture-mode.js
+// Visualizer modes and engine.
+
+// Modes
+
+const headYawBufferShiftFactor = 0.8;
+const headPitchBufferShiftFactor = 0.8;
+const fullTurnRadians = Math.PI * 2;
+const skysphereHorizontalRepeatCount = 4;
+const visualizerBackgroundCompositeShaderChunk = [
+	"uniform float backgroundMaskCount;",
+	"uniform vec2 backgroundMaskCenters[2];",
+	"uniform vec2 backgroundMaskParams[2];",
+	"float circleReveal(vec2 uv, vec2 center, vec2 params){",
+	"float radius=max(params.x,0.0001);",
+	"float softness=max(params.y,0.0001);",
+	"float inner=max(0.0,radius-softness);",
+	"return 1.0-smoothstep(inner,radius,distance(uv,center));",
+	"}",
+	"float computeBackgroundAlpha(vec2 screenUv,float uniformAlpha){",
+	"float reveal=0.0;",
+	"for(int i=0;i<2;i+=1){",
+	"if(float(i)>=backgroundMaskCount){break;}",
+	"float localReveal=circleReveal(screenUv,backgroundMaskCenters[i],backgroundMaskParams[i]);",
+	"reveal=1.0-(1.0-reveal)*(1.0-localReveal);",
+	"}",
+	"return clamp(uniformAlpha*(1.0-reveal),0.0,1.0);",
+	"}"
+].join("");
+
+const toroidalFragmentSource = [
+	"precision highp float;",
+	"uniform sampler2D sourceTexture;",
+	"uniform vec2 viewportSize;",
+	"uniform vec2 eyeCenterOffset;",
+	"uniform vec2 orientationOffset;",
+	"uniform float horizontalMirror;",
+	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
+	"varying vec2 vScreenUv;",
+	"float mirrorRepeat(float value){",
+	"float wrapped=value-floor(value*0.5)*2.0;",
+	"return wrapped<=1.0?wrapped:2.0-wrapped;",
+	"}",
+	"void main(){",
+	"vec2 texel=(floor((vScreenUv-eyeCenterOffset)*viewportSize)+vec2(0.5))/viewportSize;",
+	"float rawU=texel.x+orientationOffset.x;",
+	"vec2 sampleUv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(texel.y+orientationOffset.y));",
+	"vec4 sampleColor=texture2D(sourceTexture,sampleUv);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
+	"}"
+].join("");
+
+const toroidal = function() {
+	let horizontalMirrorLoc = null;
+	let base = createFullscreenTextureMode({
+		label: "Toroidal mode",
+		fragmentSource: toroidalFragmentSource,
+		getOrientationOffset: function(sourceState, frameState) {
+			return {
+				x: wrapUnit(frameState.headYaw * headYawBufferShiftFactor / frameState.headHorizontalFov),
+				y: clampNumber(frameState.headPitch * headPitchBufferShiftFactor / frameState.headVerticalFov, -1000, 1000)
+			};
+		},
+		applyUniforms: function(gl, programInfo, sourceState, frameState) {
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
+		}
+	});
+	let baseInit = base.init;
+	base.init = function(options) {
+		baseInit.call(this, options);
+		horizontalMirrorLoc = this.gl.getUniformLocation(this.programInfo.program, "horizontalMirror");
+	};
+	return base;
+};
+
+const skysphereFragmentSource = [
+	"precision highp float;",
+	"uniform sampler2D sourceTexture;",
+	"uniform vec3 camRight;",
+	"uniform vec3 camUp;",
+	"uniform vec3 camForward;",
+	"uniform vec4 projParams;",
+	"uniform vec2 texScale;",
+	"uniform float horizontalMirror;",
+	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
+	"varying vec2 vScreenUv;",
+	"float mirrorRepeat(float value){",
+	"float wrapped=value-floor(value*0.5)*2.0;",
+	"return wrapped<=1.0?wrapped:2.0-wrapped;",
+	"}",
+	"void main(){",
+	"vec2 clip=vScreenUv*2.0-1.0;",
+	"float vx=(clip.x+projParams.z)/projParams.x;",
+	"float vy=(clip.y+projParams.w)/projParams.y;",
+	"vec3 dir=normalize(camRight*vx+camUp*vy+camForward);",
+	"float yaw=atan(dir.x,-dir.z);",
+	"float pitch=asin(clamp(dir.y,-1.0,1.0));",
+	"float rawU=yaw*texScale.x+0.5;",
+	"vec2 uv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(pitch*texScale.y+0.5));",
+	"vec4 sampleColor=texture2D(sourceTexture,uv);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
+	"}"
+].join("");
+
+const skysphere = function() {
+	let camRightLoc = null;
+	let camUpLoc = null;
+	let camForwardLoc = null;
+	let projParamsLoc = null;
+	let texScaleLoc = null;
+	let horizontalMirrorLoc = null;
+	let base = createFullscreenTextureMode({
+		label: "Skysphere mode",
+		fragmentSource: skysphereFragmentSource,
+		getSourceFrameSize: function(frameState, viewportWidth, viewportHeight) {
+			const verticalFov = Math.max(0.0001, frameState.headVerticalFov || Math.PI / 2);
+			const perRepeatHorizontalSpan = fullTurnRadians / skysphereHorizontalRepeatCount;
+			return {
+				width: Math.max(1, Math.round(viewportHeight * perRepeatHorizontalSpan / verticalFov)),
+				height: Math.max(1, viewportHeight | 0)
+			};
+		},
+		applyUniforms: function(gl, programInfo, sourceState, frameState) {
+			let vm = frameState.viewMatrix;
+			let pm = frameState.projMatrix;
+			gl.uniform3f(camRightLoc, vm[0], vm[4], vm[8]);
+			gl.uniform3f(camUpLoc, vm[1], vm[5], vm[9]);
+			gl.uniform3f(camForwardLoc, -vm[2], -vm[6], -vm[10]);
+			gl.uniform4f(projParamsLoc, pm[0], pm[5], pm[8], pm[9]);
+			gl.uniform2f(texScaleLoc, skysphereHorizontalRepeatCount / fullTurnRadians, 1.0 / frameState.headVerticalFov);
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
+		}
+	});
+	let baseInit = base.init;
+	base.init = function(options) {
+		baseInit.call(this, options);
+		let program = this.programInfo.program;
+		camRightLoc = this.gl.getUniformLocation(program, "camRight");
+		camUpLoc = this.gl.getUniformLocation(program, "camUp");
+		camForwardLoc = this.gl.getUniformLocation(program, "camForward");
+		projParamsLoc = this.gl.getUniformLocation(program, "projParams");
+		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
+	};
+	return base;
+};
+
+const skyToroidFragmentSource = [
+	"precision highp float;",
+	"uniform sampler2D sourceTexture;",
+	"uniform vec4 projParams;",
+	"uniform vec2 headOrientation;",
+	"uniform float headRoll;",
+	"uniform vec2 texScale;",
+	"uniform float horizontalMirror;",
+	"uniform float backgroundAlpha;",
+	visualizerBackgroundCompositeShaderChunk,
+	"varying vec2 vScreenUv;",
+	"float mirrorRepeat(float value){",
+	"float wrapped=value-floor(value*0.5)*2.0;",
+	"return wrapped<=1.0?wrapped:2.0-wrapped;",
+	"}",
+	"void main(){",
+	"vec2 clip=vScreenUv*2.0-1.0;",
+	"float vx=(clip.x+projParams.z)/projParams.x;",
+	"float vy=(clip.y+projParams.w)/projParams.y;",
+	"float cosR=cos(headRoll);",
+	"float sinR=sin(headRoll);",
+	"float corrVx=vx*cosR+vy*sinR;",
+	"float corrVy=-vx*sinR+vy*cosR;",
+	"float totalYaw=headOrientation.x+atan(corrVx,1.0);",
+	"float totalPitch=headOrientation.y+atan(corrVy,1.0);",
+	"float rawU=totalYaw*texScale.x+0.5;",
+	"vec2 uv=vec2(mix(fract(rawU),mirrorRepeat(rawU),horizontalMirror),mirrorRepeat(totalPitch*texScale.y+0.5));",
+	"vec4 sampleColor=texture2D(sourceTexture,uv);",
+	"gl_FragColor=vec4(sampleColor.rgb,computeBackgroundAlpha(vScreenUv,backgroundAlpha));",
+	"}"
+].join("");
+
+const skyToroid = function() {
+	let projParamsLoc = null;
+	let headOrientationLoc = null;
+	let headRollLoc = null;
+	let texScaleLoc = null;
+	let horizontalMirrorLoc = null;
+	let base = createFullscreenTextureMode({
+		label: "Sky Toroid mode",
+		fragmentSource: skyToroidFragmentSource,
+		applyUniforms: function(gl, programInfo, sourceState, frameState) {
+			let vm = frameState.viewMatrix;
+			let pm = frameState.projMatrix;
+			gl.uniform4f(projParamsLoc, pm[0], pm[5], pm[8], pm[9]);
+			gl.uniform2f(headOrientationLoc, frameState.headYaw, frameState.headPitch);
+			gl.uniform1f(headRollLoc, -Math.atan2(vm[4], vm[5]));
+			gl.uniform2f(texScaleLoc, 1.0 / frameState.headHorizontalFov, 1.0 / frameState.headVerticalFov);
+			gl.uniform1f(horizontalMirrorLoc, frameState.horizontalMirrorBool ? 1 : 0);
+		}
+	});
+	let baseInit = base.init;
+	base.init = function(options) {
+		baseInit.call(this, options);
+		let program = this.programInfo.program;
+		projParamsLoc = this.gl.getUniformLocation(program, "projParams");
+		headOrientationLoc = this.gl.getUniformLocation(program, "headOrientation");
+		headRollLoc = this.gl.getUniformLocation(program, "headRoll");
+		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
+	};
+	return base;
+};
+
+const visualizerModeDefinitions = [
+	{
+		name: formatFunctionLabel(skysphere.name),
+		create: skysphere
+	},
+	{
+		name: formatFunctionLabel(skyToroid.name),
+		create: skyToroid
+	},
+	{
+		name: formatFunctionLabel(toroidal.name),
+		create: toroidal
+	}
+];
+
+// Fullscreen mode
 const createFullscreenTextureMode = function(spec) {
 	spec = spec || {};
 	return {
@@ -113,10 +340,9 @@ const createFullscreenTextureMode = function(spec) {
 	};
 };
 
-// core/visualizer/engine.js
-const createVisualizerEngine = function(options) {
-	const modeDefinitions = options.modes || [];
-	const frameState = {
+// Engine
+const createVisualizerFrameState = function() {
+	return {
 		timeSeconds: 0,
 		headYaw: 0,
 		headPitch: 0,
@@ -136,212 +362,259 @@ const createVisualizerEngine = function(options) {
 		projMatrix: new Float32Array(16),
 		lastRawHeadYaw: undefined
 	};
-	const setHeadYaw = function(rawYaw) {
-		if (frameState.lastRawHeadYaw === undefined) {
-			frameState.headYaw = rawYaw;
-		} else {
-			frameState.headYaw = unwrapAngle(rawYaw, frameState.lastRawHeadYaw) + (frameState.headYaw - frameState.lastRawHeadYaw);
+};
+
+const setVisualizerHeadYaw = function(frameState, rawYaw) {
+	if (frameState.lastRawHeadYaw === undefined) {
+		frameState.headYaw = rawYaw;
+	} else {
+		frameState.headYaw = unwrapAngle(rawYaw, frameState.lastRawHeadYaw) + (frameState.headYaw - frameState.lastRawHeadYaw);
+	}
+	frameState.lastRawHeadYaw = rawYaw;
+};
+
+const setVisualizerProjectionState = function(frameState, projectionMatrix) {
+	frameState.projMatrix.set(projectionMatrix);
+	frameState.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
+	frameState.eyeCenterOffsetY = -(projectionMatrix[9] || 0) * 0.5;
+};
+
+const applyVisualizerRenderView = function(frameState, viewMatrix, projectionMatrix) {
+	frameState.viewMatrix.set(viewMatrix);
+	setVisualizerProjectionState(frameState, projectionMatrix);
+};
+
+const applyVisualizerPreviewView = function(frameState, viewMatrix, projectionMatrix) {
+	const forwardAngles = extractForwardYawPitch(viewMatrix);
+	const cameraPosition = extractCameraPositionFromViewMatrix(viewMatrix);
+	const fov = extractProjectionFov(projectionMatrix);
+	applyVisualizerRenderView(frameState, viewMatrix, projectionMatrix);
+	setVisualizerHeadYaw(frameState, forwardAngles.yaw);
+	frameState.headPitch = forwardAngles.pitch;
+	frameState.headPositionX = cameraPosition.x;
+	frameState.headPositionY = cameraPosition.y;
+	frameState.headPositionZ = cameraPosition.z;
+	frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
+	frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
+};
+
+const applyVisualizerHeadPose = function(frameState, quaternion, projectionMatrix) {
+	const forwardAngles = extractForwardYawPitchFromQuaternion(quaternion);
+	const fov = extractProjectionFov(projectionMatrix);
+	setVisualizerHeadYaw(frameState, forwardAngles.yaw);
+	frameState.headPitch = forwardAngles.pitch;
+	frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
+	frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
+	setVisualizerProjectionState(frameState, projectionMatrix);
+};
+
+const setVisualizerBackgroundCompositeState = function(frameState, backgroundCompositeState) {
+	backgroundCompositeState = backgroundCompositeState || {};
+	frameState.backgroundAlpha = clampNumber(backgroundCompositeState.alpha == null ? 1 : backgroundCompositeState.alpha, 0, 1);
+	frameState.backgroundMaskCount = clampNumber(backgroundCompositeState.maskCount || 0, 0, 2);
+	for (let i = 0; i < frameState.backgroundMaskCenters.length; i += 1) {
+		frameState.backgroundMaskCenters[i] = 0;
+		frameState.backgroundMaskParams[i] = 0;
+	}
+	for (let i = 0; i < frameState.backgroundMaskCount; i += 1) {
+		const mask = backgroundCompositeState.masks[i];
+		if (!mask) {
+			continue;
 		}
-		frameState.lastRawHeadYaw = rawYaw;
-	};
-	const setProjectionState = function(projectionMatrix) {
-		frameState.projMatrix.set(projectionMatrix);
-		frameState.eyeCenterOffsetX = -(projectionMatrix[8] || 0) * 0.5;
-		frameState.eyeCenterOffsetY = -(projectionMatrix[9] || 0) * 0.5;
-	};
-	const engine = {
-		gl: null,
-		sourceBackend: null,
-		modeNames: [],
-		modes: {},
-		currentModeIndex: 0,
-		init: function(args) {
-			this.gl = args.gl;
-			this.sourceBackend = args.sourceBackend;
-			this.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
-			this.modeNames = [];
-			this.modes = {};
-			for (let i = 0; i < modeDefinitions.length; i += 1) {
-				const definition = modeDefinitions[i];
-				const mode = definition.create({gl: this.gl, sourceBackend: this.sourceBackend});
-				if (!mode) {
-					continue;
-				}
-				if (mode.init) {
-					mode.init({gl: this.gl, sourceBackend: this.sourceBackend});
-				}
-				this.modeNames.push(definition.name);
-				this.modes[definition.name] = mode;
-			}
-			if (this.currentModeIndex >= this.modeNames.length) {
-				this.currentModeIndex = 0;
-			}
-		},
-		update: function(timeSeconds) {
-			frameState.timeSeconds = timeSeconds;
-			this.sourceBackend.advanceFrame(timeSeconds);
-			const mode = getActiveMode();
-			if (mode && mode.update) {
-				mode.update(getSourceState(), frameState);
-			}
-		},
-		setRenderView: function(viewMatrix, projectionMatrix) {
-			frameState.viewMatrix.set(viewMatrix);
-			setProjectionState(projectionMatrix);
-		},
-		setPreviewView: function(viewMatrix, projectionMatrix) {
-			const forwardAngles = extractForwardYawPitch(viewMatrix);
-			const cameraPosition = extractCameraPositionFromViewMatrix(viewMatrix);
-			const fov = extractProjectionFov(projectionMatrix);
-			this.setRenderView(viewMatrix, projectionMatrix);
-			setHeadYaw(forwardAngles.yaw);
-			frameState.headPitch = forwardAngles.pitch;
-			frameState.headPositionX = cameraPosition.x;
-			frameState.headPositionY = cameraPosition.y;
-			frameState.headPositionZ = cameraPosition.z;
-			frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
-			frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
-		},
-		setHeadPoseFromQuaternion: function(quaternion, projectionMatrix) {
-			const forwardAngles = extractForwardYawPitchFromQuaternion(quaternion);
-			const fov = extractProjectionFov(projectionMatrix);
-			setHeadYaw(forwardAngles.yaw);
-			frameState.headPitch = forwardAngles.pitch;
-			frameState.headHorizontalFov = Math.max(0.0001, fov.horizontal);
-			frameState.headVerticalFov = Math.max(0.0001, fov.vertical);
-			setProjectionState(projectionMatrix);
-		},
-		setHeadPosition: function(x, y, z) {
-			frameState.headPositionX = x;
-			frameState.headPositionY = y;
-			frameState.headPositionZ = z;
-		},
-		setBackgroundCompositeState: function(backgroundCompositeState) {
-			backgroundCompositeState = backgroundCompositeState || {};
-			frameState.backgroundAlpha = clampNumber(backgroundCompositeState.alpha == null ? 1 : backgroundCompositeState.alpha, 0, 1);
-			frameState.backgroundMaskCount = clampNumber(backgroundCompositeState.maskCount || 0, 0, 2);
-			for (let i = 0; i < frameState.backgroundMaskCenters.length; i += 1) {
-				frameState.backgroundMaskCenters[i] = 0;
-				frameState.backgroundMaskParams[i] = 0;
-			}
-			for (let i = 0; i < frameState.backgroundMaskCount; i += 1) {
-				const mask = backgroundCompositeState.masks[i];
-				if (!mask) {
-					continue;
-				}
-				frameState.backgroundMaskCenters[i * 2] = mask.x;
-				frameState.backgroundMaskCenters[i * 2 + 1] = mask.y;
-				frameState.backgroundMaskParams[i * 2] = mask.radius;
-				frameState.backgroundMaskParams[i * 2 + 1] = mask.softness;
-			}
-		},
-		setBackgroundBlend: function(passthroughMix, passthroughAvailableBool) {
-			this.setBackgroundCompositeState({
-				alpha: passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1,
-				maskCount: 0,
-				masks: []
-			});
-		},
-		drawPreScene: function() {
-			drawPhase("drawPreScene");
-		},
-		drawWorld: function() {
-			drawPhase("drawWorld");
-		},
-		drawPostScene: function() {
-			drawPhase("drawPostScene");
-		},
-		setAudioStream: function(stream) {
-			this.sourceBackend.setAudioStream(stream);
-			notifyModes("onAudioChanged");
-		},
-		startDebugAudio: async function() {
-			await this.sourceBackend.startDebugAudio();
-			notifyModes("onAudioChanged");
-		},
-		activateAudio: function() {
-			return this.sourceBackend.activate();
-		},
-		getAudioMetrics: function() {
-			return this.sourceBackend.getAudioMetrics ? this.sourceBackend.getAudioMetrics() : emptyAudioMetrics;
-		},
-		getSelectionState: function() {
-			return {
-				modeNames: this.modeNames.slice(),
-				currentModeIndex: this.currentModeIndex,
-				horizontalMirrorBool: !!frameState.horizontalMirrorBool,
-				presetNames: this.sourceBackend.getPresetNames(),
-				currentPresetIndex: this.sourceBackend.getCurrentPresetIndex()
-			};
-		},
-		selectPreset: async function(index) {
-			await this.sourceBackend.selectPreset(index, 1.2);
-			this.sourceBackend.lastCanvasRenderTimeSeconds = 0;
-			notifyModes("onPresetChanged");
-		},
-		selectMode: function(index) {
-			if (!this.modeNames.length) {
-				return Promise.resolve();
-			}
-			this.currentModeIndex = (index + this.modeNames.length) % this.modeNames.length;
-			return Promise.resolve();
-		},
-		toggleHorizontalMirror: function() {
-			frameState.horizontalMirrorBool = !frameState.horizontalMirrorBool;
-			return Promise.resolve();
-		},
-		startSession: function() {
-			this.sourceBackend.startSession();
-			notifyModes("onSessionStart");
-		},
-		endSession: function() {
-			this.sourceBackend.endSession();
-			notifyModes("onSessionEnd");
+		frameState.backgroundMaskCenters[i * 2] = mask.x;
+		frameState.backgroundMaskCenters[i * 2 + 1] = mask.y;
+		frameState.backgroundMaskParams[i * 2] = mask.radius;
+		frameState.backgroundMaskParams[i * 2 + 1] = mask.softness;
+	}
+};
+
+const createVisualizerModeRegistry = function(modeDefinitions, gl, sourceBackend) {
+	const modeNames = [];
+	const modes = {};
+	for (let i = 0; i < modeDefinitions.length; i += 1) {
+		const definition = modeDefinitions[i];
+		const mode = definition.create({gl: gl, sourceBackend: sourceBackend});
+		if (!mode) {
+			continue;
 		}
+		if (mode.init) {
+			mode.init({gl: gl, sourceBackend: sourceBackend});
+		}
+		modeNames.push(definition.name);
+		modes[definition.name] = mode;
+	}
+	return {
+		modeNames: modeNames,
+		modes: modes
 	};
+};
+
+const resolvedVisualizerActionPromise = Promise.resolve();
+
+const createVisualizerEngineDispatch = function(engine, frameState) {
 	const getSourceState = function() {
 		return engine.sourceBackend.getState();
 	};
 	const getActiveMode = function() {
 		return engine.modes[engine.modeNames[engine.currentModeIndex]] || null;
 	};
-	const notifyModes = function(methodName) {
-		const sourceState = getSourceState();
-		for (let i = 0; i < engine.modeNames.length; i += 1) {
-			const mode = engine.modes[engine.modeNames[i]];
-			if (mode && mode[methodName]) {
-				mode[methodName](sourceState, frameState);
+	return {
+		getSourceState: getSourceState,
+		getActiveMode: getActiveMode,
+		notifyModes: function(methodName) {
+			const sourceState = getSourceState();
+			for (let i = 0; i < engine.modeNames.length; i += 1) {
+				const mode = engine.modes[engine.modeNames[i]];
+				if (mode && mode[methodName]) {
+					mode[methodName](sourceState, frameState);
+				}
 			}
+		},
+		drawPhase: function(methodName) {
+			const mode = getActiveMode();
+			if (!mode || !mode[methodName]) {
+				return;
+			}
+			mode[methodName](getSourceState(), frameState);
 		}
 	};
-	const drawPhase = function(methodName) {
-		const mode = getActiveMode();
-		if (!mode || !mode[methodName]) {
-			return;
-		}
-		mode[methodName](getSourceState(), frameState);
-	};
-	return engine;
 };
 
-// adapters/butterchurn-source.js
+const createVisualizerEngine = function(options) {
+	const modeDefinitions = options.modes || [];
+	const frameState = createVisualizerFrameState();
+	const engine = {
+		gl: null,
+		sourceBackend: null,
+		modeNames: [],
+		modes: {},
+		currentModeIndex: 0
+	};
+	const dispatch = createVisualizerEngineDispatch(engine, frameState);
+	const init = function(args) {
+		const modeRegistry = createVisualizerModeRegistry(modeDefinitions, args.gl, args.sourceBackend);
+		engine.gl = args.gl;
+		engine.sourceBackend = args.sourceBackend;
+		engine.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
+		engine.modeNames = modeRegistry.modeNames;
+		engine.modes = modeRegistry.modes;
+		if (engine.currentModeIndex >= engine.modeNames.length) {
+			engine.currentModeIndex = 0;
+		}
+	};
+	const update = function(timeSeconds) {
+		frameState.timeSeconds = timeSeconds;
+		engine.sourceBackend.advanceFrame(timeSeconds);
+		const activeMode = dispatch.getActiveMode();
+		if (activeMode && activeMode.update) {
+			activeMode.update(dispatch.getSourceState(), frameState);
+		}
+	};
+	const setBackgroundCompositeState = function(backgroundCompositeState) {
+		setVisualizerBackgroundCompositeState(frameState, backgroundCompositeState);
+	};
+	const getSelectionState = function() {
+		return {
+			modeNames: engine.modeNames.slice(),
+			currentModeIndex: engine.currentModeIndex,
+			horizontalMirrorBool: !!frameState.horizontalMirrorBool,
+			presetNames: engine.sourceBackend.getPresetNames(),
+			currentPresetIndex: engine.sourceBackend.getCurrentPresetIndex()
+		};
+	};
+	const selectPreset = async function(index) {
+		await engine.sourceBackend.selectPreset(index, 1.2);
+		engine.sourceBackend.lastCanvasRenderTimeSeconds = 0;
+		dispatch.notifyModes("onPresetChanged");
+	};
+	const selectMode = function(index) {
+		if (!engine.modeNames.length) {
+			return resolvedVisualizerActionPromise;
+		}
+		engine.currentModeIndex = (index + engine.modeNames.length) % engine.modeNames.length;
+		return resolvedVisualizerActionPromise;
+	};
+	const toggleHorizontalMirror = function() {
+		frameState.horizontalMirrorBool = !frameState.horizontalMirrorBool;
+		return resolvedVisualizerActionPromise;
+	};
+	const startSession = function() {
+		engine.sourceBackend.startSession();
+		dispatch.notifyModes("onSessionStart");
+	};
+	const endSession = function() {
+		engine.sourceBackend.endSession();
+		dispatch.notifyModes("onSessionEnd");
+	};
+	return Object.assign(engine, {
+		init: init,
+		update: update,
+		setRenderView: function(viewMatrix, projectionMatrix) {
+			applyVisualizerRenderView(frameState, viewMatrix, projectionMatrix);
+		},
+		setPreviewView: function(viewMatrix, projectionMatrix) {
+			applyVisualizerPreviewView(frameState, viewMatrix, projectionMatrix);
+		},
+		setHeadPoseFromQuaternion: function(quaternion, projectionMatrix) {
+			applyVisualizerHeadPose(frameState, quaternion, projectionMatrix);
+		},
+		setHeadPosition: function(x, y, z) {
+			frameState.headPositionX = x;
+			frameState.headPositionY = y;
+			frameState.headPositionZ = z;
+		},
+		setBackgroundCompositeState: setBackgroundCompositeState,
+		setBackgroundBlend: function(passthroughMix, passthroughAvailableBool) {
+			setBackgroundCompositeState({
+				alpha: passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1,
+				maskCount: 0,
+				masks: []
+			});
+		},
+		drawPreScene: function() {
+			dispatch.drawPhase("drawPreScene");
+		},
+		drawWorld: function() {
+			dispatch.drawPhase("drawWorld");
+		},
+		drawPostScene: function() {
+			dispatch.drawPhase("drawPostScene");
+		},
+		setAudioStream: function(stream) {
+			engine.sourceBackend.setAudioStream(stream);
+			dispatch.notifyModes("onAudioChanged");
+		},
+		startDebugAudio: async function() {
+			await engine.sourceBackend.startDebugAudio();
+			dispatch.notifyModes("onAudioChanged");
+		},
+		activateAudio: function() {
+			return engine.sourceBackend.activate();
+		},
+		getAudioMetrics: function() {
+			return engine.sourceBackend.getAudioMetrics ? engine.sourceBackend.getAudioMetrics() : emptyAudioMetrics;
+		},
+		getSelectionState: getSelectionState,
+		selectPreset: selectPreset,
+		selectMode: selectMode,
+		toggleHorizontalMirror: toggleHorizontalMirror,
+		startSession: startSession,
+		endSession: endSession
+	});
+};
+
+// Butterchurn source
 const defaultPresetName = "martin - mucus cervix";
 
-const createButterchurnSource = function(options) {
-	options = options || {};
-	const windowRef = options.windowRef || window;
-	const documentRef = options.documentRef || document;
-	const audioContextCtor = options.audioContextCtor || windowRef.AudioContext || windowRef.webkitAudioContext;
-	const butterchurnApi = options.butterchurnApi || (windowRef.butterchurn && windowRef.butterchurn.createVisualizer ? windowRef.butterchurn : windowRef.butterchurn && windowRef.butterchurn.default && windowRef.butterchurn.default.createVisualizer ? windowRef.butterchurn.default : null);
-	const butterchurnPresetsApi = options.butterchurnPresetsApi || (windowRef.butterchurnPresets && windowRef.butterchurnPresets.getPresets ? windowRef.butterchurnPresets : windowRef.butterchurnPresets && windowRef.butterchurnPresets.default && windowRef.butterchurnPresets.default.getPresets ? windowRef.butterchurnPresets.default : null);
-	const createCanvasElement = function(width, height) {
-		const canvas = documentRef.createElement("canvas");
-		canvas.width = width;
-		canvas.height = height;
-		canvas.style.display = "none";
-		return canvas;
-	};
-	const audioAnalyser = createAudioAnalyser();
+const createButterchurnCanvasElement = function(documentRef, width, height) {
+	const canvas = documentRef.createElement("canvas");
+	canvas.width = width;
+	canvas.height = height;
+	canvas.style.display = "none";
+	return canvas;
+};
+
+const createButterchurnSourceState = function() {
 	return {
 		canvas: null,
 		visualizer: null,
@@ -359,50 +632,110 @@ const createButterchurnSource = function(options) {
 		lastCanvasRenderTimeSeconds: 0,
 		presetVersion: 0,
 		audioVersion: 0,
-		canvasRenderVersion: 0,
+		canvasRenderVersion: 0
+	};
+};
+
+const initButterchurnPresetLibrary = function(source, butterchurnPresetsApi) {
+	source.presetMap = butterchurnPresetsApi ? butterchurnPresetsApi.getPresets() : {};
+	source.presetNames = Object.keys(source.presetMap).sort();
+	source.currentPresetIndex = Math.max(0, source.presetNames.indexOf(defaultPresetName));
+	source.presetVersion = 1;
+};
+
+const resolvedButterchurnReadyPromise = Promise.resolve();
+
+const attachButterchurnAudioNode = function(source, audioAnalyser, node) {
+	audioAnalyser.ensureNodes(source.audioContext);
+	source.audioNode = node;
+	audioAnalyser.connectSource(source.audioNode);
+	source.visualizer.connectAudio(source.audioNode);
+};
+
+const disconnectButterchurnAudioInput = function(source, audioAnalyser) {
+	if (source.audioNode) {
+		try { source.visualizer.disconnectAudio(source.audioNode); } catch (error) {}
+		try { source.audioNode.disconnect(); } catch (error) {}
+		source.audioNode = null;
+	}
+	audioAnalyser.destroyDebugAudioNodes();
+};
+
+const syncButterchurnAudioInput = function(source, audioAnalyser) {
+	if (!source.visualizer || !source.audioContext) {
+		if (!source.audioStream && source.audioSourceKind !== "debug") {
+			audioAnalyser.resetMetrics();
+		}
+		return resolvedButterchurnReadyPromise;
+	}
+	disconnectButterchurnAudioInput(source, audioAnalyser);
+	if (source.audioSourceKind === "debug") {
+		const debugNodes = audioAnalyser.createDebugAudioNodes(source.audioContext);
+		attachButterchurnAudioNode(source, audioAnalyser, debugNodes.inputNode);
+		return resolvedButterchurnReadyPromise;
+	}
+	if (!source.audioStream) {
+		audioAnalyser.resetMetrics();
+		return resolvedButterchurnReadyPromise;
+	}
+	attachButterchurnAudioNode(source, audioAnalyser, source.audioContext.createMediaStreamSource(source.audioStream));
+	return resolvedButterchurnReadyPromise;
+};
+
+const activateButterchurnBackend = function(source, audioContextCtor, butterchurnApi) {
+	if (!butterchurnApi || !source.presetNames.length || source.activatedBool) {
+		if (source.audioContext && source.audioContext.state === "suspended") {
+			return source.audioContext.resume().catch(function() {});
+		}
+		return resolvedButterchurnReadyPromise;
+	}
+	source.audioContext = new audioContextCtor();
+	source.visualizer = butterchurnApi.createVisualizer(source.audioContext, source.canvas, {
+		width: source.currentWidth,
+		height: source.currentHeight,
+		meshWidth: 32,
+		meshHeight: 24,
+		pixelRatio: 1,
+		textureRatio: 1
+	});
+	source.activatedBool = true;
+	source.visualizer.setOutputAA(false);
+	source.visualizer.setRendererSize(source.currentWidth, source.currentHeight, {meshWidth: 32, meshHeight: 24, pixelRatio: 1, textureRatio: 1});
+	source.visualizer.setInternalMeshSize(32, 24);
+	return resolvedButterchurnReadyPromise;
+};
+
+const createButterchurnSource = function(options) {
+	options = options || {};
+	const windowRef = options.windowRef || window;
+	const documentRef = options.documentRef || document;
+	const audioContextCtor = options.audioContextCtor || windowRef.AudioContext || windowRef.webkitAudioContext;
+	const butterchurnApi = options.butterchurnApi || (windowRef.butterchurn && windowRef.butterchurn.createVisualizer ? windowRef.butterchurn : windowRef.butterchurn && windowRef.butterchurn.default && windowRef.butterchurn.default.createVisualizer ? windowRef.butterchurn.default : null);
+	const butterchurnPresetsApi = options.butterchurnPresetsApi || (windowRef.butterchurnPresets && windowRef.butterchurnPresets.getPresets ? windowRef.butterchurnPresets : windowRef.butterchurnPresets && windowRef.butterchurnPresets.default && windowRef.butterchurnPresets.default.getPresets ? windowRef.butterchurnPresets.default : null);
+	const audioAnalyser = createAudioAnalyser();
+	const source = createButterchurnSourceState();
+	Object.assign(source, {
 		init: function(width, height) {
-			this.canvas = createCanvasElement(width, height);
+			this.canvas = createButterchurnCanvasElement(documentRef, width, height);
 			this.currentWidth = width;
 			this.currentHeight = height;
-			this.presetMap = butterchurnPresetsApi ? butterchurnPresetsApi.getPresets() : {};
-			this.presetNames = Object.keys(this.presetMap).sort();
-			this.currentPresetIndex = Math.max(0, this.presetNames.indexOf(defaultPresetName));
-			this.presetVersion = 1;
+			initButterchurnPresetLibrary(this, butterchurnPresetsApi);
 		},
 		advanceFrame: function(timeSeconds) {
 			this.currentTimeSeconds = typeof timeSeconds === "number" ? timeSeconds : 0;
 			audioAnalyser.advanceFrame(this.currentTimeSeconds);
 		},
-		activate: function() {
-			if (!butterchurnApi || !this.presetNames.length || this.activatedBool) {
-				if (this.audioContext && this.audioContext.state === "suspended") {
-					return this.audioContext.resume().catch(function() {});
-				}
-				return Promise.resolve();
+		activate: async function() {
+			await activateButterchurnBackend(this, audioContextCtor, butterchurnApi);
+			if (!this.visualizer) {
+				return resolvedButterchurnReadyPromise;
 			}
-			this.audioContext = new audioContextCtor();
-			this.visualizer = butterchurnApi.createVisualizer(this.audioContext, this.canvas, {
-				width: this.currentWidth,
-				height: this.currentHeight,
-				meshWidth: 32,
-				meshHeight: 24,
-				pixelRatio: 1,
-				textureRatio: 1
-			});
-			this.activatedBool = true;
-			this.visualizer.setOutputAA(false);
-			this.visualizer.setRendererSize(this.currentWidth, this.currentHeight, {meshWidth: 32, meshHeight: 24, pixelRatio: 1, textureRatio: 1});
-			this.visualizer.setInternalMeshSize(32, 24);
-			this.selectPreset(this.currentPresetIndex, 0);
-			if (this.audioSourceKind === "debug") {
-				this.startDebugAudio();
-			} else if (this.audioStream) {
-				this.setAudioStream(this.audioStream);
-			}
-			if (this.audioContext.state === "suspended") {
+			await this.selectPreset(this.currentPresetIndex, 0);
+			await syncButterchurnAudioInput(this, audioAnalyser);
+			if (this.audioContext && this.audioContext.state === "suspended") {
 				return this.audioContext.resume().catch(function() {});
 			}
-			return Promise.resolve();
+			return resolvedButterchurnReadyPromise;
 		},
 		ensureCanvasSize: function(width, height) {
 			width = Math.max(1, width | 0);
@@ -418,38 +751,13 @@ const createButterchurnSource = function(options) {
 				this.visualizer.setRendererSize(width, height, {meshWidth: 32, meshHeight: 24, pixelRatio: 1, textureRatio: 1});
 			}
 		},
-		disconnectCurrentAudioInput: function() {
-			if (this.audioNode) {
-				try { this.visualizer.disconnectAudio(this.audioNode); } catch (error) {}
-				try { this.audioNode.disconnect(); } catch (error) {}
-				this.audioNode = null;
-			}
-			audioAnalyser.destroyDebugAudioNodes();
-		},
-		attachAudioNode: function(node) {
-			audioAnalyser.ensureNodes(this.audioContext);
-			this.audioNode = node;
-			audioAnalyser.connectSource(this.audioNode);
-			this.visualizer.connectAudio(this.audioNode);
-		},
 		setAudioStream: function(stream) {
 			if (this.audioSourceKind !== "stream" || this.audioStream !== stream) {
 				this.audioVersion += 1;
 			}
 			this.audioStream = stream;
 			this.audioSourceKind = stream ? "stream" : "none";
-			if (!this.visualizer || !this.audioContext) {
-				if (!stream) {
-					audioAnalyser.resetMetrics();
-				}
-				return;
-			}
-			this.disconnectCurrentAudioInput();
-			if (!stream) {
-				audioAnalyser.resetMetrics();
-				return;
-			}
-			this.attachAudioNode(this.audioContext.createMediaStreamSource(stream));
+			syncButterchurnAudioInput(this, audioAnalyser);
 		},
 		startDebugAudio: function() {
 			if (this.audioSourceKind !== "debug") {
@@ -457,17 +765,11 @@ const createButterchurnSource = function(options) {
 			}
 			this.audioStream = null;
 			this.audioSourceKind = "debug";
-			if (!this.visualizer || !this.audioContext) {
-				return Promise.resolve();
-			}
-			this.disconnectCurrentAudioInput();
-			const nodes = audioAnalyser.createDebugAudioNodes(this.audioContext);
-			this.attachAudioNode(nodes.inputNode);
-			return Promise.resolve();
+			return syncButterchurnAudioInput(this, audioAnalyser);
 		},
 		selectPreset: function(index, blendTimeSeconds) {
 			if (!this.presetNames.length) {
-				return Promise.resolve();
+				return resolvedButterchurnReadyPromise;
 			}
 			const nextPresetIndex = (index + this.presetNames.length) % this.presetNames.length;
 			if (nextPresetIndex !== this.currentPresetIndex) {
@@ -475,10 +777,10 @@ const createButterchurnSource = function(options) {
 				this.presetVersion += 1;
 			}
 			if (!this.visualizer) {
-				return Promise.resolve();
+				return resolvedButterchurnReadyPromise;
 			}
 			this.visualizer.loadPreset(this.presetMap[this.presetNames[this.currentPresetIndex]], blendTimeSeconds || 0);
-			return Promise.resolve();
+			return resolvedButterchurnReadyPromise;
 		},
 		renderCanvas: function(timeSeconds) {
 			this.advanceFrame(timeSeconds);
@@ -520,5 +822,6 @@ const createButterchurnSource = function(options) {
 		},
 		endSession: function() {
 		}
-	};
+	});
+	return source;
 };

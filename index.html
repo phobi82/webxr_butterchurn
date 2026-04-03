@@ -7,24 +7,17 @@
 	<body>
 		<script src="butterchurn.min.js"></script>
 		<script src="butterchurnPresets.min.js"></script>
-		<script src="xr-foundation.js"></script>
-		<script src="xr-audio-controller.js"></script>
-		<script src="xr-light-fixture-effects.js"></script>
-		<script src="xr-light-projection.js"></script>
-		<script src="xr-mr-lighting-renderer.js"></script>
-		<script src="xr-light-presets.js"></script>
-		<script src="xr-visualizer.js"></script>
-		<script src="xr-visualizer-modes.js"></script>
-		<script src="xr-passthrough-modes.js"></script>
+		<script src="xr-shared.js"></script>
+		<script src="xr-audio.js"></script>
+		<script src="xr-lighting.js"></script>
 		<script src="xr-passthrough.js"></script>
-		<script src="xr-depth-processing.js"></script>
-		<script src="xr-collision.js"></script>
-		<script src="xr-locomotion.js"></script>
-		<script src="xr-world.js"></script>
-		<script src="xr-menu-sections.js"></script>
+		<script src="xr-depth.js"></script>
 		<script src="xr-menu.js"></script>
-		<script src="xr-shell.js"></script>
+		<script src="xr-movement.js"></script>
+		<script src="xr-render.js"></script>
+		<script src="xr-visualizer.js"></script>
 		<script src="xr-runtime.js"></script>
+		<script src="xr-app.js"></script>
 		<script>
 			document.body.style.backgroundColor = "#000020";
 			document.body.style.color = "#ffff00";
@@ -186,8 +179,7 @@
 			canvas.setAttribute("aria-label", "WebXR 3D visualizer scene");
 			document.body.appendChild(canvas);
 
-			const appShell = createDomAppShell({
-				documentRef: document,
+			const appShell = normalizeAppShell({
 				canvas: canvas,
 				enterButton: enterButton,
 				exitButton: exitButton,
@@ -218,9 +210,8 @@
 					audioLabel.textContent = "Audio: " + (audioState.sourceName || "none");
 					stopAudioButton.disabled = !audioState.stopEnabledBool;
 				}
-			});
+			}, {documentRef: document});
 		</script>
-		<script src="app-composition.js"></script>
 		<script>
 			createApp({shell: appShell}).start();
 		</script>
