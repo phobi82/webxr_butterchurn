@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Added a passthrough lighting `Anchor` mode cycler (`Auto`, `VR World`, `Real World`) under `Scene Lighting`, with `Auto` preferring real-world anchoring when usable depth is available and otherwise falling back to VR-world anchoring.
-- Reworked the first shared `Soft Wash` lighting effect so immersive-AR passthrough can fit broad wash masks against real ceiling, wall, and floor surfaces from depth samples instead of only scaling a hypothetical-room UV blob.
-- Changed fallback wash placement so missing depth now uses the same realistic room shell but can be anchored to the VR world, while forced `Real World` keeps the hypothetical room stable in reference-space coordinates.
+- Rebuilt passthrough light projection around one general surface path: when processed fullscreen depth is available, the overlay renderer binds MR light masks directly against that geometry; otherwise they fall back to the hypothetical room shell.
+- Replaced per-frame passthrough light object packing with one shared `lightLayers` typed-array buffer, so projection and overlay rendering now reuse the same frame data directly.
+- Removed effect-specific depth handling from `xr-light-projection`, so named effects no longer own special depth constants or raw-depth branches inside the projection module.
+- Moved MR footprint rules into `xr-light-fixture-effects`, so fixture effect definitions now own both shader semantics and physical light-shape layout.
+- Extracted the MR-lighting renderer into `xr-mr-lighting-renderer.js`, leaving `xr-passthrough` focused on passthrough policy and overlay-state assembly while `xr-world` orchestrates the frame top-down.
 - Tuned shared scene-light derivation so broad wash-heavy presets contribute more strongly to VR ambient fill, keeping the virtual world lighting closer to the visible modified-reality wash.
+- Changed fallback wall placement to respect fixture `vertical`, so wall-bound effects stay on believable wall tracks instead of collapsing to ceiling height.
 
 ## [0.8.8] - 2026-04-02
 

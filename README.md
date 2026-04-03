@@ -49,7 +49,8 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Depth Reconstruction**: shared full-resolution prepass with **Raw**, **Edge-aware**, and **Heightmap** modes, preferring float render targets to avoid 8-bit banding
 - **Motion compensation**: enabled by default for depth masking, with a `Compensation Factor` slider to tune how strongly the mask follows recent head yaw, pitch, and translation
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
-- **Depth-bound Soft Wash**: the first wash effect can now fit broad light masks onto real ceiling, wall, and floor surfaces from sensor depth instead of only inflating a screen-space blob
+- **Depth-bound Light Projection**: passthrough lighting now reuses the processed fullscreen depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
+- **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
 - Background mix crossfades between visualizer and darkened modified reality via **manual** or **sound-reactive** blend modes
 
 ### Scene Lighting
@@ -58,6 +59,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - Lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
 - Optional WebXR depth sensing for depth-aware light placement in immersive AR
 - Shared fixture groups drive both passthrough lighting and VR-world scene lighting so color and timing stay synchronized
+- Wall-bound fixture effects keep their authored `vertical` placement in the fallback room, so silhouettes, beats, and runners stay on believable wall tracks
 
 ### XR Session
 
@@ -181,18 +183,19 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-foundation.js` | Shared browser, XR, math, and rendering helpers |
 | `xr-audio-controller.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-light-fixture-effects.js` | Shared fixture-effect families and passthrough effect semantics |
-| `xr-light-projection.js` | Real-world and fallback-room light projection helpers for passthrough lighting |
+| `xr-light-projection.js` | Shared MR light-layer builder from fixture state, anchors, and room geometry |
 | `xr-light-presets.js` | Lighting preset catalog, fixture-rig builders, scene-light derivation |
 | `test-lab-lighting-presets.js` | Isolated single-effect preset catalog for TestLab |
 | `xr-visualizer.js` | Visualizer engine, Butterchurn integration, preset lifecycle |
 | `xr-visualizer-modes.js` | Visualizer mode catalog |
 | `xr-passthrough-modes.js` | Background mix, passthrough, and lighting control definitions |
-| `xr-passthrough.js` | Passthrough controller, fallback policy, overlay-lighting compositor |
+| `xr-passthrough.js` | Passthrough controller, fallback policy, and overlay-state assembly |
+| `xr-mr-lighting-renderer.js` | MR lighting renderer that consumes shared `lightLayers` and processed depth directly |
 | `xr-depth-processing.js` | Full-resolution depth reconstruction prepass (raw, edge-aware, heightmap) |
 | `xr-menu-sections.js` | Generic menu section/control descriptors |
 | `xr-collision.js` | AABB collision world with floor height, slide, and step-up logic |
 | `xr-locomotion.js` | Shared XR/desktop locomotion (walking, jumping, sprinting, crouching, gravity) |
-| `xr-world.js` | GLB asset loading and scene renderer |
+| `xr-world.js` | GLB asset loading, scene renderer, and top-level XR frame composition |
 | `xr-menu.js` | Menu canvas rendering, desktop preview, XR/desktop menu interaction |
 | `xr-shell.js` | DOM-shell contract and shell normalization helpers |
 | `xr-runtime.js` | Runtime orchestration for XR sessions, desktop preview, audio, render loop |

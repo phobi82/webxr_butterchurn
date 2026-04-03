@@ -231,13 +231,66 @@ const getFixtureEffectState = function(args) {
 	};
 };
 
+// Effect definitions also own the physical footprint rules for MR projection.
+const getFixtureEffectFootprint = function(args) {
+	args = args || {};
+	const group = args.group || {};
+	const effectState = args.effectState || {mode: FIXTURE_EFFECT_MODE_NONE};
+	const surfaceBudget = args.surfaceBudget || {};
+	const surfaceKey = args.surfaceKey || "ceiling";
+	const fillMix = clampNumber(args.fillMix == null ? 0 : args.fillMix, 0, 1);
+	const surfaceDepthBool = !!args.surfaceDepthBool;
+	const baseRadius = clampNumber(args.baseRadius == null ? 0.4 : args.baseRadius, 0.14, 1.6);
+	let radiusX = baseRadius;
+	let radiusY = baseRadius;
+	if (group.type === "wash") {
+		radiusX = baseRadius * (0.92 + fillMix * 0.86) * (surfaceBudget.washRadiusXScale || 1);
+		radiusY = baseRadius * (surfaceKey === "wall" ? 0.82 : (surfaceKey === "floor" ? 1.08 : 0.9)) * (0.84 + fillMix * 0.68) * (surfaceBudget.washRadiusYScale || 1);
+	} else if (group.type === "beam") {
+		radiusX = baseRadius * (surfaceKey === "wall" ? 1.22 : 0.96) * (surfaceBudget.beamRadiusXScale || 1);
+		radiusY = baseRadius * 0.24 * (surfaceBudget.beamRadiusYScale || 1);
+	} else {
+		radiusX = baseRadius * 0.68 * (surfaceBudget.strobeRadiusXScale || 1);
+		radiusY = baseRadius * 0.42 * (surfaceBudget.strobeRadiusYScale || 1);
+	}
+	if (effectState.mode === FIXTURE_EFFECT_MODE_SHUTTERS) {
+		radiusX *= 1.26;
+		radiusY *= 0.72;
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_EDGE_RUNNER) {
+		radiusX *= 1.84;
+		radiusY *= 0.42;
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_SILHOUETTE) {
+		radiusX *= 0.82;
+		radiusY *= 1.62;
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_WINDOW_BEAT) {
+		radiusX *= 1.22;
+		radiusY *= 1.08;
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN) {
+		radiusX *= surfaceKey === "ceiling" ? 1.94 : 1.54;
+		radiusY *= surfaceKey === "ceiling" ? 0.58 : 0.74;
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_FLOOR_HALO) {
+		radiusX *= 1.26;
+		radiusY = radiusX * (surfaceKey === "floor" ? 1.02 : 0.88);
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
+		radiusX *= group.type === "beam" ? 1.18 : 1.04;
+		radiusY = Math.max(radiusY * 1.92, radiusX * 0.72);
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_NONE && group.type === "wash" && !surfaceDepthBool) {
+		radiusX *= 1.08;
+		radiusY *= 1.12;
+	}
+	return {
+		radiusX: radiusX * (surfaceBudget.radiusScale || 1),
+		radiusY: radiusY * (surfaceBudget.radiusScale || 1)
+	};
+};
+
 const buildFixtureEffectShaderBranch = function(definition, branchIndex) {
 	const branchOpen = branchIndex === 0 ? ("if(effectType<" + (definition.shaderType + 0.5).toFixed(1) + "){") : ("else if(effectType<" + (definition.shaderType + 0.5).toFixed(1) + "){");
 	return [branchOpen].concat(definition.shaderLines).concat(["}"]);
 };
 
 const fixtureEffectFragmentSource = [
-	"vec2 spotEffect(vec2 uv, vec2 center, vec4 params, vec4 effectParams){",
+	"vec2 lightLayerEffect(vec2 uv, vec2 center, vec4 params, vec4 effectParams){",
 	"float radiusX=max(params.x,0.0001);",
 	"float radiusY=max(params.y,0.0001);",
 	"float rotation=params.w;",

@@ -322,7 +322,7 @@ const createSceneRenderer = function(options) {
 	let texProjLoc = null;
 	let texSamplerLoc = null;
 	let menuTexture = null;
-	let passthroughOverlayRenderer = null;
+	let mrLightingRenderer = null;
 	let punchRenderer = null;
 	let worldMaskCompositeRenderer = null;
 	let processedDepthRenderer = null;
@@ -908,15 +908,15 @@ const createSceneRenderer = function(options) {
 			}
 		}
 		// Layer 2: Modified Reality Overlay
-		if (passthroughOverlayRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
-			passthroughOverlayRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
+		if (mrLightingRenderer && (args.transparentBackgroundBool || args.passthroughFallbackBool)) {
+			mrLightingRenderer.draw(passthroughController && passthroughController.getOverlayRenderState ? passthroughController.getOverlayRenderState({
 				renderViewMatrix: currentView,
 				viewMatrix: passthroughViewMatrix,
 				projMatrix: passthroughProjMatrix,
 				depthProjMatrix: currentProj,
 				controllerRays: controllerRays,
 				sceneLightingState: sceneLightingState,
-				depthInfo: args.rawPassthroughDepthInfo || null
+				depthInfo: args.processedDepthInfo || null
 			}) : null, args.processedDepthInfo, args.processedDepthFrameKind || "", webgl2Bool, args.processedDepthProfile);
 		}
 		// Layer 3: VR World
@@ -996,8 +996,8 @@ const createSceneRenderer = function(options) {
 			texViewLoc = gl.getUniformLocation(texProgram, "view");
 			texProjLoc = gl.getUniformLocation(texProgram, "proj");
 			texSamplerLoc = gl.getUniformLocation(texProgram, "tex");
-			passthroughOverlayRenderer = createPassthroughOverlayRenderer();
-			passthroughOverlayRenderer.init(gl);
+			mrLightingRenderer = createMrLightingRenderer();
+			mrLightingRenderer.init(gl);
 			punchRenderer = createPunchRenderer();
 			punchRenderer.init(gl);
 			processedDepthRenderer = createProcessedDepthRenderer();

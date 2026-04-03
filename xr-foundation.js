@@ -191,6 +191,17 @@ const extractCameraPositionFromViewMatrix = function(viewMatrix) {
 	return reusableCameraPosition;
 };
 
+// XR rendering frequently needs the inverse rigid camera transform as a world matrix.
+const buildWorldFromViewMatrix = function(viewMatrix) {
+	const cameraPosition = extractCameraPositionFromViewMatrix(viewMatrix);
+	return new Float32Array([
+		viewMatrix[0], viewMatrix[4], viewMatrix[8], 0,
+		viewMatrix[1], viewMatrix[5], viewMatrix[9], 0,
+		viewMatrix[2], viewMatrix[6], viewMatrix[10], 0,
+		cameraPosition.x, cameraPosition.y, cameraPosition.z, 1
+	]);
+};
+
 const identityMatrix = function() {
 	return new Float32Array([
 		1, 0, 0, 0,

@@ -1,23 +1,56 @@
-// Shared real-world / fallback-room light projection helpers for passthrough lighting.
+// Shared light projection builds MR lighting layers from fixture state and available room geometry.
 
 const PASSTHROUGH_MAX_FLASHLIGHTS = 2;
-const PASSTHROUGH_MAX_SPOTS = 24;
+const PASSTHROUGH_MAX_LIGHT_LAYERS = 24;
 const PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT = 2.6;
 const PASSTHROUGH_ROOM_LIGHT_MIN_DISTANCE = 2.4;
 const PASSTHROUGH_ROOM_LIGHT_MAX_DISTANCE = 5.6;
 const PASSTHROUGH_ROOM_HALF_WIDTH = 3.6;
 const PASSTHROUGH_ROOM_HALF_DEPTH = 4.4;
 const PASSTHROUGH_ROOM_FLOOR_Y = 0.08;
-const PASSTHROUGH_ROOM_WALL_Y = 1.35;
-const PASSTHROUGH_DEPTH_MIN_METERS = 0.15;
-const PASSTHROUGH_DEPTH_MAX_METERS = 12;
-const PASSTHROUGH_SOFT_WASH_DEPTH_SAMPLE_UV = 0.035;
-const PASSTHROUGH_SOFT_WASH_MIN_WORLD_RADIUS_METERS = 0.35;
-const PASSTHROUGH_SOFT_WASH_MAX_WORLD_RADIUS_METERS = 2.8;
+const PASSTHROUGH_ROOM_WALL_MIN_Y = PASSTHROUGH_ROOM_FLOOR_Y + 0.42;
+const PASSTHROUGH_ROOM_WALL_MAX_Y = PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT - 0.34;
+const PASSTHROUGH_MIN_WORLD_RADIUS_METERS = 0.12;
+const PASSTHROUGH_MAX_WORLD_RADIUS_METERS = 3.2;
 
 const PASSTHROUGH_LIGHTING_ANCHOR_MODE_AUTO = "auto";
 const PASSTHROUGH_LIGHTING_ANCHOR_MODE_VR_WORLD = "vrWorld";
 const PASSTHROUGH_LIGHTING_ANCHOR_MODE_REAL_WORLD = "realWorld";
+
+const createProjectedLightLayerBuffer = function() {
+	return {
+		count: 0,
+		surfaceDepthLayerCount: 0,
+		centersUv: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 2),
+		colors: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
+		ellipseParamsUv: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
+		alphaBlendStrengths: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS),
+		effectParams: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
+		worldCenters: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
+		worldBasisX: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
+		worldBasisY: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
+		worldEllipseParams: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
+		surfaceDepthFlags: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS)
+	};
+};
+
+const getProjectedLightLayerBuffer = function(controllerState) {
+	if (!controllerState || !controllerState.projectedLightLayerBuffer) {
+		if (controllerState) {
+			controllerState.projectedLightLayerBuffer = createProjectedLightLayerBuffer();
+		}
+		return controllerState && controllerState.projectedLightLayerBuffer ? controllerState.projectedLightLayerBuffer : createProjectedLightLayerBuffer();
+	}
+	return controllerState.projectedLightLayerBuffer;
+};
+
+const resetProjectedLightLayerBuffer = function(buffer) {
+	if (!buffer) {
+		return;
+	}
+	buffer.count = 0;
+	buffer.surfaceDepthLayerCount = 0;
+};
 
 const projectWorldPointToUv = function(viewMatrix, projMatrix, x, y, z) {
 	const viewX = viewMatrix[0] * x + viewMatrix[4] * y + viewMatrix[8] * z + viewMatrix[12];
@@ -40,30 +73,6 @@ const projectWorldPointToUv = function(viewMatrix, projMatrix, x, y, z) {
 	};
 };
 
-const getWorldDirectionForUv = function(viewMatrix, projMatrix, uv) {
-	const ndcX = clampNumber((uv.x || 0) * 2 - 1, -1, 1);
-	const ndcY = clampNumber((uv.y || 0) * 2 - 1, -1, 1);
-	const projScaleX = Math.abs(projMatrix[0] || 0) > 0.0001 ? projMatrix[0] : 1;
-	const projScaleY = Math.abs(projMatrix[5] || 0) > 0.0001 ? projMatrix[5] : 1;
-	const viewX = (ndcX + (projMatrix[8] || 0)) / projScaleX;
-	const viewY = (ndcY + (projMatrix[9] || 0)) / projScaleY;
-	return normalizeVec3(
-		viewMatrix[0] * viewX + viewMatrix[1] * viewY - viewMatrix[2],
-		viewMatrix[4] * viewX + viewMatrix[5] * viewY - viewMatrix[6],
-		viewMatrix[8] * viewX + viewMatrix[9] * viewY - viewMatrix[10]
-	);
-};
-
-const buildWorldFromViewMatrix = function(viewMatrix) {
-	const cameraPosition = extractCameraPositionFromViewMatrix(viewMatrix);
-	return new Float32Array([
-		viewMatrix[0], viewMatrix[4], viewMatrix[8], 0,
-		viewMatrix[1], viewMatrix[5], viewMatrix[9], 0,
-		viewMatrix[2], viewMatrix[6], viewMatrix[10], 0,
-		cameraPosition.x, cameraPosition.y, cameraPosition.z, 1
-	]);
-};
-
 const transformPointByMatrix = function(matrix, point) {
 	return {
 		x: matrix[0] * point.x + matrix[4] * point.y + matrix[8] * point.z + matrix[12],
@@ -72,44 +81,28 @@ const transformPointByMatrix = function(matrix, point) {
 	};
 };
 
-const getDepthWorldPointAtUv = function(args, uv) {
-	if (!args || !args.depthInfo || typeof args.depthInfo.getDepthInMeters !== "function" || !args.viewMatrix || !args.projMatrix || !uv) {
-		return null;
-	}
-	let depthMeters = 0;
-	try { depthMeters = args.depthInfo.getDepthInMeters(uv.x, 1 - uv.y) || 0; } catch (e) { depthMeters = 0; }
-	if (!Number.isFinite(depthMeters) || depthMeters < PASSTHROUGH_DEPTH_MIN_METERS || depthMeters > PASSTHROUGH_DEPTH_MAX_METERS) {
-		return null;
-	}
-	const cameraPosition = extractCameraPositionFromViewMatrix(args.viewMatrix);
-	const worldDirection = getWorldDirectionForUv(args.viewMatrix, args.projMatrix, uv);
-	return {
-		x: cameraPosition.x + worldDirection.x * depthMeters,
-		y: cameraPosition.y + worldDirection.y * depthMeters,
-		z: cameraPosition.z + worldDirection.z * depthMeters,
-		depthMeters: depthMeters
-	};
+const getPointDistance2d = function(ax, ay, bx, by) {
+	const deltaX = bx - ax;
+	const deltaY = by - ay;
+	return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 };
 
-// Pre-allocated to avoid per-frame garbage in depth-anchor hot paths.
-const reusableDepthAnchorState = {depthMeters: 0, radiusScale: 1, point: {x: 0, y: 0, z: 0}};
-const getDepthAnchorState = function(args, projectedUv, fallbackPoint) {
-	const depthPoint = getDepthWorldPointAtUv(args, projectedUv);
-	if (!depthPoint) {
-		return null;
+const getPointDistance3d = function(a, b) {
+	if (!a || !b) {
+		return 0;
 	}
-	const cameraPosition = extractCameraPositionFromViewMatrix(args.viewMatrix);
-	const fallbackDistance = fallbackPoint ? Math.sqrt(
-		Math.pow(fallbackPoint.x - cameraPosition.x, 2) +
-		Math.pow(fallbackPoint.y - cameraPosition.y, 2) +
-		Math.pow(fallbackPoint.z - cameraPosition.z, 2)
-	) : depthPoint.depthMeters;
-	reusableDepthAnchorState.depthMeters = depthPoint.depthMeters;
-	reusableDepthAnchorState.radiusScale = clampNumber(fallbackDistance / Math.max(depthPoint.depthMeters, 0.0001), 0.65, 1.85);
-	reusableDepthAnchorState.point.x = depthPoint.x;
-	reusableDepthAnchorState.point.y = depthPoint.y;
-	reusableDepthAnchorState.point.z = depthPoint.z;
-	return reusableDepthAnchorState;
+	const deltaX = b.x - a.x;
+	const deltaY = b.y - a.y;
+	const deltaZ = b.z - a.z;
+	return Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+};
+
+const crossVec3 = function(ax, ay, az, bx, by, bz) {
+	return {
+		x: ay * bz - az * by,
+		y: az * bx - ax * bz,
+		z: ax * by - ay * bx
+	};
 };
 
 const getAveragedLightingColor = function(lightingState) {
@@ -165,7 +158,15 @@ const getRoomFloorLightPoint = function(ceilingPoint) {
 	};
 };
 
-const getRoomWallLightPoint = function(ceilingPoint) {
+const getRoomWallLightY = function(vertical) {
+	return lerpNumber(
+		PASSTHROUGH_ROOM_WALL_MIN_Y,
+		PASSTHROUGH_ROOM_WALL_MAX_Y,
+		clampNumber(vertical == null ? 0.55 : vertical, 0, 1)
+	);
+};
+
+const getRoomWallLightPoint = function(ceilingPoint, vertical) {
 	if (!ceilingPoint) {
 		return null;
 	}
@@ -177,7 +178,7 @@ const getRoomWallLightPoint = function(ceilingPoint) {
 	const scaleToWall = absX > absZ ? PASSTHROUGH_ROOM_HALF_WIDTH / Math.max(absX, 0.0001) : PASSTHROUGH_ROOM_HALF_DEPTH / Math.max(absZ, 0.0001);
 	return {
 		x: clampNumber(ceilingPoint.x * scaleToWall, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
-		y: PASSTHROUGH_ROOM_WALL_Y,
+		y: getRoomWallLightY(vertical),
 		z: clampNumber(ceilingPoint.z * scaleToWall, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
 	};
 };
@@ -279,7 +280,7 @@ const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix, surf
 		const depthLane = 0.26 + Math.abs(trackDepth / Math.max(PASSTHROUGH_ROOM_HALF_DEPTH, 0.0001)) * 0.74;
 		return {
 			x: PASSTHROUGH_ROOM_HALF_WIDTH * (group.stereoBias < 0 ? -1 : 1),
-			y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
+			y: getRoomWallLightY(group.vertical),
 			z: clampNumber(depthSign * PASSTHROUGH_ROOM_HALF_DEPTH * depthLane, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
 		};
 	}
@@ -288,7 +289,7 @@ const getRoomPointForFixtureGroup = function(group, variantOffset, fillMix, surf
 	const wallScale = Math.min(wallScaleX, wallScaleZ) * radialScale;
 	return {
 		x: clampNumber(Math.cos(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_WIDTH, PASSTHROUGH_ROOM_HALF_WIDTH),
-		y: PASSTHROUGH_ROOM_LIGHT_CEILING_HEIGHT,
+		y: getRoomWallLightY(group.vertical),
 		z: clampNumber(Math.sin(azimuth) * wallScale, -PASSTHROUGH_ROOM_HALF_DEPTH, PASSTHROUGH_ROOM_HALF_DEPTH)
 	};
 };
@@ -303,13 +304,11 @@ const getEffectiveLightingAnchorModeKey = function(controllerState) {
 	return requestedModeKey;
 };
 
-const canUseDepthBoundLighting = function(controllerState, args) {
+const canUseSurfaceDepth = function(controllerState) {
 	return !!(
 		controllerState &&
 		controllerState.depthActiveBool &&
-		args &&
-		args.depthInfo &&
-		typeof args.depthInfo.getDepthInMeters === "function"
+		controllerState.usableDepthAvailableBool
 	);
 };
 
@@ -357,82 +356,94 @@ const getAnchoredRoomPoint = function(args, point, controllerState) {
 	);
 };
 
-const getSurfaceTypeForDepthPoint = function(centerPoint, normal, cameraPosition) {
-	if (!centerPoint || !normal || !cameraPosition) {
-		return "wall";
+const getRoomSurfaceFrame = function(point, anchorType) {
+	if (!point) {
+		return null;
 	}
-	if (Math.abs(normal.y) >= 0.72) {
-		return centerPoint.y < cameraPosition.y ? "floor" : "ceiling";
+	let normal = null;
+	let tangentX = null;
+	let tangentY = null;
+	if (anchorType === "floor" || anchorType === "ceiling") {
+		const radialLength = Math.sqrt(point.x * point.x + point.z * point.z);
+		const radial = radialLength > 0.001 ? normalizeVec3(point.x, 0, point.z) : {x: 1, y: 0, z: 0};
+		normal = anchorType === "floor" ? {x: 0, y: 1, z: 0} : {x: 0, y: -1, z: 0};
+		tangentX = normalizeVec3(-radial.z, 0, radial.x);
+		if (Math.abs(tangentX.x) < 0.001 && Math.abs(tangentX.z) < 0.001) {
+			tangentX = {x: 1, y: 0, z: 0};
+		}
+		const tangentYCross = crossVec3(normal.x, normal.y, normal.z, tangentX.x, tangentX.y, tangentX.z);
+		tangentY = normalizeVec3(tangentYCross.x, tangentYCross.y, tangentYCross.z);
+		return {
+			normal: normal,
+			tangentX: tangentX,
+			tangentY: tangentY
+		};
 	}
-	return "wall";
+	if (Math.abs(Math.abs(point.x) - PASSTHROUGH_ROOM_HALF_WIDTH) <= Math.abs(Math.abs(point.z) - PASSTHROUGH_ROOM_HALF_DEPTH)) {
+		normal = {x: point.x >= 0 ? -1 : 1, y: 0, z: 0};
+		tangentX = {x: 0, y: 0, z: point.x >= 0 ? -1 : 1};
+	} else {
+		normal = {x: 0, y: 0, z: point.z >= 0 ? -1 : 1};
+		tangentX = {x: point.z >= 0 ? 1 : -1, y: 0, z: 0};
+	}
+	tangentY = {x: 0, y: 1, z: 0};
+	return {
+		normal: normal,
+		tangentX: tangentX,
+		tangentY: tangentY
+	};
 };
 
-const getSoftWashWorldRadii = function(group, fillMix, surfaceBudget, surfaceType, depthBoundBool) {
-	let radiusX = clampNumber((group.radius || 0.4) * (1.2 + fillMix * 0.7) * (surfaceBudget.radiusScale || 1), PASSTHROUGH_SOFT_WASH_MIN_WORLD_RADIUS_METERS, PASSTHROUGH_SOFT_WASH_MAX_WORLD_RADIUS_METERS);
-	let radiusY = radiusX * (surfaceType === "wall" ? 0.72 : (surfaceType === "floor" ? 1.08 : 0.84));
-	if (!depthBoundBool) {
-		radiusX *= 1.08;
-		radiusY *= 1.12;
+const getAnchoredRoomFrame = function(args, roomPoint, roomFrame, controllerState) {
+	if (!roomPoint || !roomFrame) {
+		return null;
+	}
+	const centerPoint = getAnchoredRoomPoint(args, roomPoint, controllerState);
+	const tangentPointX = getAnchoredRoomPoint(args, {
+		x: roomPoint.x + roomFrame.tangentX.x,
+		y: roomPoint.y + roomFrame.tangentX.y,
+		z: roomPoint.z + roomFrame.tangentX.z
+	}, controllerState);
+	const tangentPointY = getAnchoredRoomPoint(args, {
+		x: roomPoint.x + roomFrame.tangentY.x,
+		y: roomPoint.y + roomFrame.tangentY.y,
+		z: roomPoint.z + roomFrame.tangentY.z
+	}, controllerState);
+	if (!centerPoint || !tangentPointX || !tangentPointY) {
+		return null;
 	}
 	return {
-		radiusX: clampNumber(radiusX, PASSTHROUGH_SOFT_WASH_MIN_WORLD_RADIUS_METERS, PASSTHROUGH_SOFT_WASH_MAX_WORLD_RADIUS_METERS),
-		radiusY: clampNumber(radiusY, PASSTHROUGH_SOFT_WASH_MIN_WORLD_RADIUS_METERS * 0.7, PASSTHROUGH_SOFT_WASH_MAX_WORLD_RADIUS_METERS)
+		centerPoint: centerPoint,
+		tangentX: normalizeVec3(
+			tangentPointX.x - centerPoint.x,
+			tangentPointX.y - centerPoint.y,
+			tangentPointX.z - centerPoint.z
+		),
+		tangentY: normalizeVec3(
+			tangentPointY.x - centerPoint.x,
+			tangentPointY.y - centerPoint.y,
+			tangentPointY.z - centerPoint.z
+		)
 	};
 };
 
-const getDepthSurfaceProjectionState = function(args, centerUv, group, fillMix, surfaceBudget) {
-	if (!args || !centerUv || !group || group.type !== "wash") {
+const getProjectedMaskFromWorldFootprint = function(args, centerPoint, tangentX, tangentY, radiusX, radiusY) {
+	if (!args || !args.viewMatrix || !args.projMatrix || !centerPoint || !tangentX || !tangentY) {
 		return null;
 	}
-	const centerPoint = getDepthWorldPointAtUv(args, centerUv);
-	if (!centerPoint) {
+	const centerUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, centerPoint.x, centerPoint.y, centerPoint.z);
+	if (!centerUv) {
 		return null;
 	}
-	const sampleOffset = PASSTHROUGH_SOFT_WASH_DEPTH_SAMPLE_UV;
-	const sampleRight = getDepthWorldPointAtUv(args, {x: clampNumber(centerUv.x + sampleOffset, 0, 1), y: centerUv.y});
-	const sampleUp = getDepthWorldPointAtUv(args, {x: centerUv.x, y: clampNumber(centerUv.y - sampleOffset, 0, 1)});
-	if (!sampleRight || !sampleUp) {
-		return null;
-	}
-	const tangentX = normalizeVec3(sampleRight.x - centerPoint.x, sampleRight.y - centerPoint.y, sampleRight.z - centerPoint.z);
-	const tangentYRaw = normalizeVec3(sampleUp.x - centerPoint.x, sampleUp.y - centerPoint.y, sampleUp.z - centerPoint.z);
-	let normal = normalizeVec3(
-		tangentX.y * tangentYRaw.z - tangentX.z * tangentYRaw.y,
-		tangentX.z * tangentYRaw.x - tangentX.x * tangentYRaw.z,
-		tangentX.x * tangentYRaw.y - tangentX.y * tangentYRaw.x
-	);
-	const tangentLength = Math.sqrt(
-		Math.pow(sampleRight.x - centerPoint.x, 2) +
-		Math.pow(sampleRight.y - centerPoint.y, 2) +
-		Math.pow(sampleRight.z - centerPoint.z, 2)
-	);
-	if (!Number.isFinite(tangentLength) || tangentLength < 0.01) {
-		return null;
-	}
-	const cameraPosition = extractCameraPositionFromViewMatrix(args.viewMatrix);
-	const viewToSurface = normalizeVec3(centerPoint.x - cameraPosition.x, centerPoint.y - cameraPosition.y, centerPoint.z - cameraPosition.z);
-	if (dotVec3(normal.x, normal.y, normal.z, viewToSurface.x, viewToSurface.y, viewToSurface.z) > 0) {
-		normal.x *= -1;
-		normal.y *= -1;
-		normal.z *= -1;
-	}
-	const projectedDot = dotVec3(tangentYRaw.x, tangentYRaw.y, tangentYRaw.z, tangentX.x, tangentX.y, tangentX.z);
-	const tangentY = normalizeVec3(
-		tangentYRaw.x - tangentX.x * projectedDot,
-		tangentYRaw.y - tangentX.y * projectedDot,
-		tangentYRaw.z - tangentX.z * projectedDot
-	);
-	const surfaceType = getSurfaceTypeForDepthPoint(centerPoint, normal, cameraPosition);
-	const worldRadii = getSoftWashWorldRadii(group, fillMix, surfaceBudget, surfaceType, true);
 	const radiusPointX = {
-		x: centerPoint.x + tangentX.x * worldRadii.radiusX,
-		y: centerPoint.y + tangentX.y * worldRadii.radiusX,
-		z: centerPoint.z + tangentX.z * worldRadii.radiusX
+		x: centerPoint.x + tangentX.x * radiusX,
+		y: centerPoint.y + tangentX.y * radiusX,
+		z: centerPoint.z + tangentX.z * radiusX
 	};
 	const radiusPointY = {
-		x: centerPoint.x + tangentY.x * worldRadii.radiusY,
-		y: centerPoint.y + tangentY.y * worldRadii.radiusY,
-		z: centerPoint.z + tangentY.z * worldRadii.radiusY
+		x: centerPoint.x + tangentY.x * radiusY,
+		y: centerPoint.y + tangentY.y * radiusY,
+		z: centerPoint.z + tangentY.z * radiusY
 	};
 	const projectedRadiusUvX = projectWorldPointToUv(args.viewMatrix, args.projMatrix, radiusPointX.x, radiusPointX.y, radiusPointX.z);
 	const projectedRadiusUvY = projectWorldPointToUv(args.viewMatrix, args.projMatrix, radiusPointY.x, radiusPointY.y, radiusPointY.z);
@@ -440,15 +451,112 @@ const getDepthSurfaceProjectionState = function(args, centerUv, group, fillMix, 
 		return null;
 	}
 	return {
+		x: centerUv.x,
+		y: centerUv.y,
 		rotation: Math.atan2(projectedRadiusUvX.y - centerUv.y, projectedRadiusUvX.x - centerUv.x),
-		radiusX: clampNumber(Math.sqrt(Math.pow(projectedRadiusUvX.x - centerUv.x, 2) + Math.pow(projectedRadiusUvX.y - centerUv.y, 2)), 0.08, 0.5),
-		radiusY: clampNumber(Math.sqrt(Math.pow(projectedRadiusUvY.x - centerUv.x, 2) + Math.pow(projectedRadiusUvY.y - centerUv.y, 2)), 0.05, 0.48)
+		radiusX: clampNumber(getPointDistance2d(centerUv.x, centerUv.y, projectedRadiusUvX.x, projectedRadiusUvX.y), 0.02, 0.5),
+		radiusY: clampNumber(getPointDistance2d(centerUv.x, centerUv.y, projectedRadiusUvY.x, projectedRadiusUvY.y), 0.02, 0.48)
 	};
 };
 
-const appendControllerFlashlightMasks = function(target, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost) {
+const getFixtureWorldRadii = function(group, effectState, fillMix, surfaceBudget, surfaceKey, surfaceDepthBool) {
+	const footprint = getFixtureEffectFootprint({
+		group: group,
+		effectState: effectState,
+		fillMix: fillMix,
+		surfaceBudget: surfaceBudget,
+		surfaceKey: surfaceKey,
+		surfaceDepthBool: surfaceDepthBool,
+		baseRadius: group && group.radius
+	});
+	return {
+		radiusX: clampNumber(footprint.radiusX, PASSTHROUGH_MIN_WORLD_RADIUS_METERS, PASSTHROUGH_MAX_WORLD_RADIUS_METERS),
+		radiusY: clampNumber(footprint.radiusY, PASSTHROUGH_MIN_WORLD_RADIUS_METERS * 0.6, PASSTHROUGH_MAX_WORLD_RADIUS_METERS)
+	};
+};
+
+const shouldUseSurfaceDepth = function(controllerState, args) {
+	return getEffectiveLightingAnchorModeKey(controllerState) === PASSTHROUGH_LIGHTING_ANCHOR_MODE_REAL_WORLD && canUseSurfaceDepth(controllerState);
+};
+
+const getSurfaceProjectionState = function(args, controllerState, roomPoint, anchorType, radiusX, radiusY) {
+	const roomFrame = getRoomSurfaceFrame(roomPoint, anchorType);
+	const anchoredFrame = getAnchoredRoomFrame(args, roomPoint, roomFrame, controllerState);
+	if (!anchoredFrame) {
+		return null;
+	}
+	const maskState = getProjectedMaskFromWorldFootprint(
+		args,
+		anchoredFrame.centerPoint,
+		anchoredFrame.tangentX,
+		anchoredFrame.tangentY,
+		radiusX,
+		radiusY
+	);
+	if (!maskState) {
+		return null;
+	}
+	return {
+		maskState: maskState,
+		centerPoint: anchoredFrame.centerPoint,
+		tangentX: anchoredFrame.tangentX,
+		tangentY: anchoredFrame.tangentY,
+		radiusX: radiusX,
+		radiusY: radiusY,
+		surfaceDepthBool: shouldUseSurfaceDepth(controllerState, args)
+	};
+};
+
+const appendProjectedLightLayer = function(buffer, layerState) {
+	if (!buffer || !layerState || buffer.count >= PASSTHROUGH_MAX_LIGHT_LAYERS) {
+		return false;
+	}
+	const layerIndex = buffer.count;
+	const centerOffset = layerIndex * 2;
+	const colorOffset = layerIndex * 4;
+	const ellipseOffset = layerIndex * 4;
+	const worldCenterOffset = layerIndex * 3;
+	const worldBasisOffset = layerIndex * 3;
+	const worldParamsOffset = layerIndex * 4;
+	buffer.centersUv[centerOffset] = layerState.centerUvX || 0;
+	buffer.centersUv[centerOffset + 1] = layerState.centerUvY || 0;
+	buffer.colors[colorOffset] = layerState.colorR || 0;
+	buffer.colors[colorOffset + 1] = layerState.colorG || 0;
+	buffer.colors[colorOffset + 2] = layerState.colorB || 0;
+	buffer.colors[colorOffset + 3] = layerState.strength || 0;
+	buffer.ellipseParamsUv[ellipseOffset] = layerState.radiusUvX || 0;
+	buffer.ellipseParamsUv[ellipseOffset + 1] = layerState.radiusUvY || 0;
+	buffer.ellipseParamsUv[ellipseOffset + 2] = layerState.softnessUv || 0;
+	buffer.ellipseParamsUv[ellipseOffset + 3] = layerState.rotation || 0;
+	buffer.alphaBlendStrengths[layerIndex] = layerState.alphaBlendStrength == null ? 1 : layerState.alphaBlendStrength;
+	buffer.effectParams[ellipseOffset] = layerState.effectType || 0;
+	buffer.effectParams[ellipseOffset + 1] = layerState.effectPhase || 0;
+	buffer.effectParams[ellipseOffset + 2] = layerState.effectDensity || 0;
+	buffer.effectParams[ellipseOffset + 3] = layerState.effectAmount || 0;
+	buffer.worldCenters[worldCenterOffset] = layerState.worldCenterX || 0;
+	buffer.worldCenters[worldCenterOffset + 1] = layerState.worldCenterY || 0;
+	buffer.worldCenters[worldCenterOffset + 2] = layerState.worldCenterZ || 0;
+	buffer.worldBasisX[worldBasisOffset] = layerState.worldBasisXX || 0;
+	buffer.worldBasisX[worldBasisOffset + 1] = layerState.worldBasisXY || 0;
+	buffer.worldBasisX[worldBasisOffset + 2] = layerState.worldBasisXZ || 0;
+	buffer.worldBasisY[worldBasisOffset] = layerState.worldBasisYX || 0;
+	buffer.worldBasisY[worldBasisOffset + 1] = layerState.worldBasisYY || 0;
+	buffer.worldBasisY[worldBasisOffset + 2] = layerState.worldBasisYZ || 0;
+	buffer.worldEllipseParams[worldParamsOffset] = layerState.worldRadiusX || 0;
+	buffer.worldEllipseParams[worldParamsOffset + 1] = layerState.worldRadiusY || 0;
+	buffer.worldEllipseParams[worldParamsOffset + 2] = layerState.worldSoftness || 0;
+	buffer.worldEllipseParams[worldParamsOffset + 3] = layerState.worldPlaneWidth || 0;
+	buffer.surfaceDepthFlags[layerIndex] = layerState.surfaceDepthBool ? 1 : 0;
+	buffer.count += 1;
+	if (layerState.surfaceDepthBool) {
+		buffer.surfaceDepthLayerCount += 1;
+	}
+	return true;
+};
+
+const appendControllerFlashlightLayers = function(buffer, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost) {
 	const controllerRays = args.controllerRays || [];
-	for (let i = 0; i < controllerRays.length && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
+	for (let i = 0; i < controllerRays.length && buffer && buffer.count < PASSTHROUGH_MAX_LIGHT_LAYERS; i += 1) {
 		const ray = controllerRays[i];
 		if (!ray || !ray.origin || !ray.dir) {
 			continue;
@@ -458,17 +566,13 @@ const appendControllerFlashlightMasks = function(target, args, group, fillMix, b
 			y: ray.origin.y + ray.dir.y * 6,
 			z: ray.origin.z + ray.dir.z * 6
 		};
-		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
-		if (!projectedUv) {
-			continue;
+		let tangentX = crossVec3(0, 1, 0, ray.dir.x, ray.dir.y, ray.dir.z);
+		if (getPointDistance3d({x: 0, y: 0, z: 0}, tangentX) <= 0.01) {
+			tangentX = crossVec3(1, 0, 0, ray.dir.x, ray.dir.y, ray.dir.z);
 		}
-		const tangentProjectedUv = projectWorldPointToUv(
-			args.viewMatrix,
-			args.projMatrix,
-			point.x + ray.dir.x * 0.4,
-			point.y + ray.dir.y * 0.4,
-			point.z + ray.dir.z * 0.4
-		);
+		tangentX = normalizeVec3(tangentX.x, tangentX.y, tangentX.z);
+		let tangentY = crossVec3(ray.dir.x, ray.dir.y, ray.dir.z, tangentX.x, tangentX.y, tangentX.z);
+		tangentY = normalizeVec3(tangentY.x, tangentY.y, tangentY.z);
 		const effectState = getFixtureEffectState({
 			group: group,
 			audioMetrics: args.audioMetrics,
@@ -476,29 +580,47 @@ const appendControllerFlashlightMasks = function(target, args, group, fillMix, b
 			variantCenter: 0,
 			stereoBiasOffset: 0
 		});
-		const baseRadius = clampNumber((group.radius || 0.4) * (group.type === "wash" ? 0.26 : 0.22), 0.12, 0.42);
-		target.push({
-			x: projectedUv.x,
-			y: projectedUv.y,
-			r: group.color[0],
-			g: group.color[1],
-			b: group.color[2],
-			radiusX: clampNumber(baseRadius * 1.18, 0.12, 0.48),
-			radiusY: clampNumber(baseRadius * 0.84, 0.1, 0.38),
-			rotation: tangentProjectedUv ? Math.atan2(tangentProjectedUv.y - projectedUv.y, tangentProjectedUv.x - projectedUv.x) : 0,
-			softness: clampNumber((group.softness == null ? 0.16 : group.softness), 0.04, 0.4),
+		const baseRadius = clampNumber((group.radius || 0.4) * (group.type === "wash" ? 0.82 : 0.62), 0.22, 1.2);
+		const maskState = getProjectedMaskFromWorldFootprint(args, point, tangentX, tangentY, baseRadius * 1.18, baseRadius * 0.84);
+		if (!maskState) {
+			continue;
+		}
+		appendProjectedLightLayer(buffer, {
+			centerUvX: maskState.x,
+			centerUvY: maskState.y,
+			colorR: group.color[0],
+			colorG: group.color[1],
+			colorB: group.color[2],
+			radiusUvX: maskState.radiusX,
+			radiusUvY: maskState.radiusY,
+			rotation: maskState.rotation,
+			softnessUv: clampNumber((group.softness == null ? 0.16 : group.softness), 0.04, 0.4),
 			alphaBlendStrength: effectState.alphaBlendStrength,
 			effectType: effectState.type,
 			effectPhase: effectState.phase,
 			effectDensity: effectState.density,
 			effectAmount: effectState.amount,
+			worldCenterX: point.x,
+			worldCenterY: point.y,
+			worldCenterZ: point.z,
+			worldBasisXX: tangentX.x,
+			worldBasisXY: tangentX.y,
+			worldBasisXZ: tangentX.z,
+			worldBasisYX: tangentY.x,
+			worldBasisYY: tangentY.y,
+			worldBasisYZ: tangentY.z,
+			worldRadiusX: baseRadius * 1.18,
+			worldRadiusY: baseRadius * 0.84,
+			worldSoftness: clampNumber(baseRadius * 0.2, 0.05, 0.28),
+			worldPlaneWidth: clampNumber(baseRadius * 0.3, 0.08, 0.34),
+			surfaceDepthBool: false,
 			strength: clampNumber(baseStrength * typeIntensityScale * strobeBoost, 0, group.type === "strobe" ? 0.88 : 0.72)
 		});
 	}
 };
 
-const appendClubFixtureMasks = function(target, args, group, clubState) {
-	if (!target || !group || !args || !args.viewMatrix || !args.projMatrix) {
+const appendClubFixtureLayers = function(buffer, args, group, clubState) {
+	if (!buffer || !group || !args || !args.viewMatrix || !args.projMatrix) {
 		return;
 	}
 	const surfaceKey = getFixtureSurfaceKey(group.anchorType);
@@ -513,61 +635,18 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 	const strobeBoost = 1 + clampNumber((group.strobeAmount || 0) * 0.55, 0, 0.55);
 	const typeIntensityScale = group.type === "wash" ? (0.78 + fillMix * 0.24) : (group.type === "beam" ? (0.92 - fillMix * 0.08) : 0.92);
 	if ((group.effectMode || "") === FIXTURE_EFFECT_MODE_FLASHLIGHT && (args.controllerRays || []).length > 0) {
-		appendControllerFlashlightMasks(target, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost);
+		appendControllerFlashlightLayers(buffer, args, group, fillMix, baseStrength, typeIntensityScale, strobeBoost);
 		return;
 	}
 	const variantCount = Math.min(
-		PASSTHROUGH_MAX_SPOTS,
+		PASSTHROUGH_MAX_LIGHT_LAYERS,
 		(group.type === "beam" ? 3 : (group.type === "wash" ? 2 : 1)) +
 		(group.type === "wash" ? (surfaceBudget.washVariantCountBoost || 0) : (group.type === "beam" ? (surfaceBudget.beamVariantCountBoost || 0) : (surfaceBudget.strobeVariantCountBoost || 0)))
 	);
-	for (let i = 0; i < variantCount && target.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
+	for (let i = 0; i < variantCount && buffer.count < PASSTHROUGH_MAX_LIGHT_LAYERS; i += 1) {
 		const variantCenter = variantCount === 1 ? 0 : (i / (variantCount - 1)) - 0.5;
 		const variantOffset = variantCenter * sweep * (group.type === "beam" ? (surfaceKey === "wall" ? 0.64 : 0.52) : (surfaceKey === "floor" ? 0.3 : 0.24));
 		const roomPoint = getRoomPointForFixtureGroup(group, variantOffset, fillMix, surfaceBudget, stereoBiasOffset);
-		const point = getAnchoredRoomPoint(
-			args,
-			roomPoint,
-			clubState
-		);
-		const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, point.x, point.y, point.z);
-		if (!projectedUv) {
-			continue;
-		}
-		let rotation = 0;
-		const tangentPoint = getAnchoredRoomPoint(
-			args,
-			getRoomPointForFixtureGroup(group, variantOffset + 0.08, fillMix, surfaceBudget, stereoBiasOffset),
-			clubState
-		);
-		const projectedTangentUv = tangentPoint ? projectWorldPointToUv(args.viewMatrix, args.projMatrix, tangentPoint.x, tangentPoint.y, tangentPoint.z) : null;
-		if (projectedTangentUv) {
-			rotation = Math.atan2(projectedTangentUv.y - projectedUv.y, projectedTangentUv.x - projectedUv.x);
-		}
-		let radiusX = 0.18;
-		let radiusY = 0.18;
-		if (group.type === "wash") {
-			radiusX = clampNumber((group.radius || 0.4) * (0.22 + fillMix * 0.16), 0.14, 0.46);
-			radiusY = clampNumber(radiusX * lerpNumber(0.74, 0.92, fillMix), 0.12, 0.42);
-		} else if (group.type === "beam") {
-			radiusX = clampNumber((group.radius || 0.3) * (0.18 + (1 - fillMix) * 0.12), 0.12, 0.34);
-			radiusY = clampNumber(radiusX * 0.28, 0.035, 0.11);
-		} else {
-			radiusX = clampNumber((group.radius || 0.22) * 0.18, 0.09, 0.2);
-			radiusY = clampNumber(radiusX * 0.6, 0.05, 0.14);
-		}
-		if (group.type === "wash") {
-			radiusX *= surfaceBudget.washRadiusXScale;
-			radiusY *= surfaceBudget.washRadiusYScale;
-		} else if (group.type === "beam") {
-			radiusX *= surfaceBudget.beamRadiusXScale;
-			radiusY *= surfaceBudget.beamRadiusYScale;
-		} else {
-			radiusX *= surfaceBudget.strobeRadiusXScale;
-			radiusY *= surfaceBudget.strobeRadiusYScale;
-		}
-		radiusX = clampNumber(radiusX * surfaceBudget.radiusScale * (surfaceKey === "floor" && group.type === "wash" ? 1.08 : 1), 0.08, 0.5);
-		radiusY = clampNumber(radiusY * surfaceBudget.radiusScale * (surfaceKey === "floor" ? 1.12 : 1), 0.04, 0.48);
 		const effectState = getFixtureEffectState({
 			group: group,
 			audioMetrics: args.audioMetrics,
@@ -575,37 +654,42 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 			variantCenter: variantCenter,
 			stereoBiasOffset: stereoBiasOffset
 		});
-		const depthLightingBool = canUseDepthBoundLighting(clubState, args);
-		const depthSurfaceState = depthLightingBool && effectState.mode === FIXTURE_EFFECT_MODE_NONE ? getDepthSurfaceProjectionState(args, projectedUv, group, fillMix, surfaceBudget) : null;
-		const depthAnchorState = depthLightingBool && !depthSurfaceState ? getDepthAnchorState(args, projectedUv, point) : null;
-		if (depthSurfaceState) {
-			rotation = depthSurfaceState.rotation;
-			radiusX = depthSurfaceState.radiusX;
-			radiusY = depthSurfaceState.radiusY;
-		} else if (depthAnchorState) {
-			radiusX = clampNumber(radiusX * depthAnchorState.radiusScale, 0.06, 0.5);
-			radiusY = clampNumber(radiusY * depthAnchorState.radiusScale, 0.03, 0.48);
+		const worldRadii = getFixtureWorldRadii(group, effectState, fillMix, surfaceBudget, surfaceKey, shouldUseSurfaceDepth(clubState, args));
+		const surfaceState = getSurfaceProjectionState(
+			args,
+			clubState,
+			roomPoint,
+			group.anchorType,
+			worldRadii.radiusX,
+			worldRadii.radiusY
+		);
+		if (!surfaceState) {
+			continue;
 		}
-		if (effectState.mode === FIXTURE_EFFECT_MODE_AURORA_CURTAIN && surfaceKey === "ceiling") {
-			radiusX = clampNumber(radiusX * 1.18, 0.12, 0.5);
-			radiusY = clampNumber(radiusY * 0.52, 0.04, 0.18);
-		} else if (effectState.mode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
-			radiusX = clampNumber(radiusX * (group.type === "beam" ? 1.18 : 1.08), 0.12, 0.5);
-			radiusY = clampNumber(Math.max(radiusY * 1.9, radiusX * 0.72), 0.12, 0.44);
-		} else if (!depthSurfaceState && effectState.mode === FIXTURE_EFFECT_MODE_NONE) {
-			radiusX = clampNumber(radiusX * 1.06, 0.1, 0.5);
-			radiusY = clampNumber(radiusY * 1.1, 0.08, 0.48);
-		}
-		target.push({
-			x: projectedUv.x,
-			y: projectedUv.y,
-			r: group.color[0],
-			g: group.color[1],
-			b: group.color[2],
-			radiusX: radiusX,
-			radiusY: radiusY,
-			rotation: rotation,
-			softness: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
+		appendProjectedLightLayer(buffer, {
+			centerUvX: surfaceState.maskState.x,
+			centerUvY: surfaceState.maskState.y,
+			colorR: group.color[0],
+			colorG: group.color[1],
+			colorB: group.color[2],
+			radiusUvX: surfaceState.maskState.radiusX,
+			radiusUvY: surfaceState.maskState.radiusY,
+			rotation: surfaceState.maskState.rotation,
+			softnessUv: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
+			worldCenterX: surfaceState.centerPoint.x,
+			worldCenterY: surfaceState.centerPoint.y,
+			worldCenterZ: surfaceState.centerPoint.z,
+			worldBasisXX: surfaceState.tangentX.x,
+			worldBasisXY: surfaceState.tangentX.y,
+			worldBasisXZ: surfaceState.tangentX.z,
+			worldBasisYX: surfaceState.tangentY.x,
+			worldBasisYY: surfaceState.tangentY.y,
+			worldBasisYZ: surfaceState.tangentY.z,
+			worldRadiusX: surfaceState.radiusX,
+			worldRadiusY: surfaceState.radiusY,
+			worldSoftness: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.22, 0.05, 0.28),
+			worldPlaneWidth: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.32, 0.08, 0.34),
+			surfaceDepthBool: surfaceState.surfaceDepthBool,
 			alphaBlendStrength: effectState.alphaBlendStrength,
 			effectType: effectState.type,
 			effectPhase: effectState.phase,
@@ -621,13 +705,13 @@ const appendClubFixtureMasks = function(target, args, group, clubState) {
 	}
 };
 
-const getSpotLightMasks = function(args, controllerState) {
+const buildDirectionalLightLayers = function(args, controllerState, buffer) {
 	if (!controllerState || controllerState.lightingModeKey !== "spots") {
-		return [];
+		return buffer;
 	}
 	const lightingState = args.sceneLightingState;
 	if (!lightingState) {
-		return [];
+		return buffer;
 	}
 	const rankedLights = [];
 	for (let i = 0; i < lightingState.lightStrengths.length; i += 1) {
@@ -651,82 +735,107 @@ const getSpotLightMasks = function(args, controllerState) {
 		return b.strength - a.strength;
 	});
 	const audioDrive = controllerState.smoothedAudioDrive || 0;
-	const spots = [];
-	for (let i = 0; i < rankedLights.length && i < PASSTHROUGH_MAX_SPOTS; i += 1) {
+	for (let i = 0; i < rankedLights.length && i < PASSTHROUGH_MAX_LIGHT_LAYERS; i += 1) {
 		const light = rankedLights[i];
 		const ceilingPoint = getRoomCeilingLightPoint(light.dirX, light.dirY, light.dirZ);
-		const anchoredPoints = [
+		const roomTargets = [
 			{
-				point: getAnchoredRoomPoint(args, ceilingPoint, controllerState),
-				radius: clampNumber(0.12 + audioDrive * 0.1 + i * 0.012, 0.08, 0.3),
+				point: ceilingPoint,
+				anchorType: "ceiling",
+				radiusX: clampNumber(0.48 + audioDrive * 0.34 + light.strength * 0.26 + i * 0.03, 0.32, 1.18),
+				radiusY: clampNumber(0.48 + audioDrive * 0.34 + light.strength * 0.26 + i * 0.03, 0.32, 1.18),
 				strength: clampNumber(0.18 + light.strength * 0.24 + audioDrive * 0.22, 0, 0.72)
 			},
 			{
-				point: getAnchoredRoomPoint(args, getRoomFloorLightPoint(ceilingPoint), controllerState),
-				radius: clampNumber(0.16 + audioDrive * 0.14 + i * 0.015, 0.1, 0.38),
+				point: getRoomFloorLightPoint(ceilingPoint),
+				anchorType: "floor",
+				radiusX: clampNumber(0.64 + audioDrive * 0.44 + light.strength * 0.32 + i * 0.04, 0.42, 1.42),
+				radiusY: clampNumber(0.72 + audioDrive * 0.48 + light.strength * 0.34 + i * 0.04, 0.44, 1.56),
 				strength: clampNumber(0.08 + light.strength * 0.16 + audioDrive * 0.18, 0, 0.46)
 			},
 			{
-				point: getAnchoredRoomPoint(args, getRoomWallLightPoint(ceilingPoint), controllerState),
-				radius: clampNumber(0.14 + audioDrive * 0.1 + i * 0.012, 0.09, 0.32),
+				point: getRoomWallLightPoint(ceilingPoint, 0.62),
+				anchorType: "wall",
+				radiusX: clampNumber(0.58 + audioDrive * 0.28 + light.strength * 0.24 + i * 0.03, 0.36, 1.16),
+				radiusY: clampNumber(0.52 + audioDrive * 0.22 + light.strength * 0.2 + i * 0.03, 0.34, 0.96),
 				strength: clampNumber(0.1 + light.strength * 0.18 + audioDrive * 0.18, 0, 0.52)
 			}
 		];
-		for (let j = 0; j < anchoredPoints.length && spots.length < PASSTHROUGH_MAX_SPOTS; j += 1) {
-			const anchoredPoint = anchoredPoints[j];
-			if (!anchoredPoint.point) {
+		for (let j = 0; j < roomTargets.length && buffer.count < PASSTHROUGH_MAX_LIGHT_LAYERS; j += 1) {
+			const roomTarget = roomTargets[j];
+			if (!roomTarget.point) {
 				continue;
 			}
-			const projectedUv = projectWorldPointToUv(args.viewMatrix, args.projMatrix, anchoredPoint.point.x, anchoredPoint.point.y, anchoredPoint.point.z);
-			if (!projectedUv) {
+			const surfaceState = getSurfaceProjectionState(
+				args,
+				controllerState,
+				roomTarget.point,
+				roomTarget.anchorType,
+				roomTarget.radiusX,
+				roomTarget.radiusY
+			);
+			if (!surfaceState) {
 				continue;
 			}
-			const depthAnchorState = canUseDepthBoundLighting(controllerState, args) ? getDepthAnchorState(args, projectedUv, anchoredPoint.point) : null;
-			const radiusScale = depthAnchorState ? depthAnchorState.radiusScale : 1;
-			spots.push({
-				x: projectedUv.x,
-				y: projectedUv.y,
-				r: light.r,
-				g: light.g,
-				b: light.b,
-				radiusX: clampNumber(anchoredPoint.radius * radiusScale, 0.06, 0.42),
-				radiusY: clampNumber(anchoredPoint.radius * radiusScale, 0.06, 0.42),
-				rotation: 0,
-				softness: 0.12,
+			appendProjectedLightLayer(buffer, {
+				centerUvX: surfaceState.maskState.x,
+				centerUvY: surfaceState.maskState.y,
+				colorR: light.r,
+				colorG: light.g,
+				colorB: light.b,
+				radiusUvX: surfaceState.maskState.radiusX,
+				radiusUvY: surfaceState.maskState.radiusY,
+				rotation: surfaceState.maskState.rotation,
+				softnessUv: 0.12,
+				worldCenterX: surfaceState.centerPoint.x,
+				worldCenterY: surfaceState.centerPoint.y,
+				worldCenterZ: surfaceState.centerPoint.z,
+				worldBasisXX: surfaceState.tangentX.x,
+				worldBasisXY: surfaceState.tangentX.y,
+				worldBasisXZ: surfaceState.tangentX.z,
+				worldBasisYX: surfaceState.tangentY.x,
+				worldBasisYY: surfaceState.tangentY.y,
+				worldBasisYZ: surfaceState.tangentY.z,
+				worldRadiusX: surfaceState.radiusX,
+				worldRadiusY: surfaceState.radiusY,
+				worldSoftness: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.22, 0.05, 0.28),
+				worldPlaneWidth: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.32, 0.08, 0.34),
+				surfaceDepthBool: surfaceState.surfaceDepthBool,
 				alphaBlendStrength: 0.94,
 				effectType: 0,
 				effectPhase: 0,
 				effectDensity: 0,
 				effectAmount: 0,
-				strength: anchoredPoint.strength
+				strength: roomTarget.strength
 			});
 		}
 	}
-	return spots;
+	return buffer;
 };
 
-const getClubLightMasks = function(args, controllerState) {
+const buildFixtureLightLayers = function(args, controllerState, buffer) {
 	if (!controllerState || controllerState.lightingModeKey !== "club") {
-		return [];
+		return buffer;
 	}
 	const lightingState = args.sceneLightingState;
 	if (!lightingState || !lightingState.fixtureGroups || !lightingState.fixtureGroups.length) {
-		return [];
+		return buffer;
 	}
-	lightingState.fixtureGroups.sort(function(a, b) {
+	const rankedGroups = lightingState.fixtureGroups.slice(0).sort(function(a, b) {
 		return (b.intensity || 0) - (a.intensity || 0);
 	});
-	const rankedGroups = lightingState.fixtureGroups;
-	const spots = [];
-	for (let i = 0; i < rankedGroups.length && spots.length < PASSTHROUGH_MAX_SPOTS; i += 1) {
-		appendClubFixtureMasks(spots, args, rankedGroups[i], controllerState);
+	for (let i = 0; i < rankedGroups.length && buffer.count < PASSTHROUGH_MAX_LIGHT_LAYERS; i += 1) {
+		appendClubFixtureLayers(buffer, args, rankedGroups[i], controllerState);
 	}
-	return spots;
+	return buffer;
 };
 
-// Central service entry so passthrough only asks for projected lighting masks.
-const getProjectedLightMasks = function(args, controllerState) {
-	return controllerState && controllerState.lightingModeKey === "club" ?
-		getClubLightMasks(args || {}, controllerState) :
-		getSpotLightMasks(args || {}, controllerState);
+// Central service entry so passthrough only consumes one shared projected-light buffer.
+const buildProjectedLightLayers = function(args, controllerState) {
+	const layerBuffer = getProjectedLightLayerBuffer(controllerState);
+	resetProjectedLightLayerBuffer(layerBuffer);
+	if (controllerState && controllerState.lightingModeKey === "club") {
+		return buildFixtureLightLayers(args || {}, controllerState, layerBuffer);
+	}
+	return buildDirectionalLightLayers(args || {}, controllerState, layerBuffer);
 };
