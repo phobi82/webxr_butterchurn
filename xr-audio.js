@@ -451,8 +451,9 @@ const createAudioAnalyser = function() {
 	};
 };
 
-const createAudioSourceControllerRuntime = function(options) {
-	const controllerState = {
+const createAudioSourceController = function(options) {
+	options = options || {};
+	const state = {
 		audioBackend: null,
 		activeStream: null,
 		sourceKind: "none",
@@ -463,106 +464,94 @@ const createAudioSourceControllerRuntime = function(options) {
 	const openWindow = options.openWindow || function(url, windowName) {
 		return window.open(url, windowName);
 	};
-	const controllerRuntime = {
-		state: controllerState,
-		openWindow: openWindow,
-		setStatus: function(text) {
-			if (options.setStatus) {
-				options.setStatus(text);
+	const setStatus = function(text) {
+		if (options.setStatus) {
+			options.setStatus(text);
+		}
+	};
+	const updateUiState = function() {
+		if (options.onStateChange) {
+			options.onStateChange({
+				sourceKind: state.sourceKind,
+				sourceName: state.sourceName,
+				stopEnabledBool: state.sourceKind !== "none"
+			});
+		}
+	};
+	const syncBackendState = async function() {
+		const audioBackend = state.audioBackend;
+		if (!audioBackend) {
+			return;
+		}
+		if (state.sourceKind === "debug" && audioBackend.startDebugAudio) {
+			await audioBackend.startDebugAudio();
+			return;
+		}
+		if (audioBackend.setAudioStream) {
+			audioBackend.setAudioStream(state.activeStream);
+		}
+	};
+	const clearActiveStream = function() {
+		if (!state.activeStream) {
+			return;
+		}
+		const oldStream = state.activeStream;
+		state.activeStream = null;
+		const tracks = oldStream.getTracks();
+		for (let i = 0; i < tracks.length; i += 1) {
+			tracks[i].stop();
+		}
+	};
+	const requestDisplayStream = async function(optionOverrides) {
+		if (!mediaDevices || !mediaDevices.getDisplayMedia) {
+			throw new Error("display capture unavailable");
+		}
+		const optionsMap = {
+			video: true,
+			audio: {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false
+			},
+			surfaceSwitching: "include",
+			monitorTypeSurfaces: "include",
+			systemAudio: "include",
+			selfBrowserSurface: "exclude"
+		};
+		if (optionOverrides) {
+			const overrideKeys = Object.keys(optionOverrides);
+			for (let i = 0; i < overrideKeys.length; i += 1) {
+				optionsMap[overrideKeys[i]] = optionOverrides[overrideKeys[i]];
 			}
-		},
-		updateUiState: function() {
-			if (options.onStateChange) {
-				options.onStateChange({
-					sourceKind: controllerState.sourceKind,
-					sourceName: controllerState.sourceName,
-					stopEnabledBool: controllerState.sourceKind !== "none"
-				});
-			}
-		},
-		syncBackendState: async function() {
-			const audioBackend = controllerState.audioBackend;
-			if (!audioBackend) {
-				return;
-			}
-			if (controllerState.sourceKind === "debug" && audioBackend.startDebugAudio) {
-				await audioBackend.startDebugAudio();
-				return;
-			}
-			if (audioBackend.setAudioStream) {
-				audioBackend.setAudioStream(controllerState.activeStream);
-			}
-		},
-		clearActiveStream: function() {
-			if (!controllerState.activeStream) {
-				return;
-			}
-			const oldStream = controllerState.activeStream;
-			controllerState.activeStream = null;
-			const tracks = oldStream.getTracks();
+		}
+		const stream = await mediaDevices.getDisplayMedia(optionsMap);
+		if (!stream.getAudioTracks().length) {
+			const tracks = stream.getTracks();
 			for (let i = 0; i < tracks.length; i += 1) {
 				tracks[i].stop();
 			}
-		},
-		requestDisplayStream: async function(optionOverrides) {
-			if (!mediaDevices || !mediaDevices.getDisplayMedia) {
-				throw new Error("display capture unavailable");
-			}
-			const optionsMap = {
-				video: true,
-				audio: {
-					echoCancellation: false,
-					noiseSuppression: false,
-					autoGainControl: false
-				},
-				surfaceSwitching: "include",
-				monitorTypeSurfaces: "include",
-				systemAudio: "include",
-				selfBrowserSurface: "exclude"
-			};
-			if (optionOverrides) {
-				const overrideKeys = Object.keys(optionOverrides);
-				for (let i = 0; i < overrideKeys.length; i += 1) {
-					optionsMap[overrideKeys[i]] = optionOverrides[overrideKeys[i]];
-				}
-			}
-			const stream = await mediaDevices.getDisplayMedia(optionsMap);
-			if (!stream.getAudioTracks().length) {
-				const tracks = stream.getTracks();
-				for (let i = 0; i < tracks.length; i += 1) {
-					tracks[i].stop();
-				}
-				throw new Error("shared source has no audio track");
-			}
-			return stream;
-		},
-		requestMicrophoneStream: function() {
-			if (!mediaDevices || !mediaDevices.getUserMedia) {
-				throw new Error("microphone capture unavailable");
-			}
-			return mediaDevices.getUserMedia({
-				audio: {
-					echoCancellation: false,
-					noiseSuppression: false,
-					autoGainControl: false
-				},
-				video: false
-			});
-		},
-		getState: function() {
-			return {
-				sourceKind: controllerState.sourceKind,
-				sourceName: controllerState.sourceName
-			};
+			throw new Error("shared source has no audio track");
 		}
+		return stream;
 	};
-	const controllerStateRef = controllerRuntime.state;
+	const requestMicrophoneStream = function() {
+		if (!mediaDevices || !mediaDevices.getUserMedia) {
+			throw new Error("microphone capture unavailable");
+		}
+		return mediaDevices.getUserMedia({
+			audio: {
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false
+			},
+			video: false
+		});
+	};
 	const resetSourceState = function() {
-		controllerStateRef.sourceKind = "none";
-		controllerStateRef.sourceName = "";
-		controllerRuntime.updateUiState();
+		state.sourceKind = "none";
+		state.sourceName = "";
+		updateUiState();
 	};
-
 	const bindActiveStreamLifecycle = function(stream) {
 		if (!stream) {
 			return;
@@ -570,16 +559,16 @@ const createAudioSourceControllerRuntime = function(options) {
 		const tracks = stream.getTracks();
 		for (let i = 0; i < tracks.length; i += 1) {
 			tracks[i].addEventListener("ended", function() {
-				if (controllerStateRef.activeStream === stream) {
-					controllerStateRef.activeStream = null;
+				if (state.activeStream === stream) {
+					state.activeStream = null;
 					resetSourceState();
-					controllerRuntime.syncBackendState();
+					syncBackendState();
 				}
 			});
 		}
 	};
-	const activateAudio = async function() {
-		const audioBackend = controllerStateRef.audioBackend;
+	const activate = async function() {
+		const audioBackend = state.audioBackend;
 		if (!audioBackend || !audioBackend.activateAudio) {
 			return;
 		}
@@ -589,79 +578,70 @@ const createAudioSourceControllerRuntime = function(options) {
 		}
 	};
 	const setStreamSource = async function(stream, sourceName) {
-		controllerRuntime.clearActiveStream();
-		controllerStateRef.activeStream = stream;
-		controllerStateRef.sourceKind = stream ? "stream" : "none";
-		controllerStateRef.sourceName = stream ? sourceName || "shared surface" : "";
-		controllerRuntime.updateUiState();
-		await controllerRuntime.syncBackendState();
+		clearActiveStream();
+		state.activeStream = stream;
+		state.sourceKind = stream ? "stream" : "none";
+		state.sourceName = stream ? sourceName || "shared surface" : "";
+		updateUiState();
+		await syncBackendState();
 		bindActiveStreamLifecycle(stream);
 	};
-	return Object.assign(controllerRuntime, {
-		activateAudio: activateAudio,
-		setStreamSource: setStreamSource,
-		stop: function() {
-			controllerRuntime.clearActiveStream();
-			resetSourceState();
-			return controllerRuntime.syncBackendState();
-		},
-		requestSharedAudio: async function() {
-			await activateAudio();
-			const stream = await controllerRuntime.requestDisplayStream();
-			return setStreamSource(stream);
-		},
-		requestMicrophoneAudio: async function() {
-			await activateAudio();
-			const stream = await controllerRuntime.requestMicrophoneStream();
-			return setStreamSource(stream, "microphone");
-		},
-		requestTabAudio: async function(args) {
-			args = args || {};
-			await activateAudio();
-			if (!controllerStateRef.windowHandles[args.key] || controllerStateRef.windowHandles[args.key].closed) {
-				controllerStateRef.windowHandles[args.key] = controllerRuntime.openWindow(args.url, args.windowName);
-			} else {
-				controllerStateRef.windowHandles[args.key].location.href = args.url;
-			}
-			if (!controllerStateRef.windowHandles[args.key]) {
-				throw new Error(args.blockedMessage || "tab blocked");
-			}
-			try { controllerStateRef.windowHandles[args.key].focus(); } catch (error) { console.warn("tab focus error:", error.message); }
-			controllerRuntime.setStatus(args.selectStatus || "select the tab and enable tab audio");
-			const stream = await controllerRuntime.requestDisplayStream({preferCurrentTab: false});
-			await setStreamSource(stream, args.sourceName);
-			controllerRuntime.setStatus(args.activeStatus || "tab audio active");
-		},
-		startDebugAudio: async function() {
-			controllerRuntime.clearActiveStream();
-			await activateAudio();
-			const audioBackend = controllerStateRef.audioBackend;
-			if (!audioBackend || !audioBackend.startDebugAudio) {
-				return;
-			}
-			await audioBackend.startDebugAudio();
-			controllerStateRef.sourceKind = "debug";
-			controllerStateRef.sourceName = "debug signal";
-			controllerRuntime.updateUiState();
-		},
-		setAudioBackend: function(audioBackend) {
-			controllerRuntime.state.audioBackend = audioBackend || null;
-			return controllerRuntime.syncBackendState();
-		},
-		activate: activateAudio
-	});
-};
-
-const createAudioSourceController = function(options) {
-	const controllerRuntime = createAudioSourceControllerRuntime(options || {});
+	const stop = function() {
+		clearActiveStream();
+		resetSourceState();
+		return syncBackendState();
+	};
+	const requestSharedAudio = async function() {
+		await activate();
+		const stream = await requestDisplayStream();
+		return setStreamSource(stream);
+	};
+	const requestMicrophoneAudio = async function() {
+		await activate();
+		const stream = await requestMicrophoneStream();
+		return setStreamSource(stream, "microphone");
+	};
+	const requestTabAudio = async function(args) {
+		args = args || {};
+		await activate();
+		if (!state.windowHandles[args.key] || state.windowHandles[args.key].closed) {
+			state.windowHandles[args.key] = openWindow(args.url, args.windowName);
+		} else {
+			state.windowHandles[args.key].location.href = args.url;
+		}
+		if (!state.windowHandles[args.key]) {
+			throw new Error(args.blockedMessage || "tab blocked");
+		}
+		try { state.windowHandles[args.key].focus(); } catch (error) { console.warn("tab focus error:", error.message); }
+		setStatus(args.selectStatus || "select the tab and enable tab audio");
+		const stream = await requestDisplayStream({preferCurrentTab: false});
+		await setStreamSource(stream, args.sourceName);
+		setStatus(args.activeStatus || "tab audio active");
+	};
+	const startDebugAudio = async function() {
+		clearActiveStream();
+		await activate();
+		const audioBackend = state.audioBackend;
+		if (!audioBackend || !audioBackend.startDebugAudio) {
+			return;
+		}
+		await audioBackend.startDebugAudio();
+		state.sourceKind = "debug";
+		state.sourceName = "debug signal";
+		updateUiState();
+	};
+	const setAudioBackend = function(audioBackend) {
+		state.audioBackend = audioBackend || null;
+		return syncBackendState();
+	};
 	return {
-		stop: controllerRuntime.stop,
-		requestSharedAudio: controllerRuntime.requestSharedAudio,
-		requestMicrophoneAudio: controllerRuntime.requestMicrophoneAudio,
-		requestTabAudio: controllerRuntime.requestTabAudio,
-		startDebugAudio: controllerRuntime.startDebugAudio,
-		setAudioBackend: controllerRuntime.setAudioBackend,
-		getState: controllerRuntime.getState,
-		activate: controllerRuntime.activate
+		state,
+		stop,
+		requestSharedAudio,
+		requestMicrophoneAudio,
+		requestTabAudio,
+		startDebugAudio,
+		setAudioBackend,
+		activate
 	};
 };

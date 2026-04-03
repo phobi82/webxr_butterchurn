@@ -5,12 +5,24 @@ const createDesktopInput = function(options) {
 	const desktopMovementState = options.desktopMovementState;
 	const mouseSensitivity = options.mouseSensitivity || 0.0024;
 	const clampNumber = options.clampNumber;
-	const isXrSessionActive = options.isXrSessionActive || function() { return false; };
+	const runtimeState = options.runtimeState || {};
 	const onPointerLockChange = options.onPointerLockChange || function() {};
-	let pointerLockedBool = false;
+	const state = {
+		pointerLockedBool: false
+	};
 
 	const isPointerLockInputActive = function() {
-		return pointerLockedBool && !isXrSessionActive();
+		return state.pointerLockedBool && !runtimeState.xrSession;
+	};
+
+	const releaseAllMovementKeys = function() {
+		desktopMovementState.moveForwardBool = false;
+		desktopMovementState.moveBackwardBool = false;
+		desktopMovementState.moveLeftBool = false;
+		desktopMovementState.moveRightBool = false;
+		desktopMovementState.sprintBool = false;
+		desktopMovementState.crouchBool = false;
+		desktopMovementState.jumpHeldBool = false;
 	};
 
 	const setMovementKeyState = function(code, pressedBool) {
@@ -40,26 +52,16 @@ const createDesktopInput = function(options) {
 	const eventRegistry = createEventListenerRegistry();
 
 	return {
-		isPointerLocked: function() {
-			return pointerLockedBool;
-		},
-		releaseAllMovementKeys: function() {
-			desktopMovementState.moveForwardBool = false;
-			desktopMovementState.moveBackwardBool = false;
-			desktopMovementState.moveLeftBool = false;
-			desktopMovementState.moveRightBool = false;
-			desktopMovementState.sprintBool = false;
-			desktopMovementState.crouchBool = false;
-			desktopMovementState.jumpHeldBool = false;
-		},
+		state,
+		releaseAllMovementKeys,
 		registerEventHandlers: function(documentRef, windowRef) {
 			eventRegistry.on(documentRef, "pointerlockchange", function() {
-				pointerLockedBool = documentRef.pointerLockElement !== null;
-				if (!pointerLockedBool) {
+				state.pointerLockedBool = documentRef.pointerLockElement !== null;
+				if (!state.pointerLockedBool) {
 					desktopMovementState.sprintBool = false;
 					desktopMovementState.crouchBool = false;
 				}
-				onPointerLockChange(pointerLockedBool);
+				onPointerLockChange(state.pointerLockedBool);
 			});
 
 			eventRegistry.on(documentRef, "mousedown", function(event) {
@@ -79,7 +81,7 @@ const createDesktopInput = function(options) {
 			});
 
 			eventRegistry.on(documentRef, "keydown", function(event) {
-				if (isXrSessionActive()) {
+				if (runtimeState.xrSession) {
 					return;
 				}
 				if (setMovementKeyState(event.code, true)) {
@@ -94,8 +96,8 @@ const createDesktopInput = function(options) {
 			});
 
 			eventRegistry.on(windowRef, "blur", function() {
-				this.releaseAllMovementKeys();
-			}.bind(this));
+				releaseAllMovementKeys();
+			});
 		},
 		destroy: function() {
 			eventRegistry.removeAll();
@@ -180,14 +182,8 @@ const createXrSessionBridge = function(options) {
 		};
 	};
 	return {
-		isAvailable: function() {
-			return !!xrApi;
-		},
+		availableBool: !!xrApi,
 		getSupportState: getSupportState,
-		isSupported: async function() {
-			const supportState = await getSupportState();
-			return !!supportState.preferredSessionMode;
-		},
 		startSession: async function(gl, onEnd) {
 			const supportState = await getSupportState();
 			if (!supportState.preferredSessionMode) {
@@ -271,28 +267,25 @@ const createNullMenuController = function(options) {
 		planeWidth: 0.74,
 		planeHeight: 0.55
 	};
+	const controllerRays = [];
+	const setDesktopPreviewVisibleBool = function(visibleBool) {
+		state.desktopPreviewVisibleBool = !!visibleBool;
+	};
+	const resetSessionState = function() {
+		state.menuOpenBool = false;
+	};
 	return {
-		getState: function() {
-			return state;
-		},
-		getControllerRays: function() {
-			return [];
-		},
+		state,
+		controllerRays,
 		setPassthroughState: function() {},
 		clearDesktopPointerState: function() {},
 		registerDesktopPreviewEvents: function() {},
 		updateDesktopPreview: function() {},
 		updateXrInput: function() {},
 		handleDesktopPointerUp: function() {},
-		setDesktopPreviewVisibleBool: function(visibleBool) {
-			state.desktopPreviewVisibleBool = !!visibleBool;
-		},
-		resetSessionState: function() {
-			state.menuOpenBool = false;
-		},
-		endSession: function() {
-			state.menuOpenBool = false;
-		},
+		setDesktopPreviewVisibleBool: setDesktopPreviewVisibleBool,
+		resetSessionState: resetSessionState,
+		endSession: resetSessionState,
 		renderTexture: function() {}
 	};
 };
@@ -337,33 +330,6 @@ const computeRuntimeDepthProfile = function(depthFrameKind, depthDataFormat, raw
 	return {linearScale: rawValueToMeters || 0.001, nearZ: 0, label: "gpu-linear"};
 };
 
-const createRuntimeState = function() {
-	return {
-		gl: null,
-		xrSession: null,
-		xrSessionMode: "",
-		xrEnvironmentBlendMode: "opaque",
-		xrDepthUsage: "",
-		xrDepthDataFormat: "",
-		depthSensingActiveBool: false,
-		glBinding: null,
-		usableDepthAvailableBool: false,
-		depthFrameKind: "",
-		depthProfile: null,
-		passthroughAvailableBool: false,
-		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
-		baseRefSpace: null,
-		xrRefSpace: null,
-		frameHandle: null,
-		lastRenderTime: 0,
-		previewLastRenderTime: 0,
-		sceneTimeSeconds: 0,
-		glbAssetStore: null,
-		visualizerSourceBackend: null,
-		visualizerEngine: null
-	};
-};
-
 const resetRuntimeSessionState = function(state) {
 	state.frameHandle = null;
 	state.xrSession = null;
@@ -383,33 +349,88 @@ const resetRuntimeSessionState = function(state) {
 	state.previewLastRenderTime = 0;
 };
 
-const createRuntimeQueries = function(args) {
-	const state = args.state;
-	const desktopInput = args.desktopInput;
-	const menuController = args.menuController;
-	const audioController = args.audioController;
-	const sceneLighting = args.sceneLighting;
-	const passthroughController = args.passthroughController;
-	const getAudioMetrics = function() {
-		return state.visualizerSourceBackend && state.visualizerSourceBackend.getAudioMetrics ? state.visualizerSourceBackend.getAudioMetrics() : emptyAudioMetrics;
+// Runtime
+const createRuntime = function(options) {
+	const windowRef = options.windowRef || window;
+	const documentRef = options.documentRef || document;
+	const shell = normalizeAppShell(options.shell, {documentRef: documentRef});
+	const sessionBridge = options.sessionBridge;
+	const audioController = options.audioController;
+	const locomotion = options.locomotion;
+	const menuController = options.menuController || createNullMenuController(options.menuDefaults);
+	const passthroughController = options.passthroughController;
+	const sceneRenderer = options.sceneRenderer;
+	const sceneLighting = options.sceneLighting;
+	const createGlbAssetStore = options.createGlbAssetStore;
+	const visualizerSourceBackend = options.visualizerSourceBackend || null;
+	const visualizerEngine = options.visualizerEngine || null;
+	const getFloorColors = options.getReactiveFloorColors || null;
+	const sceneGlbAssets = options.sceneGlbAssets || [];
+	const inputConfig = options.inputConfig || {};
+	const renderPolicy = Object.assign({
+		visualizerBackgroundEnabledBool: true
+	}, options.renderPolicy || {});
+	const tabSources = options.tabSources || {};
+	const runtimeEventRegistry = createEventListenerRegistry();
+	const xrMovementState = locomotion.createXrState();
+	const desktopMovementState = locomotion.createDesktopState();
+	const state = {
+		gl: null,
+		xrSession: null,
+		xrSessionMode: "",
+		xrEnvironmentBlendMode: "opaque",
+		xrDepthUsage: "",
+		xrDepthDataFormat: "",
+		depthSensingActiveBool: false,
+		glBinding: null,
+		usableDepthAvailableBool: false,
+		depthFrameKind: "",
+		depthProfile: null,
+		passthroughAvailableBool: false,
+		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
+		baseRefSpace: null,
+		xrRefSpace: null,
+		frameHandle: null,
+		lastRenderTime: 0,
+		previewLastRenderTime: 0,
+		sceneTimeSeconds: 0,
+		audioMetrics: emptyAudioMetrics,
+		glbAssetStore: null,
+		visualizerSourceBackend: visualizerSourceBackend,
+		visualizerEngine: visualizerEngine
 	};
-	const getVisualizerSelectionState = function() {
-		return state.visualizerEngine && state.visualizerEngine.getSelectionState ? state.visualizerEngine.getSelectionState() : null;
+	const desktopInput = createDesktopInput({
+		desktopMovementState: desktopMovementState,
+		mouseSensitivity: inputConfig.desktopMouseSensitivity,
+		clampNumber: clampNumber,
+		runtimeState: state,
+		onPointerLockChange: function(lockedBool) {
+			if (lockedBool) {
+				menuController.clearDesktopPointerState();
+			}
+		}
+	});
+	const buildVisualizerSelectionState = function() {
+		if (!state.visualizerEngine || !state.visualizerSourceBackend) {
+			return null;
+		}
+		return {
+			modeNames: state.visualizerEngine.state.modeNames.slice(),
+			currentModeIndex: state.visualizerEngine.state.currentModeIndex,
+			horizontalMirrorBool: !!state.visualizerEngine.state.horizontalMirrorBool,
+			presetNames: state.visualizerSourceBackend.state.presetNames.slice(),
+			currentPresetIndex: state.visualizerSourceBackend.state.currentPresetIndex
+		};
 	};
-	const getLightingSelectionState = function() {
-		return sceneLighting && sceneLighting.getSelectionState ? sceneLighting.getSelectionState() : null;
-	};
-	const getEffectSemanticModeState = function() {
-		return passthroughController && passthroughController.getEffectSemanticModeState ? passthroughController.getEffectSemanticModeState() : {key: PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT, label: "Current"};
-	};
-	const getMenuContentState = function() {
-		const visualizerState = getVisualizerSelectionState() || DEFAULT_VISUALIZER_SELECTION_STATE;
-		const lightingState = getLightingSelectionState() || DEFAULT_LIGHTING_SELECTION_STATE;
-		const audioSourceState = audioController && audioController.getState ? audioController.getState() : {sourceKind: "none", sourceName: ""};
-		const effectSemanticModeState = getEffectSemanticModeState();
+	const buildMenuContentState = function() {
+		const visualizerState = buildVisualizerSelectionState() || DEFAULT_VISUALIZER_SELECTION_STATE;
+		const lightingState = sceneLighting && sceneLighting.getSelectionState ? sceneLighting.getSelectionState() || DEFAULT_LIGHTING_SELECTION_STATE : DEFAULT_LIGHTING_SELECTION_STATE;
+		const audioSourceState = audioController ? audioController.state : {sourceKind: "none", sourceName: ""};
+		const menuState = menuController.state;
+		const passthroughState = passthroughController ? passthroughController.state : null;
 		return {
 			sceneTimeSeconds: state.sceneTimeSeconds,
-			audioMetrics: getAudioMetrics(),
+			audioMetrics: state.audioMetrics,
 			audioSourceKind: audioSourceState.sourceKind || "none",
 			audioSourceName: audioSourceState.sourceName || "",
 			shaderModeNames: visualizerState.modeNames,
@@ -428,97 +449,23 @@ const createRuntimeQueries = function(args) {
 			currentLightPresetVariantCount: lightingState.currentPresetVariantCount,
 			currentLightPresetVariantLabel: lightingState.currentPresetVariantLabel,
 			currentLightPresetSurfaceKey: lightingState.currentPresetSurfaceKey,
-			effectSemanticModeKey: effectSemanticModeState.key,
-			effectSemanticModeLabel: effectSemanticModeState.label,
+			effectSemanticModeKey: passthroughState ? passthroughState.effectSemanticModeKey : PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+			effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(passthroughState ? passthroughState.effectSemanticModeKey : PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT),
 			presetNames: visualizerState.presetNames,
 			currentPresetIndex: visualizerState.currentPresetIndex,
-			xrSessionActiveBool: !!state.xrSession
+			xrSessionActiveBool: !!state.xrSession,
+			menuOpenBool: !!menuState.menuOpenBool
 		};
 	};
-	const getDesktopMenuInteractionState = function() {
-		return {xrSessionActiveBool: !!state.xrSession, pointerLockedBool: desktopInput.isPointerLocked()};
-	};
-	return {
-		getAudioMetrics: getAudioMetrics,
-		getVisualizerSelectionState: getVisualizerSelectionState,
-		getLightingSelectionState: getLightingSelectionState,
-		getEffectSemanticModeState: getEffectSemanticModeState,
-		getMenuContentState: getMenuContentState,
-		getDesktopMenuInteractionState: getDesktopMenuInteractionState,
-		updateDesktopMenuPreview: function(xrSessionActiveOverrideBool) {
-			const interactionState = getDesktopMenuInteractionState();
-			const xrSessionActiveBool = xrSessionActiveOverrideBool == null ? interactionState.xrSessionActiveBool : xrSessionActiveOverrideBool;
-			menuController.updateDesktopPreview({
-				xrSessionActiveBool: xrSessionActiveBool,
-				pointerLockedBool: interactionState.pointerLockedBool,
-				interactiveBool: !interactionState.pointerLockedBool && !xrSessionActiveBool,
-				renderState: getMenuContentState()
-			});
-		}
-	};
-};
-
-const createRuntimeLightingActions = function(args) {
-	const sceneLighting = args.sceneLighting;
-	const runtimeQueries = args.runtimeQueries;
-	const runLightingAction = function(action, value) {
-		if (!action) {
-			return resolvedRuntimeActionPromise;
-		}
-		return action(value);
-	};
-	const selectLightingPreset = function(index) {
-		return runLightingAction(sceneLighting && sceneLighting.selectPreset, index);
-	};
-	return {
-		selectLightingPreset: selectLightingPreset,
-		cycleLightingPreset: function(direction) {
-			const selectionState = runtimeQueries.getLightingSelectionState();
-			const count = selectionState ? selectionState.presetNames.length : 0;
-			if (!count) {
-				return resolvedRuntimeActionPromise;
-			}
-			return selectLightingPreset((selectionState.currentPresetIndex + direction + count) % count);
-		},
-		cycleLightingEffect: function(direction) {
-			return runLightingAction(sceneLighting && sceneLighting.cycleEffect, direction < 0 ? -1 : 1);
-		},
-		cycleLightingVariant: function(direction) {
-			return runLightingAction(sceneLighting && sceneLighting.cycleVariant, direction < 0 ? -1 : 1);
-		}
-	};
-};
-
-const createRuntimeMenuActions = function(args) {
-	const state = args.state;
-	const audioController = args.audioController;
-	const menuController = args.menuController;
-	const passthroughController = args.passthroughController;
-	const runtimeQueries = args.runtimeQueries;
-	const lightingActions = args.lightingActions;
-	const invokePassthroughAction = function(methodName, value) {
-		if (passthroughController && passthroughController[methodName]) {
-			passthroughController[methodName](value);
-		}
-	};
-	const createPassthroughToggleHandler = function(methodName) {
-		return function() {
-			invokePassthroughAction(methodName);
-		};
-	};
-	const createPassthroughDirectionHandler = function(methodName) {
-		return function(action) {
-			if (action) {
-				invokePassthroughAction(methodName, action.direction);
-			}
-		};
-	};
-	const createPassthroughKeyHandler = function(methodName, keyName) {
-		return function(action) {
-			if (action) {
-				invokePassthroughAction(methodName, action[keyName]);
-			}
-		};
+	const updateDesktopMenuPreview = function(xrSessionActiveOverrideBool) {
+		const pointerLockedBool = desktopInput.state.pointerLockedBool;
+		const xrSessionActiveBool = xrSessionActiveOverrideBool == null ? !!state.xrSession : xrSessionActiveOverrideBool;
+		menuController.updateDesktopPreview({
+			xrSessionActiveBool: xrSessionActiveBool,
+			pointerLockedBool: pointerLockedBool,
+			interactiveBool: !pointerLockedBool && !xrSessionActiveBool,
+			renderState: buildMenuContentState()
+		});
 	};
 	const cycleVisualizerSelection = function(action, selectionState, countKey, currentIndexKey, selectMethodName, wrapIndexBool) {
 		if (!action || !state.visualizerEngine || !state.visualizerEngine[selectMethodName]) {
@@ -531,154 +478,57 @@ const createRuntimeMenuActions = function(args) {
 		const nextIndex = selectionState[currentIndexKey] + (action.direction < 0 ? -1 : 1);
 		return state.visualizerEngine[selectMethodName](wrapIndexBool ? (nextIndex + count) % count : nextIndex);
 	};
-	const handlers = {
-		"session.exit": function() {
-			if (state.xrSession) {
-				state.xrSession.end();
-			}
-		},
-		"jumpMode.set": function(action) {
-			if (action && menuController && menuController.setJumpMode) {
-				menuController.setJumpMode(action.mode);
-			}
-		},
-		"backgroundMixMode.select": function(action) {
-			if (action && passthroughController && passthroughController.selectMixMode) {
-				passthroughController.selectMixMode(action.key);
-			}
-		},
-		"passthroughFlashlight.toggle": createPassthroughToggleHandler("toggleFlashlight"),
-		"passthroughDepth.toggle": createPassthroughToggleHandler("toggleDepth"),
-		"passthroughDepthRadial.toggle": createPassthroughToggleHandler("toggleDepthRadial"),
-		"passthroughDepthMotionCompensation.toggle": createPassthroughToggleHandler("toggleDepthMotionCompensation"),
-		"passthroughDepthReconstruction.cycle": createPassthroughDirectionHandler("cycleDepthReconstructionMode"),
-		"passthroughDepthMode.cycle": createPassthroughDirectionHandler("cycleDepthMode"),
-		"depthEchoReactive.toggle": createPassthroughKeyHandler("toggleDepthEchoReactive", "key"),
-		"depthDistanceReactive.toggle": createPassthroughToggleHandler("toggleDepthDistanceReactive"),
-		"sceneLightingMode.cycle": createPassthroughDirectionHandler("cycleLightingMode"),
-		"sceneLightingAnchorMode.cycle": createPassthroughDirectionHandler("cycleLightingAnchorMode"),
-		"sceneLightPreset.cycle": function(action) {
-			if (action) {
-				lightingActions.cycleLightingEffect(action.direction);
-			}
-		},
-		"visualizerMode.cycle": function(action) {
-			return cycleVisualizerSelection(action, runtimeQueries.getVisualizerSelectionState(), "modeNames", "currentModeIndex", "selectMode", false);
-		},
-		"visualizerHorizontalMirror.toggle": function() {
-			if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
-				return resolvedRuntimeActionPromise;
-			}
-			return state.visualizerEngine.toggleHorizontalMirror();
-		},
-		"butterchurnPreset.cycle": function(action) {
-			return cycleVisualizerSelection(action, runtimeQueries.getVisualizerSelectionState(), "presetNames", "currentPresetIndex", "selectPreset", true);
+	const updateSceneLighting = function(timeSeconds) {
+		if (sceneLighting) {
+			sceneLighting.update(timeSeconds, state.audioMetrics);
 		}
 	};
-	const dispatchMenuAction = function(action) {
-		if (!action || !action.type) {
-			return;
-		}
-		const actionHandler = handlers[action.type];
-		if (!actionHandler) {
-			console.warn("[MenuAction] unknown type:", action.type);
-			return;
-		}
-		return actionHandler(action);
-	};
-	const dispatchDesktopMenuAction = function(action) {
-		if (action && action.type === "butterchurnPreset.cycle") {
-			audioController.activate();
-		}
-		dispatchMenuAction(action);
-	};
-	return {
-		dispatchMenuAction: dispatchMenuAction,
-		xrCallbacks: {
-			dispatchMenuAction: dispatchMenuAction
-		},
-		desktopCallbacks: {
-			dispatchMenuAction: dispatchDesktopMenuAction
-		}
-	};
-};
-
-const createRuntimeSceneActions = function(args) {
-	const state = args.state;
-	const sceneLighting = args.sceneLighting;
-	const menuController = args.menuController;
-	const runtimeQueries = args.runtimeQueries;
-	const getFloorColors = args.getFloorColors || null;
-	return {
-		updateSceneLighting: function(timeSeconds) {
-			if (sceneLighting) {
-				sceneLighting.update(timeSeconds, runtimeQueries.getAudioMetrics());
-			}
-		},
-		resolveFloorColors: function() {
-			if (getFloorColors) {
-				return getFloorColors({
-					audioMetrics: runtimeQueries.getAudioMetrics(),
-					menuState: menuController.getState(),
-					sceneTimeSeconds: state.sceneTimeSeconds
-				});
-			}
-			const audioMetrics = runtimeQueries.getAudioMetrics();
-			const menuState = menuController.getState();
-			const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
-			const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
-			const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
-			const transientLevel = clampNumber(audioMetrics.transient || 0, 0, 1);
-			const baseHue = (state.sceneTimeSeconds * 0.03) % 1;
-			const floorDrive = clampNumber(audioLevel * 0.72 + audioPeak * 0.28 + beatPulse * 0.4, 0, 1);
-			const floorRgb = hslToRgb((baseHue + beatPulse * 0.03) % 1, lerpNumber(0.45, 0.98, floorDrive), lerpNumber(0.26, 0.66, floorDrive));
-			const gridRgb = hslToRgb((baseHue + 0.08 + beatPulse * 0.05) % 1, lerpNumber(0.55, 1, floorDrive), lerpNumber(0.48, 0.82, clampNumber(floorDrive + transientLevel, 0, 1)));
-			return {
-				audioLevel: audioLevel,
-				audioPeak: audioPeak,
-				beatPulse: beatPulse,
-				transient: transientLevel,
-				floor: [floorRgb[0], floorRgb[1], floorRgb[2], menuState.floorAlpha],
-				grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(menuState.floorAlpha * 0.72, menuState.floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
-			};
-		}
-	};
-};
-
-const createRuntimeSessionStateSync = function(args) {
-	const state = args.state;
-	const shell = args.shell;
-	const menuController = args.menuController;
-	return {
-		updatePassthroughUiState: function() {
-			menuController.setPassthroughState({
-				supportedBool: !!state.xrSupportState.immersiveArSupportedBool,
-				availableBool: !!state.passthroughAvailableBool,
-				sessionMode: state.xrSessionMode,
-				environmentBlendMode: state.xrEnvironmentBlendMode
-			});
-		},
-		syncReadyShellState: function() {
-			shell.setXrState({
-				statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.",
-				enterEnabledBool: !!state.xrSupportState.preferredSessionMode,
-				exitEnabledBool: false
+	const resolveFloorColors = function() {
+		if (getFloorColors) {
+			return getFloorColors({
+				audioMetrics: state.audioMetrics,
+				menuState: menuController.state,
+				sceneTimeSeconds: state.sceneTimeSeconds
 			});
 		}
+		const audioMetrics = state.audioMetrics;
+		const menuState = menuController.state;
+		const audioLevel = clampNumber(audioMetrics.level || 0, 0, 1);
+		const audioPeak = clampNumber(audioMetrics.peak || 0, 0, 1);
+		const beatPulse = clampNumber(audioMetrics.beatPulse || 0, 0, 1);
+		const transientLevel = clampNumber(audioMetrics.transient || 0, 0, 1);
+		const baseHue = (state.sceneTimeSeconds * 0.03) % 1;
+		const floorDrive = clampNumber(audioLevel * 0.72 + audioPeak * 0.28 + beatPulse * 0.4, 0, 1);
+		const floorRgb = hslToRgb((baseHue + beatPulse * 0.03) % 1, lerpNumber(0.45, 0.98, floorDrive), lerpNumber(0.26, 0.66, floorDrive));
+		const gridRgb = hslToRgb((baseHue + 0.08 + beatPulse * 0.05) % 1, lerpNumber(0.55, 1, floorDrive), lerpNumber(0.48, 0.82, clampNumber(floorDrive + transientLevel, 0, 1)));
+		return {
+			audioLevel: audioLevel,
+			audioPeak: audioPeak,
+			beatPulse: beatPulse,
+			transient: transientLevel,
+			floor: [floorRgb[0], floorRgb[1], floorRgb[2], menuState.floorAlpha],
+			grid: [gridRgb[0], gridRgb[1], gridRgb[2], clampNumber(lerpNumber(menuState.floorAlpha * 0.72, menuState.floorAlpha, clampNumber(audioLevel * 0.85 + beatPulse * 0.35, 0, 1)), 0, 1)]
+		};
 	};
-};
-
-const createRuntimeXrActions = function(args) {
-	const state = args.state;
-	const sessionBridge = args.sessionBridge;
-	const locomotion = args.locomotion;
-	const xrMovementState = args.xrMovementState;
-	const menuController = args.menuController;
-	const inputConfig = args.inputConfig || {};
+	const updatePassthroughUiState = function() {
+		menuController.setPassthroughState({
+			supportedBool: !!state.xrSupportState.immersiveArSupportedBool,
+			availableBool: !!state.passthroughAvailableBool,
+			sessionMode: state.xrSessionMode,
+			environmentBlendMode: state.xrEnvironmentBlendMode
+		});
+	};
+	const syncReadyShellState = function() {
+		shell.setXrState({
+			statusText: state.xrSupportState.preferredSessionMode ? "ready" : "headset not detected.",
+			enterEnabledBool: !!state.xrSupportState.preferredSessionMode,
+			exitEnabledBool: false
+		});
+	};
 	const stickDeadzone = inputConfig.stickDeadzone == null ? 0.08 : inputConfig.stickDeadzone;
 	const stanceStickDeadzone = inputConfig.stanceStickDeadzone == null ? 0.22 : inputConfig.stanceStickDeadzone;
 	const stanceVerticalDominanceMargin = inputConfig.stanceVerticalDominanceMargin == null ? 0.12 : inputConfig.stanceVerticalDominanceMargin;
-	const getSourceStickAxes = function(gamepad) {
+	const readSourceStickAxes = function(gamepad) {
 		const primaryX = gamepad.axes[0] || 0;
 		const primaryY = gamepad.axes[1] || 0;
 		const secondaryX = gamepad.axes[2] || 0;
@@ -690,119 +540,195 @@ const createRuntimeXrActions = function(args) {
 		}
 		return {x: primaryX, y: primaryY};
 	};
-	return {
-		updateReferenceSpace: function(viewerTransform) {
-			state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
-		},
-		getPassthroughDepthInfoByView: function(frame, pose) {
-			if (!state.depthSensingActiveBool || !frame || !pose || !pose.views) {
-				return [];
+	const updateReferenceSpace = function(viewerTransform) {
+		state.xrRefSpace = sessionBridge.createOffsetReferenceSpace(state.baseRefSpace, xrMovementState, viewerTransform);
+	};
+	const collectPassthroughDepthInfoByView = function(frame, pose) {
+		if (!state.depthSensingActiveBool || !frame || !pose || !pose.views) {
+			return [];
+		}
+		const useGlBinding = state.glBinding && typeof state.glBinding.getDepthInformation === "function";
+		if (!useGlBinding && typeof frame.getDepthInformation !== "function") {
+			return [];
+		}
+		const depthInfoByView = [];
+		for (let i = 0; i < pose.views.length; i += 1) {
+			let depthInfo = null;
+			try {
+				depthInfo = (useGlBinding ? state.glBinding.getDepthInformation(pose.views[i]) : frame.getDepthInformation(pose.views[i])) || null;
+			} catch (error) {
+				depthInfo = null;
 			}
-			const useGlBinding = state.glBinding && typeof state.glBinding.getDepthInformation === "function";
-			if (!useGlBinding && typeof frame.getDepthInformation !== "function") {
-				return [];
+			depthInfoByView.push(depthInfo);
+		}
+		return depthInfoByView;
+	};
+	const applyXrLocomotion = function(delta, pose, frame) {
+		if (!state.xrSession || !pose || !frame) {
+			return;
+		}
+		const locomotionInput = {moveX: 0, moveY: 0, turnX: 0, stanceInputY: 0, jumpRequestBool: false, airBoostActiveBool: false, rightControllerBoostDir: null, sprintActiveBool: false};
+		const sources = state.xrSession.inputSources || [];
+		for (let i = 0; i < sources.length; i += 1) {
+			const source = sources[i];
+			const gamepad = source.gamepad;
+			if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) {
+				continue;
 			}
-			const depthInfoByView = [];
-			for (let i = 0; i < pose.views.length; i += 1) {
-				let depthInfo = null;
-				try {
-					depthInfo = (useGlBinding ? state.glBinding.getDepthInformation(pose.views[i]) : frame.getDepthInformation(pose.views[i])) || null;
-				} catch (error) {
-					depthInfo = null;
-				}
-				depthInfoByView.push(depthInfo);
+			const stickAxes = readSourceStickAxes(gamepad);
+			if (source.handedness === "left") {
+				locomotionInput.moveX = Math.abs(stickAxes.x) > stickDeadzone ? stickAxes.x : 0;
+				locomotionInput.moveY = Math.abs(stickAxes.y) > stickDeadzone ? stickAxes.y : 0;
+				locomotionInput.sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
 			}
-			return depthInfoByView;
-		},
-		applyLocomotion: function(delta, pose, frame) {
-			if (!state.xrSession || !pose || !frame) {
-				return;
-			}
-			const locomotionInput = {moveX: 0, moveY: 0, turnX: 0, stanceInputY: 0, jumpRequestBool: false, airBoostActiveBool: false, rightControllerBoostDir: null, sprintActiveBool: false};
-			const sources = state.xrSession.inputSources || [];
-			for (let i = 0; i < sources.length; i += 1) {
-				const source = sources[i];
-				const gamepad = source.gamepad;
-				if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) {
-					continue;
+			if (source.handedness === "right") {
+				locomotionInput.turnX = Math.abs(stickAxes.x) > stickDeadzone ? stickAxes.x : 0;
+				locomotionInput.stanceInputY = Math.abs(stickAxes.y) > stanceStickDeadzone && Math.abs(stickAxes.y) > Math.abs(stickAxes.x) + stanceVerticalDominanceMargin ? -stickAxes.y : 0;
+				locomotionInput.jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
+				locomotionInput.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
+				const targetRayPose = state.xrRefSpace ? frame.getPose(source.targetRaySpace, state.xrRefSpace) : null;
+				if (targetRayPose) {
+					locomotionInput.rightControllerBoostDir = extractForwardDirectionFromQuaternion(targetRayPose.transform.orientation);
 				}
-				const stickAxes = getSourceStickAxes(gamepad);
-				if (source.handedness === "left") {
-					locomotionInput.moveX = Math.abs(stickAxes.x) > stickDeadzone ? stickAxes.x : 0;
-					locomotionInput.moveY = Math.abs(stickAxes.y) > stickDeadzone ? stickAxes.y : 0;
-					locomotionInput.sprintActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-				}
-				if (source.handedness === "right") {
-					locomotionInput.turnX = Math.abs(stickAxes.x) > stickDeadzone ? stickAxes.x : 0;
-					locomotionInput.stanceInputY = Math.abs(stickAxes.y) > stanceStickDeadzone && Math.abs(stickAxes.y) > Math.abs(stickAxes.x) + stanceVerticalDominanceMargin ? -stickAxes.y : 0;
-					locomotionInput.jumpRequestBool = !!(gamepad.buttons[4] && gamepad.buttons[4].pressed);
-					locomotionInput.airBoostActiveBool = !!(gamepad.buttons[0] && gamepad.buttons[0].pressed);
-					const targetRayPose = state.xrRefSpace ? frame.getPose(source.targetRaySpace, state.xrRefSpace) : null;
-					if (targetRayPose) {
-						locomotionInput.rightControllerBoostDir = extractForwardDirectionFromQuaternion(targetRayPose.transform.orientation);
-					}
-				}
-			}
-			const basePose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : null;
-			const rawViewerTransform = basePose ? basePose.transform : pose.transform;
-			const menuState = menuController.getState();
-			const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {
-				delta: delta,
-				renderedTransform: pose.transform,
-				viewerTransform: rawViewerTransform,
-				renderSpaceInitializedBool: state.xrRefSpace !== state.baseRefSpace,
-				locomotion: locomotionInput,
-				jumpMode: menuState.jumpMode,
-				menuConsumesRightTriggerBool: menuState.menuConsumesRightTriggerBool
-			});
-			if (locomotionStep.referenceSpaceUpdateNeededBool) {
-				this.updateReferenceSpace(rawViewerTransform);
-			}
-		},
-		updateDepthAvailability: function(passthroughDepthInfoByView) {
-			if (state.usableDepthAvailableBool || !passthroughDepthInfoByView.length) {
-				return;
-			}
-			for (let i = 0; i < passthroughDepthInfoByView.length; i += 1) {
-				const depthInfo = passthroughDepthInfoByView[i];
-				if (!depthInfo || depthInfo.isValid === false) {
-					continue;
-				}
-				if (typeof depthInfo.getDepthInMeters === "function") {
-					state.depthFrameKind = "cpu";
-				} else if (depthInfo.texture && depthInfo.textureType === "texture-array") {
-					state.depthFrameKind = "gpu-array";
-				} else if (depthInfo.texture) {
-					state.depthFrameKind = "gpu-texture";
-				}
-				if (!state.depthFrameKind) {
-					continue;
-				}
-				state.usableDepthAvailableBool = true;
-				state.depthProfile = computeRuntimeDepthProfile(state.depthFrameKind, state.xrDepthDataFormat, depthInfo.rawValueToMeters);
-				console.log("[DepthProfile] " + state.depthProfile.label + " linearScale=" + state.depthProfile.linearScale + " nearZ=" + state.depthProfile.nearZ);
-				return;
 			}
 		}
+		const basePose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : null;
+		const rawViewerTransform = basePose ? basePose.transform : pose.transform;
+		const menuState = menuController.state;
+		const locomotionStep = locomotion.applyXrLocomotion(xrMovementState, {
+			delta: delta,
+			renderedTransform: pose.transform,
+			viewerTransform: rawViewerTransform,
+			renderSpaceInitializedBool: state.xrRefSpace !== state.baseRefSpace,
+			locomotion: locomotionInput,
+			jumpMode: menuState.jumpMode,
+			menuConsumesRightTriggerBool: menuState.menuConsumesRightTriggerBool
+		});
+		if (locomotionStep.referenceSpaceUpdateNeededBool) {
+			updateReferenceSpace(rawViewerTransform);
+		}
 	};
-};
-
-const createRuntimeFrameActions = function(args) {
-	const windowRef = args.windowRef;
-	const state = args.state;
-	const sceneRenderer = args.sceneRenderer;
-	const sceneLighting = args.sceneLighting;
-	const passthroughController = args.passthroughController;
-	const menuController = args.menuController;
-	const runtimeQueries = args.runtimeQueries;
-	const xrActions = args.xrActions;
-	const sceneActions = args.sceneActions;
-	const locomotion = args.locomotion;
-	const desktopMovementState = args.desktopMovementState;
-	const renderPolicy = args.renderPolicy || {};
+	const updateDepthAvailability = function(passthroughDepthInfoByView) {
+		if (state.usableDepthAvailableBool || !passthroughDepthInfoByView.length) {
+			return;
+		}
+		for (let i = 0; i < passthroughDepthInfoByView.length; i += 1) {
+			const depthInfo = passthroughDepthInfoByView[i];
+			if (!depthInfo || depthInfo.isValid === false) {
+				continue;
+			}
+			if (typeof depthInfo.getDepthInMeters === "function") {
+				state.depthFrameKind = "cpu";
+			} else if (depthInfo.texture && depthInfo.textureType === "texture-array") {
+				state.depthFrameKind = "gpu-array";
+			} else if (depthInfo.texture) {
+				state.depthFrameKind = "gpu-texture";
+			}
+			if (!state.depthFrameKind) {
+				continue;
+			}
+			state.usableDepthAvailableBool = true;
+			state.depthProfile = computeRuntimeDepthProfile(state.depthFrameKind, state.xrDepthDataFormat, depthInfo.rawValueToMeters);
+			console.log("[DepthProfile] " + state.depthProfile.label + " linearScale=" + state.depthProfile.linearScale + " nearZ=" + state.depthProfile.nearZ);
+			return;
+		}
+	};
+	const dispatchMenuAction = function(action) {
+		if (!action || !action.type) {
+			return;
+		}
+		switch (action.type) {
+			case "session.exit":
+				if (state.xrSession) {
+					state.xrSession.end();
+				}
+				return;
+			case "jumpMode.set":
+				if (menuController && menuController.setJumpMode) {
+					menuController.setJumpMode(action.mode);
+				}
+				return;
+			case "backgroundMixMode.select":
+				if (passthroughController && passthroughController.selectMixMode) {
+					passthroughController.selectMixMode(action.key);
+				}
+				return;
+			case "passthroughFlashlight.toggle":
+				if (passthroughController && passthroughController.toggleFlashlight) {
+					passthroughController.toggleFlashlight();
+				}
+				return;
+			case "passthroughDepth.toggle":
+				if (passthroughController && passthroughController.toggleDepth) {
+					passthroughController.toggleDepth();
+				}
+				return;
+			case "passthroughDepthRadial.toggle":
+				if (passthroughController && passthroughController.toggleDepthRadial) {
+					passthroughController.toggleDepthRadial();
+				}
+				return;
+			case "passthroughDepthMotionCompensation.toggle":
+				if (passthroughController && passthroughController.toggleDepthMotionCompensation) {
+					passthroughController.toggleDepthMotionCompensation();
+				}
+				return;
+			case "passthroughDepthReconstruction.cycle":
+				if (passthroughController && passthroughController.cycleDepthReconstructionMode) {
+					passthroughController.cycleDepthReconstructionMode(action.direction);
+				}
+				return;
+			case "passthroughDepthMode.cycle":
+				if (passthroughController && passthroughController.cycleDepthMode) {
+					passthroughController.cycleDepthMode(action.direction);
+				}
+				return;
+			case "depthEchoReactive.toggle":
+				if (passthroughController && passthroughController.toggleDepthEchoReactive) {
+					passthroughController.toggleDepthEchoReactive(action.key);
+				}
+				return;
+			case "depthDistanceReactive.toggle":
+				if (passthroughController && passthroughController.toggleDepthDistanceReactive) {
+					passthroughController.toggleDepthDistanceReactive();
+				}
+				return;
+			case "sceneLightingMode.cycle":
+				if (passthroughController && passthroughController.cycleLightingMode) {
+					passthroughController.cycleLightingMode(action.direction);
+				}
+				return;
+			case "sceneLightingAnchorMode.cycle":
+				if (passthroughController && passthroughController.cycleLightingAnchorMode) {
+					passthroughController.cycleLightingAnchorMode(action.direction);
+				}
+				return;
+			case "sceneLightPreset.cycle":
+				if (sceneLighting && sceneLighting.cycleEffect) {
+					sceneLighting.cycleEffect(action.direction < 0 ? -1 : 1);
+				}
+				return;
+			case "visualizerMode.cycle":
+				return cycleVisualizerSelection(action, buildVisualizerSelectionState(), "modeNames", "currentModeIndex", "selectMode", false);
+			case "visualizerHorizontalMirror.toggle":
+				if (!state.visualizerEngine || !state.visualizerEngine.toggleHorizontalMirror) {
+					return resolvedRuntimeActionPromise;
+				}
+				return state.visualizerEngine.toggleHorizontalMirror();
+			case "butterchurnPreset.cycle":
+				return cycleVisualizerSelection(action, buildVisualizerSelectionState(), "presetNames", "currentPresetIndex", "selectPreset", true);
+			default:
+				console.warn("[MenuAction] unknown type:", action.type);
+		}
+	};
+	const dispatchDesktopMenuAction = function(action) {
+		if (action && action.type === "butterchurnPreset.cycle") {
+			audioController.activate();
+		}
+		dispatchMenuAction(action);
+	};
 	let frameBudgetOverCount = 0;
 	let frameBudgetFrameCount = 0;
-
 	const syncVisualizerFrame = function(renderPose, timeSeconds) {
 		if (!state.visualizerEngine) {
 			return;
@@ -812,8 +738,8 @@ const createRuntimeFrameActions = function(args) {
 			state.visualizerEngine.setHeadPoseFromQuaternion(renderPose.transform.orientation, renderPose.views[0].projectionMatrix);
 		}
 		state.visualizerEngine.update(timeSeconds);
+		state.audioMetrics = state.visualizerSourceBackend ? state.visualizerSourceBackend.state.audioMetrics : emptyAudioMetrics;
 	};
-
 	const updatePassthroughFrame = function(delta, passthroughPose) {
 		if (passthroughController && passthroughController.setDepthAvailability) {
 			passthroughController.setDepthAvailability(state.usableDepthAvailableBool);
@@ -821,12 +747,11 @@ const createRuntimeFrameActions = function(args) {
 		if (passthroughController && passthroughController.updateFrame) {
 			passthroughController.updateFrame({
 				delta: delta,
-				audioMetrics: runtimeQueries.getAudioMetrics(),
+				audioMetrics: state.audioMetrics,
 				passthroughPose: passthroughPose || null
 			});
 		}
 	};
-
 	const updateFrameBudget = function(frameStartMs) {
 		const frameElapsedMs = performance.now() - frameStartMs;
 		frameBudgetFrameCount += 1;
@@ -842,7 +767,6 @@ const createRuntimeFrameActions = function(args) {
 		frameBudgetOverCount = 0;
 		frameBudgetFrameCount = 0;
 	};
-
 	const renderXr = function(time, frame) {
 		state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 		const frameStartMs = performance.now();
@@ -853,18 +777,18 @@ const createRuntimeFrameActions = function(args) {
 		const delta = state.lastRenderTime === 0 ? 0 : (time - state.lastRenderTime) / 1000;
 		state.lastRenderTime = time;
 		state.sceneTimeSeconds = time * 0.001;
-		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: pose, callbacks: args.menuActions.xrCallbacks});
-		xrActions.applyLocomotion(delta, pose, frame);
+		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: pose, dispatchMenuAction: dispatchMenuAction});
+		applyXrLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
 		if (state.depthSensingActiveBool && state.xrSession && state.xrSession.depthActive === false) {
 			try { state.xrSession.resumeDepthSensing(); } catch (e) { console.warn("[Depth] resumeDepthSensing failed:", e.message || e); }
 		}
-		const passthroughDepthInfoByView = xrActions.getPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
-		xrActions.updateDepthAvailability(passthroughDepthInfoByView);
+		const passthroughDepthInfoByView = collectPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
+		updateDepthAvailability(passthroughDepthInfoByView);
 		updatePassthroughFrame(delta, passthroughPose || renderPose);
 		syncVisualizerFrame(renderPose, time * 0.001);
-		sceneActions.updateSceneLighting(time * 0.001);
+		updateSceneLighting(time * 0.001);
 		sceneRenderer.renderXrViews({
 			baseLayer: state.xrSession.renderState.baseLayer,
 			depthFrameKind: state.depthFrameKind || "",
@@ -872,21 +796,20 @@ const createRuntimeFrameActions = function(args) {
 			pose: renderPose,
 			passthroughPose: passthroughPose || renderPose,
 			passthroughDepthInfoByView: passthroughDepthInfoByView,
-			eyeDistanceMeters: menuController.getState().eyeDistanceMeters,
+			eyeDistanceMeters: menuController.state.eyeDistanceMeters,
 			visualizerEngine: state.visualizerEngine,
 			glbAssetStore: state.glbAssetStore,
 			sceneLighting: sceneLighting,
 			menuController: menuController,
 			passthroughController: passthroughController,
-			menuContentState: runtimeQueries.getMenuContentState(),
-			getReactiveFloorColors: sceneActions.resolveFloorColors,
+			menuContentState: buildMenuContentState(),
+			getReactiveFloorColors: resolveFloorColors,
 			transparentBackgroundBool: state.passthroughAvailableBool,
 			passthroughFallbackBool: !state.passthroughAvailableBool,
 			visualizerBackgroundEnabledBool: !!renderPolicy.visualizerBackgroundEnabledBool
 		});
 		updateFrameBudget(frameStartMs);
 	};
-
 	const renderPreview = function(time) {
 		if (state.xrSession) {
 			return;
@@ -895,8 +818,8 @@ const createRuntimeFrameActions = function(args) {
 		const delta = state.previewLastRenderTime === 0 ? 0 : Math.min(0.05, Math.max(0, previewTimeSeconds - state.previewLastRenderTime));
 		state.previewLastRenderTime = previewTimeSeconds;
 		state.sceneTimeSeconds = previewTimeSeconds;
-		locomotion.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.getState().jumpMode);
-		sceneActions.updateSceneLighting(previewTimeSeconds);
+		locomotion.applyDesktopPreviewMovement(desktopMovementState, delta, menuController.state.jumpMode);
+		updateSceneLighting(previewTimeSeconds);
 		updatePassthroughFrame(delta, null);
 		sceneRenderer.renderPreviewFrame({
 			previewTimeSeconds: previewTimeSeconds,
@@ -906,56 +829,37 @@ const createRuntimeFrameActions = function(args) {
 			sceneLighting: sceneLighting,
 			menuController: menuController,
 			passthroughController: passthroughController,
-			menuContentState: runtimeQueries.getMenuContentState(),
-			getReactiveFloorColors: sceneActions.resolveFloorColors,
+			menuContentState: buildMenuContentState(),
+			getReactiveFloorColors: resolveFloorColors,
 			passthroughFallbackBool: true,
 			visualizerBackgroundEnabledBool: !!renderPolicy.visualizerBackgroundEnabledBool
 		});
-		runtimeQueries.updateDesktopMenuPreview();
+		updateDesktopMenuPreview();
 		windowRef.requestAnimationFrame(renderPreview);
 	};
-
-	return {
-		renderXr: renderXr,
-		renderPreview: renderPreview
-	};
-};
-
-const createRuntimeSessionLifecycle = function(args) {
-	const windowRef = args.windowRef;
-	const documentRef = args.documentRef;
-	const shell = args.shell;
-	const sessionBridge = args.sessionBridge;
-	const state = args.state;
-	const locomotion = args.locomotion;
-	const xrMovementState = args.xrMovementState;
-	const menuController = args.menuController;
-	const runtimeQueries = args.runtimeQueries;
-	const sessionStateSync = args.sessionStateSync;
-	const frameActions = args.frameActions;
 	const endSession = function() {
 		if (state.frameHandle !== null && state.xrSession) {
 			state.xrSession.cancelAnimationFrame(state.frameHandle);
 		}
 		resetRuntimeSessionState(state);
 		menuController.endSession();
-		sessionStateSync.updatePassthroughUiState();
-		sessionStateSync.syncReadyShellState();
+		updatePassthroughUiState();
+		syncReadyShellState();
 		if (state.visualizerEngine) {
 			applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
 			state.visualizerEngine.endSession();
 		}
 		xrMovementState.horizontalVelocityX = 0;
 		xrMovementState.horizontalVelocityZ = 0;
-		runtimeQueries.updateDesktopMenuPreview();
-		windowRef.requestAnimationFrame(frameActions.renderPreview);
+		updateDesktopMenuPreview();
+		windowRef.requestAnimationFrame(renderPreview);
 	};
 	const startSession = async function() {
 		try {
 			if (shell.isCanvasPointerLocked(documentRef) && documentRef.exitPointerLock) {
 				documentRef.exitPointerLock();
 			}
-			runtimeQueries.updateDesktopMenuPreview(true);
+			updateDesktopMenuPreview(true);
 			const timeoutPromise = new Promise(function(resolve, reject) {
 				setTimeout(function() {
 					reject(new Error("XR session request timed out after " + (SESSION_TIMEOUT_MS / 1000) + "s"));
@@ -973,7 +877,7 @@ const createRuntimeSessionLifecycle = function(args) {
 			state.baseRefSpace = xrState.baseRefSpace;
 			locomotion.resetXrState(xrMovementState);
 			menuController.resetSessionState();
-			sessionStateSync.updatePassthroughUiState();
+			updatePassthroughUiState();
 			state.xrRefSpace = state.baseRefSpace;
 			shell.setXrState({
 				statusText: state.xrSessionMode === "immersive-ar" ? "session running (AR)" : "session running (VR)",
@@ -984,7 +888,7 @@ const createRuntimeSessionLifecycle = function(args) {
 			if (state.visualizerEngine) {
 				state.visualizerEngine.startSession();
 			}
-			state.frameHandle = state.xrSession.requestAnimationFrame(frameActions.renderXr);
+			state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 		} catch (error) {
 			shell.setXrState({
 				statusText: error.message || "session failed",
@@ -992,37 +896,15 @@ const createRuntimeSessionLifecycle = function(args) {
 				exitEnabledBool: false
 			});
 			resetRuntimeSessionState(state);
-			sessionStateSync.updatePassthroughUiState();
-			runtimeQueries.updateDesktopMenuPreview();
+			updatePassthroughUiState();
+			updateDesktopMenuPreview();
 		}
 	};
-	return {
-		endSession: endSession,
-		startSession: startSession
-	};
-};
-
-const createRuntimeEventBindings = function(args) {
-	const windowRef = args.windowRef;
-	const documentRef = args.documentRef;
-	const shell = args.shell;
-	const state = args.state;
-	const sessionBridge = args.sessionBridge;
-	const audioController = args.audioController;
-	const menuController = args.menuController;
-	const runtimeEventRegistry = args.runtimeEventRegistry;
-	const desktopInput = args.desktopInput;
-	const menuActions = args.menuActions;
-	const runtimeQueries = args.runtimeQueries;
-	const sessionLifecycle = args.sessionLifecycle;
-	const tabSources = args.tabSources || {};
-
 	const runAudioAction = function(actionPromise, fallbackMessage) {
 		actionPromise.catch(function(error) {
 			shell.setStatus(error.message || fallbackMessage);
 		});
 	};
-
 	const bindAsyncButton = function(button, action, fallbackMessage) {
 		if (!button || !action) {
 			return;
@@ -1031,335 +913,130 @@ const createRuntimeEventBindings = function(args) {
 			runAudioAction(action(), fallbackMessage);
 		});
 	};
-
-	return {
-		registerEventHandlers: function() {
-			desktopInput.registerEventHandlers(documentRef, windowRef);
-			menuController.registerDesktopPreviewEvents({callbacks: menuActions.desktopCallbacks, getInteractionState: runtimeQueries.getDesktopMenuInteractionState});
-			if (shell.enterButton) {
-				runtimeEventRegistry.on(shell.enterButton, "click", function() {
-					if (sessionBridge.isAvailable() && state.gl && !state.xrSession) {
-						audioController.activate();
-						sessionLifecycle.startSession();
-					}
-				});
-			}
-			bindAsyncButton(shell.audioButton, audioController.requestSharedAudio, "audio capture failed");
-			bindAsyncButton(shell.youtubeAudioButton, function() {
-				return audioController.requestTabAudio(tabSources.youtube);
-			}, "youtube audio failed");
-			bindAsyncButton(shell.youtubeHouseDiscoButton, function() {
-				return audioController.requestTabAudio(tabSources.youtubeHouseDisco);
-			}, "youtube house disco audio failed");
-			bindAsyncButton(shell.sunoLiveRadioButton, function() {
-				return audioController.requestTabAudio(tabSources.suno);
-			}, "suno live radio audio failed");
-			bindAsyncButton(shell.microphoneButton, audioController.requestMicrophoneAudio, "microphone capture failed");
-			bindAsyncButton(shell.debugAudioButton, audioController.startDebugAudio, "debug audio failed");
-			if (shell.stopAudioButton) {
-				runtimeEventRegistry.on(shell.stopAudioButton, "click", function() {
-					audioController.stop();
-				});
-			}
-			if (shell.exitButton) {
-				runtimeEventRegistry.on(shell.exitButton, "click", function() {
-					if (state.xrSession) {
-						state.xrSession.end();
-					}
-				});
-			}
-			runtimeEventRegistry.on(windowRef, "resize", function() {
-				if (!state.xrSession) {
-					shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
+	const bindTabAudioButton = function(button, tabSource, fallbackMessage) {
+		if (!button || !tabSource) {
+			return;
+		}
+		bindAsyncButton(button, function() {
+			return audioController.requestTabAudio(tabSource);
+		}, fallbackMessage);
+	};
+	const registerEventHandlers = function() {
+		desktopInput.registerEventHandlers(documentRef, windowRef);
+		menuController.registerDesktopPreviewEvents({
+			dispatchMenuAction: dispatchDesktopMenuAction,
+			runtimeState: state,
+			desktopInputState: desktopInput.state
+		});
+		if (shell.enterButton) {
+			runtimeEventRegistry.on(shell.enterButton, "click", function() {
+				if (sessionBridge.availableBool && state.gl && !state.xrSession) {
+					audioController.activate();
+					startSession();
 				}
 			});
-			runtimeEventRegistry.on(shell.canvas, "click", function() {
-				if (!state.xrSession && !shell.isCanvasPointerLocked(documentRef)) {
-					shell.requestCanvasPointerLock();
-				}
+		}
+		bindAsyncButton(shell.audioButton, audioController.requestSharedAudio, "audio capture failed");
+		bindTabAudioButton(shell.youtubeAudioButton, tabSources.youtube, "youtube audio failed");
+		bindTabAudioButton(shell.youtubeHouseDiscoButton, tabSources.youtubeHouseDisco, "youtube house disco audio failed");
+		bindTabAudioButton(shell.sunoLiveRadioButton, tabSources.suno, "suno live radio audio failed");
+		bindAsyncButton(shell.microphoneButton, audioController.requestMicrophoneAudio, "microphone capture failed");
+		bindAsyncButton(shell.debugAudioButton, audioController.startDebugAudio, "debug audio failed");
+		if (shell.stopAudioButton) {
+			runtimeEventRegistry.on(shell.stopAudioButton, "click", function() {
+				audioController.stop();
 			});
-			runtimeEventRegistry.on(shell.canvas, "contextmenu", function(event) {
-				if (!state.xrSession) {
-					event.preventDefault();
-				}
-			});
-			runtimeEventRegistry.on(documentRef, "pointerdown", function() {
-				audioController.activate();
-			}, {passive: true});
-			runtimeEventRegistry.on(documentRef, "keydown", function() {
-				audioController.activate();
-			});
-			runtimeEventRegistry.on(documentRef, "keydown", function(event) {
+		}
+		if (shell.exitButton) {
+			runtimeEventRegistry.on(shell.exitButton, "click", function() {
 				if (state.xrSession) {
-					return;
+					state.xrSession.end();
 				}
-				if (event.code === "KeyM" && !event.repeat) {
-					menuController.setDesktopPreviewVisibleBool(!menuController.getState().desktopPreviewVisibleBool);
-					event.preventDefault();
-				}
-			});
-			runtimeEventRegistry.on(documentRef, "mouseup", function() {
-				menuController.handleDesktopPointerUp();
-			});
-			runtimeEventRegistry.on(windowRef, "blur", function() {
-				menuController.clearDesktopPointerState();
 			});
 		}
+		runtimeEventRegistry.on(windowRef, "resize", function() {
+			if (!state.xrSession) {
+				shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
+			}
+		});
+		runtimeEventRegistry.on(shell.canvas, "click", function() {
+			if (!state.xrSession && !shell.isCanvasPointerLocked(documentRef)) {
+				shell.requestCanvasPointerLock();
+			}
+		});
+		runtimeEventRegistry.on(shell.canvas, "contextmenu", function(event) {
+			if (!state.xrSession) {
+				event.preventDefault();
+			}
+		});
+		runtimeEventRegistry.on(documentRef, "pointerdown", function() {
+			audioController.activate();
+		}, {passive: true});
+		runtimeEventRegistry.on(documentRef, "keydown", function() {
+			audioController.activate();
+		});
+		runtimeEventRegistry.on(documentRef, "keydown", function(event) {
+			if (state.xrSession) {
+				return;
+			}
+			if (event.code === "KeyM" && !event.repeat) {
+				menuController.setDesktopPreviewVisibleBool(!menuController.state.desktopPreviewVisibleBool);
+				event.preventDefault();
+			}
+		});
+		runtimeEventRegistry.on(documentRef, "mouseup", function() {
+			menuController.handleDesktopPointerUp();
+		});
+		runtimeEventRegistry.on(windowRef, "blur", function() {
+			menuController.clearDesktopPointerState();
+		});
 	};
-};
-
-const createRuntimeStartupActions = function(args) {
-	const windowRef = args.windowRef;
-	const shell = args.shell;
-	const sessionBridge = args.sessionBridge;
-	const sceneRenderer = args.sceneRenderer;
-	const sceneLighting = args.sceneLighting;
-	const audioController = args.audioController;
-	const locomotion = args.locomotion;
-	const createGlbAssetStore = args.createGlbAssetStore;
-	const createVisualizerSourceBackend = args.createVisualizerSourceBackend;
-	const createVisualizerEngine = args.createVisualizerEngine;
-	const sceneGlbAssets = args.sceneGlbAssets || [];
-	const state = args.state;
-	const desktopMovementState = args.desktopMovementState;
-	const sessionStateSync = args.sessionStateSync;
-	const frameActions = args.frameActions;
-	const initGlbAssets = async function() {
+	const start = async function() {
+		registerEventHandlers();
+		state.gl = sceneRenderer.init();
+		if (!state.gl) {
+			return;
+		}
+		locomotion.resetDesktopState(desktopMovementState);
+		sceneLighting.update(0, emptyAudioMetrics);
 		state.glbAssetStore = createGlbAssetStore ? createGlbAssetStore(state.gl) : null;
-		if (!state.glbAssetStore) {
-			return;
+		if (state.glbAssetStore) {
+			try {
+				state.glbAssetStore.init();
+				await state.glbAssetStore.loadAssets(sceneGlbAssets);
+			} catch (error) {
+				console.warn("[GLB] init/load error:", error);
+				shell.setStatus(error.message || "glb init failed");
+			}
 		}
-		try {
-			state.glbAssetStore.init();
-			await state.glbAssetStore.loadAssets(sceneGlbAssets);
-		} catch (error) {
-			console.warn("[GLB] init/load error:", error);
-			shell.setStatus(error.message || "glb init failed");
+		if (state.visualizerEngine && state.visualizerSourceBackend) {
+			state.visualizerEngine.init({gl: state.gl, sourceBackend: state.visualizerSourceBackend});
+			audioController.setAudioBackend(state.visualizerEngine);
+			audioController.activate().catch(function() {});
+			applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
 		}
-	};
-	const initVisualizer = function() {
-		state.visualizerSourceBackend = createVisualizerSourceBackend ? createVisualizerSourceBackend() : null;
-		state.visualizerEngine = createVisualizerEngine ? createVisualizerEngine(state.gl) : null;
-		if (!state.visualizerEngine) {
-			return;
-		}
-		state.visualizerEngine.init({gl: state.gl, sourceBackend: state.visualizerSourceBackend || null});
-		audioController.setAudioBackend(state.visualizerEngine);
-		audioController.activate().catch(function() {});
-		applyVisualizerBackgroundComposite(state.visualizerEngine, {alpha: 1, maskCount: 0, masks: []});
-	};
-	const syncSupportState = async function() {
-		if (!sessionBridge.isAvailable()) {
-			sessionStateSync.updatePassthroughUiState();
+		if (!sessionBridge.availableBool) {
+			updatePassthroughUiState();
 			shell.setXrState({statusText: "WebXR not available.", enterEnabledBool: false, exitEnabledBool: false});
 			return;
 		}
 		state.xrSupportState = await sessionBridge.getSupportState();
-		sessionStateSync.updatePassthroughUiState();
-		sessionStateSync.syncReadyShellState();
+		updatePassthroughUiState();
+		syncReadyShellState();
+		shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
+		windowRef.requestAnimationFrame(renderPreview);
+	};
+	const destroy = function() {
+		runtimeEventRegistry.removeAll();
+		if (desktopInput && desktopInput.destroy) {
+			desktopInput.destroy();
+		}
+		if (menuController && menuController.destroy) {
+			menuController.destroy();
+		}
 	};
 	return {
-		start: async function() {
-			args.eventBindings.registerEventHandlers();
-			state.gl = sceneRenderer.init();
-			if (!state.gl) {
-				return;
-			}
-			locomotion.resetDesktopState(desktopMovementState);
-			sceneLighting.update(0, emptyAudioMetrics);
-			await initGlbAssets();
-			initVisualizer();
-			await syncSupportState();
-			shell.syncCanvasToViewport({width: windowRef.innerWidth, height: windowRef.innerHeight, pixelRatio: windowRef.devicePixelRatio});
-			windowRef.requestAnimationFrame(frameActions.renderPreview);
-		}
+		start,
+		destroy
 	};
-};
-
-const createRuntimePublicActions = function(args) {
-	const passthroughController = args.passthroughController;
-	const runtimeQueries = args.runtimeQueries;
-	const lightingActions = args.lightingActions;
-	const selectEffectSemanticMode = function(key) {
-		if (passthroughController && passthroughController.selectEffectSemanticMode) {
-			passthroughController.selectEffectSemanticMode(key);
-		}
-		return resolvedRuntimeActionPromise;
-	};
-	return Object.assign({}, lightingActions, {
-		selectEffectSemanticMode: selectEffectSemanticMode,
-		getEffectSemanticModeState: runtimeQueries.getEffectSemanticModeState,
-		getLightingSelectionState: runtimeQueries.getLightingSelectionState
-	});
-};
-
-const createRuntimeLifecycleActions = function(args) {
-	const runtimeEventRegistry = args.runtimeEventRegistry;
-	const desktopInput = args.desktopInput;
-	const menuController = args.menuController;
-	return {
-		destroy: function() {
-			runtimeEventRegistry.removeAll();
-			if (desktopInput && desktopInput.destroy) {
-				desktopInput.destroy();
-			}
-			if (menuController && menuController.destroy) {
-				menuController.destroy();
-			}
-		}
-	};
-};
-
-// Runtime
-const createRuntime = function(options) {
-	const windowRef = options.windowRef || window;
-	const documentRef = options.documentRef || document;
-	const shell = normalizeAppShell(options.shell, {documentRef: documentRef});
-	const sessionBridge = options.sessionBridge;
-	const audioController = options.audioController;
-	const locomotion = options.locomotion;
-	const menuController = options.menuController || createNullMenuController(options.menuDefaults);
-	const passthroughController = options.passthroughController;
-	const sceneRenderer = options.sceneRenderer;
-	const sceneLighting = options.sceneLighting;
-	const createGlbAssetStore = options.createGlbAssetStore;
-	const createVisualizerSourceBackend = options.createVisualizerSourceBackend;
-	const createVisualizerEngine = options.createVisualizerEngine;
-	const getFloorColors = options.getReactiveFloorColors || null;
-	const sceneGlbAssets = options.sceneGlbAssets || [];
-	const inputConfig = options.inputConfig || {};
-	const renderPolicy = Object.assign({
-		visualizerBackgroundEnabledBool: true
-	}, options.renderPolicy || {});
-	const tabSources = options.tabSources || {};
-	const runtimeEventRegistry = createEventListenerRegistry();
-	const xrMovementState = locomotion.createXrState();
-	const desktopMovementState = locomotion.createDesktopState();
-	const state = createRuntimeState();
-	const desktopInput = createDesktopInput({
-		desktopMovementState: desktopMovementState,
-		mouseSensitivity: inputConfig.desktopMouseSensitivity,
-		clampNumber: clampNumber,
-		isXrSessionActive: function() { return !!state.xrSession; },
-		onPointerLockChange: function(lockedBool) {
-			if (lockedBool) {
-				menuController.clearDesktopPointerState();
-			}
-		}
-	});
-	const runtimeQueries = createRuntimeQueries({
-		state: state,
-		desktopInput: desktopInput,
-		menuController: menuController,
-		audioController: audioController,
-		sceneLighting: sceneLighting,
-		passthroughController: passthroughController
-	});
-	const lightingActions = createRuntimeLightingActions({
-		sceneLighting: sceneLighting,
-		runtimeQueries: runtimeQueries
-	});
-	const menuActions = createRuntimeMenuActions({
-		state: state,
-		audioController: audioController,
-		menuController: menuController,
-		passthroughController: passthroughController,
-		runtimeQueries: runtimeQueries,
-		lightingActions: lightingActions
-	});
-	const sceneActions = createRuntimeSceneActions({
-		state: state,
-		sceneLighting: sceneLighting,
-		menuController: menuController,
-		runtimeQueries: runtimeQueries,
-		getFloorColors: getFloorColors
-	});
-	const xrActions = createRuntimeXrActions({
-		state: state,
-		sessionBridge: sessionBridge,
-		locomotion: locomotion,
-		xrMovementState: xrMovementState,
-		menuController: menuController,
-		inputConfig: inputConfig
-	});
-	const sessionStateSync = createRuntimeSessionStateSync({
-		state: state,
-		shell: shell,
-		menuController: menuController
-	});
-	const frameActions = createRuntimeFrameActions({
-		windowRef: windowRef,
-		state: state,
-		sceneRenderer: sceneRenderer,
-		sceneLighting: sceneLighting,
-		passthroughController: passthroughController,
-		menuController: menuController,
-		menuActions: menuActions,
-		runtimeQueries: runtimeQueries,
-		xrActions: xrActions,
-		sceneActions: sceneActions,
-		locomotion: locomotion,
-		desktopMovementState: desktopMovementState,
-		renderPolicy: renderPolicy
-	});
-	const sessionLifecycle = createRuntimeSessionLifecycle({
-		windowRef: windowRef,
-		documentRef: documentRef,
-		shell: shell,
-		sessionBridge: sessionBridge,
-		state: state,
-		locomotion: locomotion,
-		xrMovementState: xrMovementState,
-		menuController: menuController,
-		runtimeQueries: runtimeQueries,
-		sessionStateSync: sessionStateSync,
-		frameActions: frameActions
-	});
-	const eventBindings = createRuntimeEventBindings({
-		windowRef: windowRef,
-		documentRef: documentRef,
-		shell: shell,
-		state: state,
-		sessionBridge: sessionBridge,
-		audioController: audioController,
-		menuController: menuController,
-		runtimeEventRegistry: runtimeEventRegistry,
-		desktopInput: desktopInput,
-		menuActions: menuActions,
-		runtimeQueries: runtimeQueries,
-		sessionLifecycle: sessionLifecycle,
-		tabSources: tabSources
-	});
-	const startupActions = createRuntimeStartupActions({
-		windowRef: windowRef,
-		shell: shell,
-		sessionBridge: sessionBridge,
-		sceneRenderer: sceneRenderer,
-		sceneLighting: sceneLighting,
-		audioController: audioController,
-		locomotion: locomotion,
-		createGlbAssetStore: createGlbAssetStore,
-		createVisualizerSourceBackend: createVisualizerSourceBackend,
-		createVisualizerEngine: createVisualizerEngine,
-		sceneGlbAssets: sceneGlbAssets,
-		state: state,
-		desktopMovementState: desktopMovementState,
-		sessionStateSync: sessionStateSync,
-		frameActions: frameActions,
-		eventBindings: eventBindings
-	});
-	const publicActions = createRuntimePublicActions({
-		sceneLighting: sceneLighting,
-		passthroughController: passthroughController,
-		runtimeQueries: runtimeQueries,
-		lightingActions: lightingActions
-	});
-	const lifecycleActions = createRuntimeLifecycleActions({
-		runtimeEventRegistry: runtimeEventRegistry,
-		desktopInput: desktopInput,
-		menuController: menuController
-	});
-	return Object.assign({
-		start: startupActions.start
-	}, publicActions, lifecycleActions);
 };

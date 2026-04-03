@@ -153,84 +153,93 @@ const DEFAULT_RENDER_POLICY = {
 
 const mergeAppConfig = function(projectConfig) {
 	projectConfig = projectConfig || {};
-	const mergeConfigSection = function(defaults, overrides) {
-		return Object.assign({}, defaults, overrides || {});
-	};
 	return {
-		audio: mergeConfigSection(DEFAULT_APP_CONFIG.audio, projectConfig.audio),
-		locomotion: mergeConfigSection(DEFAULT_APP_CONFIG.locomotion, projectConfig.locomotion),
-		menu: mergeConfigSection(DEFAULT_APP_CONFIG.menu, projectConfig.menu),
-		passthrough: mergeConfigSection(DEFAULT_APP_CONFIG.passthrough, projectConfig.passthrough),
-		lighting: mergeConfigSection(DEFAULT_APP_CONFIG.lighting, projectConfig.lighting),
-		runtime: mergeConfigSection(DEFAULT_APP_CONFIG.runtime, projectConfig.runtime),
-		scene: mergeConfigSection(DEFAULT_APP_CONFIG.scene, projectConfig.scene),
-		renderPolicy: mergeConfigSection(DEFAULT_RENDER_POLICY, projectConfig.renderPolicy)
+		audio: Object.assign({}, DEFAULT_APP_CONFIG.audio, projectConfig.audio || {}),
+		locomotion: Object.assign({}, DEFAULT_APP_CONFIG.locomotion, projectConfig.locomotion || {}),
+		menu: Object.assign({}, DEFAULT_APP_CONFIG.menu, projectConfig.menu || {}),
+		passthrough: Object.assign({}, DEFAULT_APP_CONFIG.passthrough, projectConfig.passthrough || {}),
+		lighting: Object.assign({}, DEFAULT_APP_CONFIG.lighting, projectConfig.lighting || {}),
+		runtime: Object.assign({}, DEFAULT_APP_CONFIG.runtime, projectConfig.runtime || {}),
+		scene: Object.assign({}, DEFAULT_APP_CONFIG.scene, projectConfig.scene || {}),
+		renderPolicy: Object.assign({}, DEFAULT_RENDER_POLICY, projectConfig.renderPolicy || {})
 	};
 };
 
-const createAppTabSources = function(audioConfig) {
-	return {
-		youtube: {
-			key: "youtube",
-			url: audioConfig.youtubePlaylistUrl,
-			windowName: audioConfig.youtubeWindowName,
-			sourceName: "YT Synth",
-			blockedMessage: "yt synth tab blocked",
-			selectStatus: "select the YT Synth tab and enable tab audio",
-			activeStatus: "yt synth tab audio active"
-		},
-		youtubeHouseDisco: {
-			key: "youtubeHouseDisco",
-			url: audioConfig.youtubeHouseDiscoUrl,
-			windowName: audioConfig.youtubeHouseDiscoWindowName,
-			sourceName: "YT House/Disco",
-			blockedMessage: "yt house disco tab blocked",
-			selectStatus: "select the YT House/Disco tab and enable tab audio",
-			activeStatus: "yt house disco tab audio active"
-		},
-		suno: {
-			key: "suno",
-			url: audioConfig.sunoLiveRadioUrl,
-			windowName: audioConfig.sunoWindowName,
-			sourceName: "Suno Live Radio",
-			blockedMessage: "suno live radio tab blocked",
-			selectStatus: "select the Suno Live Radio tab and enable tab audio",
-			activeStatus: "suno live radio tab audio active"
-		}
-	};
-};
-
-const createAppSystems = function(args) {
-	const shell = args.shell;
-	const config = args.config;
-	const documentRef = args.documentRef;
-	const windowRef = args.windowRef;
-	const navigatorRef = args.navigatorRef;
-	const projectConfig = args.projectConfig;
+const createApp = function(projectConfig) {
+	projectConfig = projectConfig || {};
+	const documentRef = projectConfig.documentRef || document;
+	const windowRef = projectConfig.windowRef || window;
+	const navigatorRef = projectConfig.navigatorRef || navigator;
+	const shell = normalizeAppShell(projectConfig.shell, {documentRef: documentRef});
+	const config = mergeAppConfig(projectConfig);
 	let assetStoreRef = null;
-	const mergeMenuConfig = function(baseConfig) {
-		return Object.assign({}, config.menu, baseConfig);
-	};
+	const openWindow = windowRef.open ? windowRef.open.bind(windowRef) : window.open.bind(window);
 	const passthroughController = createPassthroughController(config.passthrough);
 	const menuViewFactory = projectConfig.createMenuView || createMenuView;
 	const menuControllerFactory = projectConfig.createMenuController || createMenuController;
-	const menuView = menuViewFactory(mergeMenuConfig({
-		documentRef: documentRef,
+	const menuView = menuViewFactory({
+		rayLength: config.menu.rayLength,
+		eyeDistanceMin: config.menu.eyeDistanceMin,
+		eyeDistanceMax: config.menu.eyeDistanceMax,
+		floorAlphaMin: config.menu.floorAlphaMin,
+		floorAlphaMax: config.menu.floorAlphaMax,
+		desktopMenuPreviewWidthPixels: config.menu.desktopMenuPreviewWidthPixels,
+		jumpModeDoubleMinU: config.menu.jumpModeDoubleMinU,
+		jumpModeDoubleMaxU: config.menu.jumpModeDoubleMaxU,
+		jumpModeMultiMinU: config.menu.jumpModeMultiMinU,
+		jumpModeMultiMaxU: config.menu.jumpModeMultiMaxU,
+		menuSliderMinU: config.menu.menuSliderMinU,
+		menuSliderMaxU: config.menu.menuSliderMaxU,
+		menuSliderHalfHeight: config.menu.menuSliderHalfHeight,
+		maxMenuTextureHeight: config.menu.maxMenuTextureHeight,
+		presetPrevMinU: config.menu.presetPrevMinU,
+		presetPrevMaxU: config.menu.presetPrevMaxU,
+		presetNextMinU: config.menu.presetNextMinU,
+		presetNextMaxU: config.menu.presetNextMaxU,
+		initialJumpMode: config.menu.initialJumpMode,
+		initialFloorAlpha: config.menu.initialFloorAlpha,
+		initialEyeDistanceMeters: config.menu.initialEyeDistanceMeters,
+		initialDesktopPreviewVisibleBool: config.menu.initialDesktopPreviewVisibleBool,
+		previewStyle: config.menu.previewStyle,
+		documentRef,
 		menuWorldWidth: config.scene.menuWidth
-	}));
-	const menuController = menuControllerFactory(mergeMenuConfig({
-		menuView: menuView,
+	});
+	const menuController = menuControllerFactory({
+		rayLength: config.menu.rayLength,
+		eyeDistanceMin: config.menu.eyeDistanceMin,
+		eyeDistanceMax: config.menu.eyeDistanceMax,
+		floorAlphaMin: config.menu.floorAlphaMin,
+		floorAlphaMax: config.menu.floorAlphaMax,
+		desktopMenuPreviewWidthPixels: config.menu.desktopMenuPreviewWidthPixels,
+		jumpModeDoubleMinU: config.menu.jumpModeDoubleMinU,
+		jumpModeDoubleMaxU: config.menu.jumpModeDoubleMaxU,
+		jumpModeMultiMinU: config.menu.jumpModeMultiMinU,
+		jumpModeMultiMaxU: config.menu.jumpModeMultiMaxU,
+		menuSliderMinU: config.menu.menuSliderMinU,
+		menuSliderMaxU: config.menu.menuSliderMaxU,
+		menuSliderHalfHeight: config.menu.menuSliderHalfHeight,
+		maxMenuTextureHeight: config.menu.maxMenuTextureHeight,
+		presetPrevMinU: config.menu.presetPrevMinU,
+		presetPrevMaxU: config.menu.presetPrevMaxU,
+		presetNextMinU: config.menu.presetNextMinU,
+		presetNextMaxU: config.menu.presetNextMaxU,
+		initialJumpMode: config.menu.initialJumpMode,
+		initialFloorAlpha: config.menu.initialFloorAlpha,
+		initialEyeDistanceMeters: config.menu.initialEyeDistanceMeters,
+		initialDesktopPreviewVisibleBool: config.menu.initialDesktopPreviewVisibleBool,
+		previewStyle: config.menu.previewStyle,
+		menuView,
 		menuWidth: config.scene.menuWidth,
-		passthroughController: passthroughController
-	}));
+		passthroughController
+	});
 	const audioController = createAudioSourceController({
 		setStatus: shell.setStatus,
 		mediaDevices: navigatorRef.mediaDevices || null,
-		openWindow: function(url, windowName) {
-			return windowRef.open(url, windowName);
-		},
+		openWindow: openWindow,
 		onStateChange: shell.setAudioState
 	});
+	const visualizerSourceBackend = createButterchurnSource({windowRef: windowRef, documentRef: documentRef});
+	const visualizerEngine = createVisualizerEngine({modes: visualizerModeDefinitions});
 	const sceneLighting = createSceneLighting(config.lighting);
 	const collisionWorld = createCollisionWorld({
 		staticBoxes: config.scene.levelBoxes,
@@ -253,9 +262,7 @@ const createAppSystems = function(args) {
 		onInitFailure: function() {
 			shell.setXrState({statusText: "WebGL not available.", enterEnabledBool: false, exitEnabledBool: false});
 		},
-		clampNumber: function(value, minValue, maxValue) {
-			return Math.max(minValue, Math.min(maxValue, value));
-		},
+		clampNumber: clampNumber,
 		levelBoxes: config.scene.levelBoxes,
 		floorHalfSize: config.scene.floorHalfSize,
 		floorReceivesSceneLightingBool: projectConfig.floorReceivesSceneLightingBool,
@@ -264,55 +271,56 @@ const createAppSystems = function(args) {
 		getLightingUniformLocations: getLightingUniformLocations,
 		applyLightingUniforms: applyLightingUniforms
 	});
-	return {
-		audioController: audioController,
-		locomotion: locomotion,
-		menuController: menuController,
-		passthroughController: passthroughController,
-		sceneLighting: sceneLighting,
-		sceneRenderer: sceneRenderer,
-		sessionBridge: sessionBridge,
-		createGlbAssetStore: function(gl) {
-			assetStoreRef = createGlbAssetStore({
-				gl: gl,
-				fetchFn: windowRef.fetch ? windowRef.fetch.bind(windowRef) : null,
-				createImageBitmapFn: windowRef.createImageBitmap ? windowRef.createImageBitmap.bind(windowRef) : null,
-				imageCtor: windowRef.Image,
-				blobCtor: windowRef.Blob,
-				textDecoderCtor: windowRef.TextDecoder,
-				urlApi: windowRef.URL,
-				setStatus: shell.setStatus,
-				getLightingState: function() {
-					return sceneLighting.getState();
-				},
-				getLightingUniformLocations: getLightingUniformLocations,
-				applyLightingUniforms: applyLightingUniforms,
-				maxSceneLights: MAX_DIRECTIONAL_LIGHTS
-			});
-			return assetStoreRef;
+	const tabSources = {
+		youtube: {
+			key: "youtube",
+			url: config.audio.youtubePlaylistUrl,
+			windowName: config.audio.youtubeWindowName,
+			sourceName: "YT Synth",
+			blockedMessage: "yt synth tab blocked",
+			selectStatus: "select the YT Synth tab and enable tab audio",
+			activeStatus: "yt synth tab audio active"
+		},
+		youtubeHouseDisco: {
+			key: "youtubeHouseDisco",
+			url: config.audio.youtubeHouseDiscoUrl,
+			windowName: config.audio.youtubeHouseDiscoWindowName,
+			sourceName: "YT House/Disco",
+			blockedMessage: "yt house disco tab blocked",
+			selectStatus: "select the YT House/Disco tab and enable tab audio",
+			activeStatus: "yt house disco tab audio active"
+		},
+		suno: {
+			key: "suno",
+			url: config.audio.sunoLiveRadioUrl,
+			windowName: config.audio.sunoWindowName,
+			sourceName: "Suno Live Radio",
+			blockedMessage: "suno live radio tab blocked",
+			selectStatus: "select the Suno Live Radio tab and enable tab audio",
+			activeStatus: "suno live radio tab audio active"
 		}
 	};
-};
-
-const createApp = function(projectConfig) {
-	projectConfig = projectConfig || {};
-	const documentRef = projectConfig.documentRef || document;
-	const windowRef = projectConfig.windowRef || window;
-	const navigatorRef = projectConfig.navigatorRef || navigator;
-	const shell = normalizeAppShell(projectConfig.shell, {documentRef: documentRef});
-	const config = mergeAppConfig(projectConfig);
-	const systems = createAppSystems({
-		shell: shell,
-		config: config,
-		projectConfig: projectConfig,
-		documentRef: documentRef,
-		windowRef: windowRef,
-		navigatorRef: navigatorRef
-	});
+	const createGlbStore = function(gl) {
+		assetStoreRef = createGlbAssetStore({
+			gl: gl,
+			fetchFn: windowRef.fetch ? windowRef.fetch.bind(windowRef) : null,
+			createImageBitmapFn: windowRef.createImageBitmap ? windowRef.createImageBitmap.bind(windowRef) : null,
+			imageCtor: windowRef.Image,
+			blobCtor: windowRef.Blob,
+			textDecoderCtor: windowRef.TextDecoder,
+			urlApi: windowRef.URL,
+			setStatus: shell.setStatus,
+			getLightingState: sceneLighting.getState,
+			getLightingUniformLocations: getLightingUniformLocations,
+			applyLightingUniforms: applyLightingUniforms,
+			maxSceneLights: MAX_DIRECTIONAL_LIGHTS
+		});
+		return assetStoreRef;
+	};
 	return createRuntime({
-		windowRef: windowRef,
-		documentRef: documentRef,
-		shell: shell,
+		windowRef,
+		documentRef,
+		shell,
 		getReactiveFloorColors: projectConfig.getReactiveFloorColors,
 		menuDefaults: {
 			jumpMode: config.menu.initialJumpMode,
@@ -320,25 +328,19 @@ const createApp = function(projectConfig) {
 			eyeDistanceMeters: config.menu.initialEyeDistanceMeters,
 			desktopPreviewVisibleBool: config.menu.initialDesktopPreviewVisibleBool
 		},
-		sessionBridge: systems.sessionBridge,
-		audioController: systems.audioController,
-		locomotion: systems.locomotion,
-		menuController: systems.menuController,
-		passthroughController: systems.passthroughController,
-		sceneRenderer: systems.sceneRenderer,
-		sceneLighting: systems.sceneLighting,
-		createGlbAssetStore: systems.createGlbAssetStore,
-		createVisualizerSourceBackend: function() {
-			return createButterchurnSource({windowRef: windowRef, documentRef: documentRef});
-		},
-		createVisualizerEngine: function() {
-			return createVisualizerEngine({
-				modes: visualizerModeDefinitions
-			});
-		},
+		sessionBridge,
+		audioController,
+		locomotion,
+		menuController,
+		passthroughController,
+		sceneRenderer,
+		sceneLighting,
+		createGlbAssetStore: createGlbStore,
+		visualizerSourceBackend,
+		visualizerEngine,
 		renderPolicy: config.renderPolicy,
 		sceneGlbAssets: config.scene.sceneGlbAssets,
 		inputConfig: config.runtime,
-		tabSources: createAppTabSources(config.audio)
+		tabSources
 	});
 };

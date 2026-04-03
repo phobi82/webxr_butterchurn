@@ -1253,11 +1253,53 @@ const createMenuView = function(options) {
 	};
 };
 
-const createMenuControllerState = function(options) {
-	return {
+const DEFAULT_MENU_PASSTHROUGH_UI_STATE = {
+	availableBool: false,
+	fallbackBool: true,
+	statusText: "Passthrough unsupported, using black fallback",
+	mixModes: backgroundMixModeDefinitions,
+	selectedMixModeKey: "manual",
+	mixModeVisibleBool: true,
+	backgroundControls: [],
+	flashlightActiveBool: false,
+	depthActiveBool: false,
+	depthRadialBool: true,
+	depthMotionCompensationBool: true,
+	depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
+	selectedDepthReconstructionModeKey: "heightmap",
+	depthModes: passthroughDepthModeDefinitions,
+	selectedDepthModeKey: "distance",
+	usableDepthAvailableBool: false,
+	passthroughControls: [],
+	distanceReactiveControl: null,
+	echoReactiveControls: [],
+	echoReactiveIntensityVisibleBool: false,
+	lightingModes: passthroughLightingModeDefinitions,
+	lightingAnchorModes: passthroughLightingAnchorModeDefinitions,
+	selectedLightingModeKey: "uniform",
+	selectedLightingAnchorModeKey: "auto",
+	lightingControls: [],
+	effectSemanticControls: [],
+	visibleShare: 0
+};
+
+
+// Controller
+const createMenuController = function(options) {
+	const menuView = options.menuView;
+	const buildModuleSections = options.buildModuleSections || createLowerMenuSections;
+	const menuCanvas = menuView.menuCanvas;
+	const previewCanvas = menuView.previewCanvas;
+	const windowRef = options.windowRef || window;
+	const passthroughController = options.passthroughController || null;
+	const menuEventRegistry = createEventListenerRegistry();
+	const controllerRays = [];
+	const triggerPressedByHand = new Map();
+	const state = {
 		jumpMode: options.initialJumpMode || "double",
 		menuOpenBool: false,
 		menuTogglePressedBool: false,
+		menuConsumesRightTriggerBool: false,
 		floorAlpha: options.initialFloorAlpha == null ? 0.72 : options.initialFloorAlpha,
 		eyeDistanceMeters: options.initialEyeDistanceMeters == null ? 0.064 : options.initialEyeDistanceMeters,
 		activeSliderHand: "",
@@ -1270,6 +1312,14 @@ const createMenuControllerState = function(options) {
 		desktopPointerU: 0,
 		desktopPointerV: 0,
 		desktopPreviewEventsRegisteredBool: false,
+		plane: {
+			center: {x: 0, y: 1.45, z: -0.8},
+			right: {x: 1, y: 0, z: 0},
+			up: {x: 0, y: 1, z: 0},
+			normal: {x: 0, y: 0, z: 1}
+		},
+		planeWidth: 0,
+		planeHeight: 0,
 		cachedSceneLightingState: {
 			lightPresetNames: ["Aurora Drift"],
 			currentLightPresetIndex: 0,
@@ -1288,185 +1338,13 @@ const createMenuControllerState = function(options) {
 			effectSemanticModeLabel: "Current"
 		}
 	};
-};
-
-const createDefaultMenuPassthroughUiState = function() {
-	return {
-		availableBool: false,
-		fallbackBool: true,
-		statusText: "Passthrough unsupported, using black fallback",
-		mixModes: backgroundMixModeDefinitions,
-		selectedMixModeKey: "manual",
-		mixModeVisibleBool: true,
-		backgroundControls: [],
-		flashlightActiveBool: false,
-		depthActiveBool: false,
-		depthRadialBool: true,
-		depthMotionCompensationBool: true,
-		depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
-		selectedDepthReconstructionModeKey: "heightmap",
-		depthModes: passthroughDepthModeDefinitions,
-		selectedDepthModeKey: "distance",
-		usableDepthAvailableBool: false,
-		passthroughControls: [],
-		distanceReactiveControl: null,
-		echoReactiveControls: [],
-		echoReactiveIntensityVisibleBool: false,
-		lightingModes: passthroughLightingModeDefinitions,
-		lightingAnchorModes: passthroughLightingAnchorModeDefinitions,
-		selectedLightingModeKey: "uniform",
-		selectedLightingAnchorModeKey: "auto",
-		lightingControls: [],
-		effectSemanticControls: [],
-		visibleShare: 0
-	};
-};
-
-const createMenuControllerDataModel = function(args) {
-	const state = args.state;
-	const passthroughController = args.passthroughController;
-	const buildModuleSections = args.buildModuleSections;
-	const options = args.options;
-	const getControlSliderU = args.getControlSliderU;
-	const isMenuSliderControlActive = args.isMenuSliderControlActive;
-	const getPassthroughUiState = function() {
-		return passthroughController && passthroughController.getUiState ? passthroughController.getUiState() : createDefaultMenuPassthroughUiState();
-	};
-	const updateCachedSceneLightingState = function(externalState) {
-		externalState = externalState || {};
-		if (externalState.lightPresetNames && externalState.lightPresetNames.length) {
-			state.cachedSceneLightingState = {
-				lightPresetNames: externalState.lightPresetNames,
-				currentLightPresetIndex: externalState.currentLightPresetIndex || 0,
-				currentLightPresetName: externalState.currentLightPresetName || "",
-				currentLightPresetDescription: externalState.currentLightPresetDescription || "",
-				currentLightPresetEffectDescription: externalState.currentLightPresetEffectDescription || externalState.currentLightPresetDescription || "",
-				currentLightPresetEffectName: externalState.currentLightPresetEffectName || externalState.currentLightPresetName || "",
-				currentLightPresetEffectIndex: externalState.currentLightPresetEffectIndex || 0,
-				currentLightPresetEffectCount: externalState.currentLightPresetEffectCount || 1,
-				currentLightPresetVariantKey: externalState.currentLightPresetVariantKey || "",
-				currentLightPresetVariantIndex: externalState.currentLightPresetVariantIndex || 0,
-				currentLightPresetVariantCount: externalState.currentLightPresetVariantCount || 1,
-				currentLightPresetVariantLabel: externalState.currentLightPresetVariantLabel || "",
-				currentLightPresetSurfaceKey: externalState.currentLightPresetSurfaceKey || "",
-				effectSemanticModeKey: externalState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
-				effectSemanticModeLabel: externalState.effectSemanticModeLabel || "Current"
-			};
-		}
-	};
-	const getMenuSliderControls = function(passthroughUiState) {
-		passthroughUiState = passthroughUiState || {};
-		return (passthroughUiState.backgroundControls || [])
-			.concat(passthroughUiState.passthroughControls || [])
-			.concat(passthroughUiState.lightingControls || [])
-			.concat(passthroughUiState.effectSemanticControls || []);
-	};
-	const getMenuSliderControlByKey = function(passthroughUiState, controlKey) {
-		const controls = getMenuSliderControls(passthroughUiState);
-		for (let i = 0; i < controls.length; i += 1) {
-			if (controls[i].key === controlKey) {
-				return controls[i];
-			}
-		}
-		return null;
-	};
-	const getModuleSections = function(externalState) {
-		updateCachedSceneLightingState(externalState);
-		const passthroughUiState = getPassthroughUiState();
-		const lightingState = state.cachedSceneLightingState;
-		const lightPresetNames = lightingState.lightPresetNames || ["Aurora Drift"];
-		const lightPresetIndex = clampNumber(lightingState.currentLightPresetIndex || 0, 0, Math.max(0, lightPresetNames.length - 1));
-		externalState = externalState || {};
-		const shaderModeNames = externalState.shaderModeNames && externalState.shaderModeNames.length ? externalState.shaderModeNames : ["No mode"];
-		const currentShaderModeIndex = clampNumber(externalState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
-		const presetNames = externalState.presetNames && externalState.presetNames.length ? externalState.presetNames : ["No preset"];
-		const currentPresetIndex = clampNumber(externalState.currentPresetIndex || 0, 0, presetNames.length - 1);
-		const xrSessionActiveBool = externalState.xrSessionActiveBool == null ? state.xrSessionActiveBool : !!externalState.xrSessionActiveBool;
-		const createMenuSliderState = function(control) {
-			return {
-				control: control,
-				sliderU: getControlSliderU(control),
-				hoveredBool: !!state.hoveredActionKeys[control.key],
-				activeBool: isMenuSliderControlActive(control.key)
-			};
-		};
-		const backgroundControls = (passthroughUiState.backgroundControls || []).map(createMenuSliderState);
-		const passthroughControls = (passthroughUiState.passthroughControls || []).map(createMenuSliderState);
-		const sceneLightingControls = (passthroughUiState.lightingControls || []).map(createMenuSliderState);
-		const effectSemanticControls = (passthroughUiState.effectSemanticControls || []).map(createMenuSliderState);
-		return buildModuleSections({
-			selectedJumpMode: state.jumpMode,
-			hoveredActionKeys: state.hoveredActionKeys,
-			floorAlpha: state.floorAlpha,
-			floorAlphaSliderU: options.floorAlphaSlider.toSliderU(state.floorAlpha),
-			floorAlphaHoverBool: !!state.hoveredActionKeys["floorAlpha"],
-			floorAlphaActiveBool: !!state.activeFloorAlphaSliderHand,
-			passthroughUiState: passthroughUiState,
-			backgroundControls: backgroundControls,
-			passthroughControls: passthroughControls,
-			eyeDistanceMeters: state.eyeDistanceMeters,
-			eyeDistanceMin: options.eyeDistanceMin,
-			eyeDistanceMax: options.eyeDistanceMax,
-			eyeDistanceSliderU: options.eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
-			eyeDistanceHoverBool: !!state.hoveredActionKeys["eyeDistance"],
-			eyeDistanceActiveBool: !!state.activeSliderHand,
-			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
-			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
-			horizontalMirrorBool: !!externalState.horizontalMirrorBool,
-			lightingModes: passthroughUiState.lightingModes || [],
-			lightingAnchorModes: passthroughUiState.lightingAnchorModes || passthroughLightingAnchorModeDefinitions,
-			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
-			selectedLightingAnchorModeKey: passthroughUiState.selectedLightingAnchorModeKey || "auto",
-			lightPresetNames: lightPresetNames,
-			currentLightPresetIndex: lightPresetIndex,
-			currentLightPresetName: lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
-			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
-			currentLightPresetEffectDescription: lightingState.currentLightPresetEffectDescription || lightingState.currentLightPresetDescription || "",
-			currentLightPresetEffectName: lightingState.currentLightPresetEffectName || lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
-			currentLightPresetEffectIndex: lightingState.currentLightPresetEffectIndex || 0,
-			currentLightPresetEffectCount: lightingState.currentLightPresetEffectCount || 1,
-			currentLightPresetVariantKey: lightingState.currentLightPresetVariantKey || "",
-			currentLightPresetVariantIndex: lightingState.currentLightPresetVariantIndex || 0,
-			currentLightPresetVariantCount: lightingState.currentLightPresetVariantCount || 1,
-			currentLightPresetVariantLabel: lightingState.currentLightPresetVariantLabel || "",
-			currentLightPresetSurfaceKey: lightingState.currentLightPresetSurfaceKey || "",
-			effectSemanticModeKey: lightingState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
-			effectSemanticModeLabel: lightingState.effectSemanticModeLabel || "Current",
-			sceneLightingControls: sceneLightingControls,
-			effectSemanticControls: effectSemanticControls,
-			currentPresetName: presetNames[currentPresetIndex],
-			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
-			audioSourceKind: externalState.audioSourceKind || "none",
-			audioSourceName: externalState.audioSourceName || "",
-			xrSessionActiveBool: xrSessionActiveBool
-		});
-	};
-	return {
-		getPassthroughUiState: getPassthroughUiState,
-		getMenuSliderControlByKey: getMenuSliderControlByKey,
-		getModuleSections: getModuleSections
-	};
-};
-
-
-// Controller
-const createMenuController = function(options) {
-	const menuView = options.menuView;
-	const buildModuleSections = options.buildModuleSections || createLowerMenuSections;
-	const menuCanvas = menuView.menuCanvas;
-	const previewCanvas = menuView.previewCanvas;
-	const windowRef = options.windowRef || window;
-	const passthroughController = options.passthroughController || null;
-	const menuEventRegistry = createEventListenerRegistry();
-	const controllerRays = [];
-	const triggerPressedByHand = new Map();
-	const state = createMenuControllerState(options);
 	const menuPlane = {
 		center: {x: 0, y: 1.45, z: -0.8},
 		right: {x: 1, y: 0, z: 0},
 		up: {x: 0, y: 1, z: 0},
 		normal: {x: 0, y: 0, z: 1}
 	};
+	state.plane = menuPlane;
 	const getActiveMenuSliderControlKey = function(hand) {
 		return state.activeMenuSliderControlKeyByHand[hand] || "";
 	};
@@ -1518,22 +1396,116 @@ const createMenuController = function(options) {
 	const getControlValueFromSliderU = function(control, u) {
 		return control.min + clampNumber((u - options.menuSliderMinU) / (options.menuSliderMaxU - options.menuSliderMinU), 0, 1) * (control.max - control.min);
 	};
-	const dataModel = createMenuControllerDataModel({
-		state: state,
-		passthroughController: passthroughController,
-		buildModuleSections: buildModuleSections,
-		options: {
+	const readPassthroughUiState = passthroughController && passthroughController.getUiState ? passthroughController.getUiState : null;
+	const updateCachedSceneLightingState = function(externalState) {
+		externalState = externalState || {};
+		if (!externalState.lightPresetNames || !externalState.lightPresetNames.length) {
+			return;
+		}
+		state.cachedSceneLightingState = {
+			lightPresetNames: externalState.lightPresetNames,
+			currentLightPresetIndex: externalState.currentLightPresetIndex || 0,
+			currentLightPresetName: externalState.currentLightPresetName || "",
+			currentLightPresetDescription: externalState.currentLightPresetDescription || "",
+			currentLightPresetEffectDescription: externalState.currentLightPresetEffectDescription || externalState.currentLightPresetDescription || "",
+			currentLightPresetEffectName: externalState.currentLightPresetEffectName || externalState.currentLightPresetName || "",
+			currentLightPresetEffectIndex: externalState.currentLightPresetEffectIndex || 0,
+			currentLightPresetEffectCount: externalState.currentLightPresetEffectCount || 1,
+			currentLightPresetVariantKey: externalState.currentLightPresetVariantKey || "",
+			currentLightPresetVariantIndex: externalState.currentLightPresetVariantIndex || 0,
+			currentLightPresetVariantCount: externalState.currentLightPresetVariantCount || 1,
+			currentLightPresetVariantLabel: externalState.currentLightPresetVariantLabel || "",
+			currentLightPresetSurfaceKey: externalState.currentLightPresetSurfaceKey || "",
+			effectSemanticModeKey: externalState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+			effectSemanticModeLabel: externalState.effectSemanticModeLabel || "Current"
+		};
+	};
+	const getMenuSliderControlByKey = function(passthroughUiState, controlKey) {
+		if (!controlKey) {
+			return null;
+		}
+		const controlGroups = [
+			passthroughUiState.backgroundControls || [],
+			passthroughUiState.passthroughControls || [],
+			passthroughUiState.lightingControls || [],
+			passthroughUiState.effectSemanticControls || []
+		];
+		for (let groupIndex = 0; groupIndex < controlGroups.length; groupIndex += 1) {
+			const controls = controlGroups[groupIndex];
+			for (let controlIndex = 0; controlIndex < controls.length; controlIndex += 1) {
+				if (controls[controlIndex].key === controlKey) {
+					return controls[controlIndex];
+				}
+			}
+		}
+		return null;
+	};
+	const getModuleSections = function(externalState) {
+		updateCachedSceneLightingState(externalState);
+		const passthroughUiState = readPassthroughUiState ? readPassthroughUiState() : DEFAULT_MENU_PASSTHROUGH_UI_STATE;
+		const lightingState = state.cachedSceneLightingState;
+		const lightPresetNames = lightingState.lightPresetNames || ["Aurora Drift"];
+		const lightPresetIndex = clampNumber(lightingState.currentLightPresetIndex || 0, 0, Math.max(0, lightPresetNames.length - 1));
+		externalState = externalState || {};
+		const shaderModeNames = externalState.shaderModeNames && externalState.shaderModeNames.length ? externalState.shaderModeNames : ["No mode"];
+		const currentShaderModeIndex = clampNumber(externalState.currentShaderModeIndex || 0, 0, shaderModeNames.length - 1);
+		const presetNames = externalState.presetNames && externalState.presetNames.length ? externalState.presetNames : ["No preset"];
+		const currentPresetIndex = clampNumber(externalState.currentPresetIndex || 0, 0, presetNames.length - 1);
+		const xrSessionActiveBool = externalState.xrSessionActiveBool == null ? state.xrSessionActiveBool : !!externalState.xrSessionActiveBool;
+		const createMenuSliderState = function(control) {
+			return {
+				control,
+				sliderU: getControlSliderU(control),
+				hoveredBool: !!state.hoveredActionKeys[control.key],
+				activeBool: isMenuSliderControlActive(control.key)
+			};
+		};
+		return buildModuleSections({
+			selectedJumpMode: state.jumpMode,
+			hoveredActionKeys: state.hoveredActionKeys,
+			floorAlpha: state.floorAlpha,
+			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
+			floorAlphaHoverBool: !!state.hoveredActionKeys.floorAlpha,
+			floorAlphaActiveBool: !!state.activeFloorAlphaSliderHand,
+			passthroughUiState,
+			backgroundControls: (passthroughUiState.backgroundControls || []).map(createMenuSliderState),
+			passthroughControls: (passthroughUiState.passthroughControls || []).map(createMenuSliderState),
+			eyeDistanceMeters: state.eyeDistanceMeters,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
-			eyeDistanceSlider: eyeDistanceSlider,
-			floorAlphaSlider: floorAlphaSlider
-		},
-		getControlSliderU: getControlSliderU,
-		isMenuSliderControlActive: isMenuSliderControlActive
-	});
-	// The controller only gathers runtime state and delegates section creation.
-	const getModuleSections = function(externalState) {
-		return dataModel.getModuleSections(externalState);
+			eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
+			eyeDistanceHoverBool: !!state.hoveredActionKeys.eyeDistance,
+			eyeDistanceActiveBool: !!state.activeSliderHand,
+			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
+			shaderModeMetaText: (currentShaderModeIndex + 1) + " / " + shaderModeNames.length,
+			horizontalMirrorBool: !!externalState.horizontalMirrorBool,
+			lightingModes: passthroughUiState.lightingModes || [],
+			lightingAnchorModes: passthroughUiState.lightingAnchorModes || passthroughLightingAnchorModeDefinitions,
+			selectedLightingModeKey: passthroughUiState.selectedLightingModeKey,
+			selectedLightingAnchorModeKey: passthroughUiState.selectedLightingAnchorModeKey || "auto",
+			lightPresetNames,
+			currentLightPresetIndex: lightPresetIndex,
+			currentLightPresetName: lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetDescription: lightingState.currentLightPresetDescription || "",
+			currentLightPresetEffectDescription: lightingState.currentLightPresetEffectDescription || lightingState.currentLightPresetDescription || "",
+			currentLightPresetEffectName: lightingState.currentLightPresetEffectName || lightingState.currentLightPresetName || lightPresetNames[lightPresetIndex] || "Aurora Drift",
+			currentLightPresetEffectIndex: lightingState.currentLightPresetEffectIndex || 0,
+			currentLightPresetEffectCount: lightingState.currentLightPresetEffectCount || 1,
+			currentLightPresetVariantKey: lightingState.currentLightPresetVariantKey || "",
+			currentLightPresetVariantIndex: lightingState.currentLightPresetVariantIndex || 0,
+			currentLightPresetVariantCount: lightingState.currentLightPresetVariantCount || 1,
+			currentLightPresetVariantLabel: lightingState.currentLightPresetVariantLabel || "",
+			currentLightPresetSurfaceKey: lightingState.currentLightPresetSurfaceKey || "",
+			effectSemanticModeKey: lightingState.effectSemanticModeKey || PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT,
+			effectSemanticModeLabel: lightingState.effectSemanticModeLabel || "Current",
+			sceneLightingControls: (passthroughUiState.lightingControls || []).map(createMenuSliderState),
+			effectSemanticControls: (passthroughUiState.effectSemanticControls || []).map(createMenuSliderState),
+			currentPresetName: presetNames[currentPresetIndex],
+			presetMetaText: (currentPresetIndex + 1) + " / " + presetNames.length,
+			audioSourceKind: externalState.audioSourceKind || "none",
+			audioSourceName: externalState.audioSourceName || "",
+			xrSessionActiveBool
+		});
 	};
 	const clearHoverState = function() {
 		state.hoveredActionKeys = {};
@@ -1574,6 +1546,7 @@ const createMenuController = function(options) {
 		if (passthroughController && passthroughController.setSessionState) {
 			passthroughController.setSessionState(args);
 		}
+		syncDerivedState();
 	};
 	const buildMenuRenderState = function(externalState) {
 		externalState = externalState || {};
@@ -1600,6 +1573,20 @@ const createMenuController = function(options) {
 			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha)
 		};
 	};
+	const syncDerivedState = function() {
+		const moduleSections = getModuleSections();
+		let rightRayHitsMenuBool = false;
+		for (let i = 0; i < controllerRays.length; i += 1) {
+			if (controllerRays[i].hand === "right" && controllerRays[i].hitBool) {
+				rightRayHitsMenuBool = true;
+				break;
+			}
+		}
+		state.menuConsumesRightTriggerBool = state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || !!getActiveMenuSliderControlKey("right"));
+		const planeDimensions = menuView.getPlaneDimensions(moduleSections);
+		state.planeWidth = planeDimensions.width;
+		state.planeHeight = planeDimensions.height;
+	};
 	const resetMenuInteractionState = function() {
 		state.menuOpenBool = false;
 		state.menuTogglePressedBool = false;
@@ -1609,6 +1596,7 @@ const createMenuController = function(options) {
 		clearHoverState();
 		controllerRays.length = 0;
 		triggerPressedByHand.clear();
+		syncDerivedState();
 	};
 	const setActiveSliderHoverKeys = function(hand) {
 		if (state.activeSliderHand === hand) { setHoveredActionKey("eyeDistance"); }
@@ -1623,6 +1611,7 @@ const createMenuController = function(options) {
 			state.activeFloorAlphaSliderHand = "";
 		}
 		state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(sliderU);
+		syncDerivedState();
 	};
 	const applyFloorAlphaSliderHit = function(hand, sliderU) {
 		state.activeFloorAlphaSliderHand = hand;
@@ -1631,6 +1620,7 @@ const createMenuController = function(options) {
 			state.activeSliderHand = "";
 		}
 		state.floorAlpha = floorAlphaSlider.fromSliderU(sliderU);
+		syncDerivedState();
 	};
 	const applyMenuSliderControlHit = function(hand, sliderU, menuSliderControl) {
 		if (!menuSliderControl || !passthroughController || !passthroughController.setControlValue) {
@@ -1644,13 +1634,15 @@ const createMenuController = function(options) {
 			state.activeFloorAlphaSliderHand = "";
 		}
 		passthroughController.setControlValue(menuSliderControl.key, getControlValueFromSliderU(menuSliderControl, sliderU));
+		syncDerivedState();
 	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
-		const passthroughUiState = dataModel.getPassthroughUiState();
+		const passthroughUiState = readPassthroughUiState ? readPassthroughUiState() : DEFAULT_MENU_PASSTHROUGH_UI_STATE;
 		const moduleSections = getModuleSections({xrSessionActiveBool: xrSessionActiveBool});
 		if (xrSessionActiveBool || !state.desktopPreviewVisibleBool || pointerLockedBool || !state.desktopPointerActiveBool) {
 			state.hoveredActionKeys = {};
 			setActiveSliderHoverKeys("desktop");
+			syncDerivedState();
 			return;
 		}
 		const hit = menuView.getInteractionAtUv(state.desktopPointerU, state.desktopPointerV, moduleSections);
@@ -1663,10 +1655,11 @@ const createMenuController = function(options) {
 		if (state.activeFloorAlphaSliderHand === "desktop") {
 			state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
 		}
-		const activeMenuSliderControl = dataModel.getMenuSliderControlByKey(passthroughUiState, getActiveMenuSliderControlKey("desktop"));
+		const activeMenuSliderControl = getMenuSliderControlByKey(passthroughUiState, getActiveMenuSliderControlKey("desktop"));
 		if (activeMenuSliderControl && passthroughController && passthroughController.setControlValue) {
 			passthroughController.setControlValue(activeMenuSliderControl.key, getControlValueFromSliderU(activeMenuSliderControl, state.desktopPointerU));
 		}
+		syncDerivedState();
 	};
 	const intersectMenu = function(ray) {
 		if (!state.menuOpenBool) {
@@ -1743,6 +1736,7 @@ const createMenuController = function(options) {
 			}
 			controllerRays.push(ray);
 		}
+		syncDerivedState();
 	};
 	const updateMenuPose = function(pose) {
 		if (!pose) {
@@ -1762,6 +1756,7 @@ const createMenuController = function(options) {
 		menuPlane.center.x = matrix[12] + forward.x * 0.8;
 		menuPlane.center.y = matrix[13] - 0.03;
 		menuPlane.center.z = matrix[14] + forward.z * 0.8;
+		syncDerivedState();
 	};
 	const isXrMenuTogglePressed = function(source) {
 		const gamepad = source && source.gamepad;
@@ -1794,15 +1789,16 @@ const createMenuController = function(options) {
 			}
 		}
 		state.menuTogglePressedBool = togglePressedBool;
+		syncDerivedState();
 	};
-	const applyXrRayTriggerState = function(ray, callbacks) {
+	const applyXrRayTriggerState = function(ray, dispatchMenuAction) {
 		const gamepad = ray.source.gamepad;
 		const hand = ray.hand;
 		const triggerPressedBool = !!(gamepad && gamepad.buttons[0] && gamepad.buttons[0].pressed);
 		const wasTriggerPressedBool = triggerPressedByHand.get(hand) || false;
-		const passthroughUiState = dataModel.getPassthroughUiState();
-		if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.action && callbacks.dispatchMenuAction) {
-			callbacks.dispatchMenuAction(ray.hit.action);
+		const passthroughUiState = readPassthroughUiState ? readPassthroughUiState() : DEFAULT_MENU_PASSTHROUGH_UI_STATE;
+		if (triggerPressedBool && !wasTriggerPressedBool && ray.hit && ray.hit.action && dispatchMenuAction) {
+			dispatchMenuAction(ray.hit.action);
 		}
 		if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "eyeDistance" && (!wasTriggerPressedBool || state.activeSliderHand === hand)) {
 			applyEyeDistanceSliderHit(hand, ray.hit.u);
@@ -1810,7 +1806,7 @@ const createMenuController = function(options) {
 		if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "floorAlpha" && (!wasTriggerPressedBool || state.activeFloorAlphaSliderHand === hand)) {
 			applyFloorAlphaSliderHit(hand, ray.hit.u);
 		}
-		const menuSliderControl = dataModel.getMenuSliderControlByKey(passthroughUiState, ray.hit && ray.hit.moduleSliderControlKey);
+		const menuSliderControl = getMenuSliderControlByKey(passthroughUiState, ray.hit && ray.hit.moduleSliderControlKey);
 		if (triggerPressedBool && ray.hit && (!wasTriggerPressedBool || getActiveMenuSliderControlKey(hand) === (menuSliderControl && menuSliderControl.key))) {
 			applyMenuSliderControlHit(hand, ray.hit.u, menuSliderControl);
 		}
@@ -1818,6 +1814,7 @@ const createMenuController = function(options) {
 			releaseSliderHand(hand);
 		}
 		triggerPressedByHand.set(hand, triggerPressedBool);
+		syncDerivedState();
 	};
 	const syncMissingXrHands = function() {
 		const handsWithRays = new Set();
@@ -1830,47 +1827,7 @@ const createMenuController = function(options) {
 				triggerPressedByHand.set(hand, false);
 			}
 		}
-	};
-	const renderActions = {
-		getState: function() {
-			const moduleSections = getModuleSections();
-			let rightRayHitsMenuBool = false;
-			for (let i = 0; i < controllerRays.length; i += 1) {
-				if (controllerRays[i].hand === "right" && controllerRays[i].hitBool) {
-					rightRayHitsMenuBool = true;
-					break;
-				}
-			}
-			return {
-				jumpMode: state.jumpMode,
-				menuOpenBool: state.menuOpenBool,
-				menuConsumesRightTriggerBool: state.menuOpenBool && (rightRayHitsMenuBool || state.activeSliderHand === "right" || state.activeFloorAlphaSliderHand === "right" || !!getActiveMenuSliderControlKey("right")),
-				floorAlpha: state.floorAlpha,
-				eyeDistanceMeters: state.eyeDistanceMeters,
-				desktopPreviewVisibleBool: state.desktopPreviewVisibleBool,
-				plane: menuPlane,
-				planeWidth: menuView.getPlaneDimensions(moduleSections).width,
-				planeHeight: menuView.getPlaneDimensions(moduleSections).height
-			};
-		},
-		getControllerRays: function() {
-			return controllerRays;
-		},
-		renderTexture: function(gl, menuTexture, externalState) {
-			menuView.render(buildMenuRenderState(externalState));
-			gl.bindTexture(gl.TEXTURE_2D, menuTexture);
-			gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
-		},
-		updateDesktopPreview: function(args) {
-			args = args || {};
-			state.xrSessionActiveBool = !!args.xrSessionActiveBool;
-			applyDesktopHoverState(args.pointerLockedBool, args.xrSessionActiveBool);
-			menuView.updateDesktopPreview({
-				visibleBool: state.desktopPreviewVisibleBool,
-				interactiveBool: !!args.interactiveBool,
-				renderState: buildMenuRenderState(args.renderState)
-			});
-		}
+		syncDerivedState();
 	};
 	const updateDesktopPointerFromEvent = function(event) {
 		const rect = previewCanvas.getBoundingClientRect();
@@ -1888,6 +1845,7 @@ const createMenuController = function(options) {
 		state.desktopPointerV = 0;
 		clearHoverState();
 		releaseSliderHand("desktop");
+		syncDerivedState();
 	};
 	const handleDesktopPointerUp = function() {
 		releaseSliderHand("desktop");
@@ -1905,9 +1863,8 @@ const createMenuController = function(options) {
 		}
 		clearDesktopPointerState();
 	};
-	const handleDesktopPointerDown = function(event, callbacks, args) {
+	const handleDesktopPointerDown = function(event, dispatchMenuAction, args) {
 		args = args || {};
-		callbacks = callbacks || {};
 		if (args.xrSessionActiveBool || args.pointerLockedBool || !state.desktopPreviewVisibleBool) {
 			return false;
 		}
@@ -1915,9 +1872,9 @@ const createMenuController = function(options) {
 		if (!hit) {
 			return false;
 		}
-		const passthroughUiState = dataModel.getPassthroughUiState();
-		if (hit.action && callbacks.dispatchMenuAction) {
-			callbacks.dispatchMenuAction(hit.action);
+		const passthroughUiState = readPassthroughUiState ? readPassthroughUiState() : DEFAULT_MENU_PASSTHROUGH_UI_STATE;
+		if (hit.action && dispatchMenuAction) {
+			dispatchMenuAction(hit.action);
 		}
 		if (hit.moduleSliderControlKey === "eyeDistance") {
 			applyEyeDistanceSliderHit("desktop", state.desktopPointerU);
@@ -1925,89 +1882,119 @@ const createMenuController = function(options) {
 		if (hit.moduleSliderControlKey === "floorAlpha") {
 			applyFloorAlphaSliderHit("desktop", state.desktopPointerU);
 		}
-		const menuSliderControl = dataModel.getMenuSliderControlByKey(passthroughUiState, hit.moduleSliderControlKey);
+		const menuSliderControl = getMenuSliderControlByKey(passthroughUiState, hit.moduleSliderControlKey);
 		applyMenuSliderControlHit("desktop", state.desktopPointerU, menuSliderControl);
 		return true;
-	};
-	const desktopActions = {
-		registerDesktopPreviewEvents: function(args) {
-			args = args || {};
-			if (state.desktopPreviewEventsRegisteredBool) {
-				return;
-			}
-			const callbacks = args.callbacks || {};
-			const getInteractionState = args.getInteractionState || function() { return {}; };
-			menuEventRegistry.on(previewCanvas, "mousemove", function(event) {
-				handleDesktopPointerMove(event, getInteractionState());
-			});
-			menuEventRegistry.on(previewCanvas, "mouseleave", function() {
-				handleDesktopPointerLeave();
-			});
-			menuEventRegistry.on(previewCanvas, "mousedown", function(event) {
-				if (handleDesktopPointerDown(event, callbacks, getInteractionState())) {
-					event.preventDefault();
-				}
-			});
-			menuEventRegistry.on(previewCanvas, "mouseup", function() {
-				handleDesktopPointerUp();
-			});
-			menuEventRegistry.on(windowRef, "mousemove", function(event) {
-				if (getCapturedModuleSliderKey("desktop")) {
-					handleDesktopPointerMove(event, getInteractionState());
-				}
-			});
-			menuEventRegistry.on(windowRef, "mouseup", function() {
-				handleDesktopPointerUp();
-			});
-			state.desktopPreviewEventsRegisteredBool = true;
-		},
-		handleDesktopPointerUp: handleDesktopPointerUp,
-		clearDesktopPointerState: clearDesktopPointerState,
-		setDesktopPreviewVisibleBool: function(visibleBool) {
-			state.desktopPreviewVisibleBool = !!visibleBool;
-			if (!state.desktopPreviewVisibleBool) {
-				clearDesktopPointerState();
-				applyStyles(previewCanvas, {display: "none"});
-				return;
-			}
-			applyStyles(previewCanvas, {display: "block"});
-		}
-	};
-	const xrActions = {
-		updateXrInput: function(args) {
-			args = args || {};
-			state.xrSessionActiveBool = !!args.xrSession;
-			const callbacks = args.callbacks || {};
-			applyXrMenuToggleState(args);
-			updateControllerRays(args.frame, args.xrSession, args.xrRefSpace);
-			syncMissingXrHands();
-			for (let i = 0; i < controllerRays.length; i += 1) {
-				applyXrRayTriggerState(controllerRays[i], callbacks);
-			}
-		}
 	};
 	const resetSessionState = function() {
 		state.xrSessionActiveBool = false;
 		resetMenuInteractionState();
 	};
-	const lifecycleActions = {
-		resetSessionState: resetSessionState,
-		endSession: resetSessionState,
-		destroy: function() {
-			menuEventRegistry.removeAll();
-			controllerRays.length = 0;
-			triggerPressedByHand.clear();
+	const registerDesktopPreviewEvents = function(args) {
+		args = args || {};
+		if (state.desktopPreviewEventsRegisteredBool) {
+			return;
+		}
+		const dispatchMenuAction = args.dispatchMenuAction || null;
+		const runtimeState = args.runtimeState || {};
+		const desktopInputState = args.desktopInputState || {};
+		menuEventRegistry.on(previewCanvas, "mousemove", function(event) {
+			handleDesktopPointerMove(event, {
+				xrSessionActiveBool: !!runtimeState.xrSession,
+				pointerLockedBool: !!desktopInputState.pointerLockedBool
+			});
+		});
+		menuEventRegistry.on(previewCanvas, "mouseleave", function() {
+			handleDesktopPointerLeave();
+		});
+		menuEventRegistry.on(previewCanvas, "mousedown", function(event) {
+			if (handleDesktopPointerDown(event, dispatchMenuAction, {
+				xrSessionActiveBool: !!runtimeState.xrSession,
+				pointerLockedBool: !!desktopInputState.pointerLockedBool
+			})) {
+				event.preventDefault();
+			}
+		});
+		menuEventRegistry.on(previewCanvas, "mouseup", function() {
+			handleDesktopPointerUp();
+		});
+		menuEventRegistry.on(windowRef, "mousemove", function(event) {
+			if (getCapturedModuleSliderKey("desktop")) {
+				handleDesktopPointerMove(event, {
+					xrSessionActiveBool: !!runtimeState.xrSession,
+					pointerLockedBool: !!desktopInputState.pointerLockedBool
+				});
+			}
+		});
+		menuEventRegistry.on(windowRef, "mouseup", function() {
+			handleDesktopPointerUp();
+		});
+		state.desktopPreviewEventsRegisteredBool = true;
+	};
+	const updateXrInput = function(args) {
+		args = args || {};
+		state.xrSessionActiveBool = !!args.xrSession;
+		applyXrMenuToggleState(args);
+		updateControllerRays(args.frame, args.xrSession, args.xrRefSpace);
+		syncMissingXrHands();
+		for (let i = 0; i < controllerRays.length; i += 1) {
+			applyXrRayTriggerState(controllerRays[i], args.dispatchMenuAction || null);
 		}
 	};
-	const controllerActions = {
-		setPassthroughState: function(args) {
-			applyPassthroughState(args);
-		},
-		setJumpMode: function(jumpMode) {
-			if (jumpMode === "double" || jumpMode === "multi") {
-				state.jumpMode = jumpMode;
-			}
-		},
+	const renderTexture = function(gl, menuTexture, externalState) {
+		menuView.render(buildMenuRenderState(externalState));
+		gl.bindTexture(gl.TEXTURE_2D, menuTexture);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, menuCanvas);
 	};
-	return Object.assign({}, renderActions, controllerActions, desktopActions, xrActions, lifecycleActions);
+	const updateDesktopPreview = function(args) {
+		args = args || {};
+		state.xrSessionActiveBool = !!args.xrSessionActiveBool;
+		applyDesktopHoverState(args.pointerLockedBool, args.xrSessionActiveBool);
+		menuView.updateDesktopPreview({
+			visibleBool: state.desktopPreviewVisibleBool,
+			interactiveBool: !!args.interactiveBool,
+			renderState: buildMenuRenderState(args.renderState)
+		});
+	};
+	const setDesktopPreviewVisibleBool = function(visibleBool) {
+		state.desktopPreviewVisibleBool = !!visibleBool;
+		if (!state.desktopPreviewVisibleBool) {
+			clearDesktopPointerState();
+			applyStyles(previewCanvas, {display: "none"});
+			return;
+		}
+		applyStyles(previewCanvas, {display: "block"});
+		syncDerivedState();
+	};
+	const destroy = function() {
+		menuEventRegistry.removeAll();
+		controllerRays.length = 0;
+		triggerPressedByHand.clear();
+	};
+	const setPassthroughState = function(args) {
+		applyPassthroughState(args);
+	};
+	const setJumpMode = function(jumpMode) {
+		if (jumpMode === "double" || jumpMode === "multi") {
+			state.jumpMode = jumpMode;
+			syncDerivedState();
+		}
+	};
+	syncDerivedState();
+	return {
+		state,
+		controllerRays,
+		renderTexture,
+		updateDesktopPreview,
+		registerDesktopPreviewEvents: registerDesktopPreviewEvents,
+		handleDesktopPointerUp: handleDesktopPointerUp,
+		clearDesktopPointerState: clearDesktopPointerState,
+		setDesktopPreviewVisibleBool,
+		updateXrInput: updateXrInput,
+		resetSessionState: resetSessionState,
+		endSession: resetSessionState,
+		destroy,
+		setPassthroughState,
+		setJumpMode
+	};
 };

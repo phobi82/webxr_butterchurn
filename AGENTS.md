@@ -81,6 +81,19 @@ Use this as default when the user does not specify other styles:
 - Add comments where they meaningfully improve orientation or readability.
 - **All comments must be in English and stay short but useful.**
 - Keep code concise and contained; avoid sprawl and unnecessary variables while staying efficient, maintainable, and well-structured.
+- Prefer a direct top-down style:
+  - Show the main flow first and let it call real subproblems below.
+  - Use free functions as the default.
+  - Use visible state objects instead of hiding mutable state in factory closures.
+  - Small domain objects are allowed only when they have a few real methods such as `start`, `stop`, or `render`.
+  - Do not add functions whose only job is returning a stored value or forwarding another call.
+  - If a function exists, it should change state, derive data, validate input, or run a real step in the flow.
+  - Prefer direct state access or direct method references over getter and forwarder wrappers.
+  - Avoid meta-factories such as `createXActions`, `createXQueries`, `createXRuntime`, `buildControllerApi`, or similar abstraction layers.
+  - Avoid export boilerplate and self-listing objects when they add no real structure.
+  - Extract only real subproblems; keep trivial one-off steps inline.
+  - Accept some duplication when it keeps the code more direct and readable.
+  - Use lists or maps only for real data or a flat visible dispatch, not for hidden meta-logic.
 - Prefer **straight-line code** over unnecessary abstractions:
   - Do **not** introduce tiny helper functions ("mini-functions") that are only used once, if the inline code is clear and short.
   - Do **not** introduce single-use variables that only alias another expression once, unless they significantly reduce duplication, make a complex expression clearer, or noticeably keep the code shorter.

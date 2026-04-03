@@ -313,9 +313,19 @@ const buildPassthroughDepthProjectionParams = function(projMatrix) {
 	};
 };
 
-const createPassthroughControllerState = function(options) {
+const selectKnownModeKey = function(definitions, key, currentKey) {
+	for (let i = 0; i < definitions.length; i += 1) {
+		if (definitions[i].key === key) {
+			return key;
+		}
+	}
+	return currentKey;
+};
+
+// Runtime controller owns session state, fallback policy, and overlay assembly.
+const createPassthroughController = function(options) {
 	options = options || {};
-	return {
+	const state = {
 		availableBool: false,
 		fallbackBool: true,
 		supportedBool: false,
@@ -365,329 +375,6 @@ const createPassthroughControllerState = function(options) {
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
 	};
-};
-
-const createPassthroughQueries = function(args) {
-	const state = args.state;
-	const buildDepthRenderState = args.buildDepthRenderState;
-	const getFlashlightMasks = args.getFlashlightMasks;
-	const getUiState = function() {
-		const backgroundControlState = getBackgroundControlDefinitions(state);
-		const passthroughControlState = getPassthroughControlDefinitions(state);
-		const lightingControlState = getPassthroughLightingControlDefinitions(state);
-		return {
-			availableBool: state.availableBool,
-			fallbackBool: state.fallbackBool,
-			statusText: state.statusText,
-			mixModes: backgroundMixModeDefinitions,
-			selectedMixModeKey: state.mixModeKey,
-			mixModeVisibleBool: backgroundControlState.mixModeVisibleBool,
-			backgroundControls: backgroundControlState.controls || [],
-			flashlightActiveBool: state.flashlightActiveBool,
-			depthActiveBool: state.depthActiveBool,
-			depthRadialBool: state.depthRadialBool,
-			depthMotionCompensationBool: state.depthMotionCompensationBool,
-			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
-			selectedDepthReconstructionModeKey: state.depthReconstructionModeKey,
-			depthModes: passthroughDepthModeDefinitions,
-			selectedDepthModeKey: state.depthModeKey,
-			usableDepthAvailableBool: state.usableDepthAvailableBool,
-			passthroughControls: passthroughControlState.controls || [],
-			distanceReactiveControl: passthroughControlState.distanceReactiveControl || null,
-			echoReactiveControls: passthroughControlState.echoReactiveControls || [],
-			echoReactiveIntensityVisibleBool: !!passthroughControlState.echoReactiveIntensityVisibleBool,
-			lightingModes: passthroughLightingModeDefinitions,
-			lightingAnchorModes: passthroughLightingAnchorModeDefinitions,
-			selectedLightingModeKey: state.lightingModeKey,
-			selectedLightingAnchorModeKey: state.lightingAnchorModeKey,
-			lightingControls: lightingControlState.controls || [],
-			effectSemanticControls: lightingControlState.effectSemanticControls || [],
-			audioDrive: state.smoothedBlendDrive,
-			visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive),
-			effectSemanticModeKey: state.effectSemanticModeKey,
-			effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
-		};
-	};
-	const getEffectSemanticModeState = function() {
-		return {
-			key: state.effectSemanticModeKey,
-			label: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
-		};
-	};
-	const buildOverlayRenderState = function(queryArgs, depthRenderState) {
-		queryArgs = queryArgs || {};
-		const visibleShare = getPassthroughVisibleShare(state, state.smoothedBlendDrive);
-		const lightingState = queryArgs.sceneLightingState || null;
-		const lightingColor = getAveragedLightingColor(lightingState);
-		const additiveStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
-		const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
-		const lightLayerAdditiveScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 0 : clampNumber(state.effectAdditiveShare, 0, 1);
-		const lightLayerAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : clampNumber(state.effectAlphaBlendShare, 0, 1);
-		return {
-			visibleShare: visibleShare,
-			maskCount: 0,
-			masks: [],
-			depth: depthRenderState,
-			depthProjectionParams: buildPassthroughDepthProjectionParams(queryArgs.depthProjMatrix || queryArgs.projMatrix),
-			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix) : identityMatrix(),
-			darkAlpha: 1 - darkness,
-			additiveColor: lightingColor,
-			additiveStrength: additiveStrength,
-			lightingModeKey: state.lightingModeKey,
-			effectSemanticModeKey: state.effectSemanticModeKey,
-			lightLayerAdditiveScale: lightLayerAdditiveScale,
-			lightLayerAlphaBlendScale: lightLayerAlphaBlendScale,
-			lightLayers: buildProjectedLightLayers(queryArgs, state)
-		};
-	};
-	return {
-		getPunchRenderState: function(queryArgs) {
-			var depth = null;
-			var flashlight = null;
-			var worldMask = null;
-			if (state.depthActiveBool && state.depthVisualMaskingEnabledBool) {
-				depth = buildDepthRenderState(queryArgs);
-				worldMask = buildDepthRenderState(queryArgs);
-			}
-			if (state.flashlightActiveBool) {
-				var masks = getFlashlightMasks(queryArgs || {});
-				if (masks.length) {
-					flashlight = {masks: masks};
-				}
-			}
-			if (!depth && !flashlight && !worldMask) {
-				return null;
-			}
-			return {depth: depth, flashlight: flashlight, worldMask: worldMask};
-		},
-		getBackgroundCompositeState: function() {
-			return {
-				alpha: clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
-				maskCount: 0,
-				masks: []
-			};
-		},
-		getOverlayRenderState: function(queryArgs) {
-			return buildOverlayRenderState(queryArgs, state.depthActiveBool && state.depthVisualMaskingEnabledBool ? buildDepthRenderState(queryArgs) : null);
-		},
-		getUiState: getUiState,
-		getEffectSemanticModeState: getEffectSemanticModeState
-	};
-};
-
-const selectKnownModeKey = function(definitions, key, currentKey) {
-	for (let i = 0; i < definitions.length; i += 1) {
-		if (definitions[i].key === key) {
-			return key;
-		}
-	}
-	return currentKey;
-};
-
-const createPassthroughFrameActions = function(args) {
-	const state = args.state;
-	const getWeightedAudioDrive = args.getWeightedAudioDrive;
-	const getPassthroughBlendDrive = args.getPassthroughBlendDrive;
-	const updateDepthMotionCompensation = args.updateDepthMotionCompensation;
-	const applyReactiveDelta = args.applyReactiveDelta;
-	const wrapEchoPhase = args.wrapEchoPhase;
-	return {
-		updateFrame: function(frameArgs) {
-			frameArgs = frameArgs || {};
-			const targetDrive = getWeightedAudioDrive(frameArgs.audioMetrics);
-			const targetBlendDrive = getPassthroughBlendDrive(frameArgs.audioMetrics);
-			const delta = clampNumber(frameArgs.delta == null ? 1 / 60 : frameArgs.delta, 0, 0.1);
-			const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
-			state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
-			state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
-			var effectivePhaseSpeed = state.depthEchoPhaseSpeed;
-			if (state.depthEchoPhaseSpeedReactiveBool) {
-				effectivePhaseSpeed = clampNumber(
-					applyReactiveDelta(state.depthEchoPhaseSpeed, state.depthEchoPhaseSpeed + (state.smoothedBlendDrive - 0.5) * 20, state.depthEchoReactiveIntensity),
-					-10,
-					10
-				);
-			}
-			state.depthEchoPhaseOffset += effectivePhaseSpeed * delta;
-			if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
-				state.depthEchoPhaseOffset = wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
-			}
-			updateDepthMotionCompensation(frameArgs.passthroughPose || null, delta);
-		},
-		setDepthAvailability: function(availableBool) {
-			if (!!availableBool && !state.usableDepthAvailableBool) {
-				state.depthActiveBool = true;
-			}
-			state.usableDepthAvailableBool = !!availableBool;
-		}
-	};
-};
-
-const createPassthroughModeActions = function(args) {
-	const state = args.state;
-	const resetDepthMotionCompensationFilter = args.resetDepthMotionCompensationFilter;
-	const toggleStateBool = function(key) {
-		state[key] = !state[key];
-	};
-	const cycleStateMode = function(key, definitions, direction) {
-		state[key] = cycleModeKey(definitions, state[key], direction < 0 ? -1 : 1);
-	};
-	const selectKnownStateMode = function(key, definitions, nextKey) {
-		state[key] = selectKnownModeKey(definitions, nextKey, state[key]);
-	};
-	return {
-		toggleFlashlight: function() {
-			toggleStateBool("flashlightActiveBool");
-		},
-		toggleDepth: function() {
-			toggleStateBool("depthActiveBool");
-		},
-		toggleDepthRadial: function() {
-			toggleStateBool("depthRadialBool");
-		},
-		toggleDepthMotionCompensation: function() {
-			toggleStateBool("depthMotionCompensationBool");
-			if (!state.depthMotionCompensationBool) {
-				resetDepthMotionCompensationFilter();
-			}
-		},
-		cycleDepthReconstructionMode: function(direction) {
-			cycleStateMode("depthReconstructionModeKey", passthroughDepthReconstructionModeDefinitions, direction);
-		},
-		cycleDepthMode: function(direction) {
-			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
-			state.depthMrRetain = args.getDepthMrRetainForMode(state.depthModeKey);
-		},
-		cycleLightingMode: function(direction) {
-			cycleStateMode("lightingModeKey", passthroughLightingModeDefinitions, direction);
-		},
-		cycleLightingAnchorMode: function(direction) {
-			cycleStateMode("lightingAnchorModeKey", passthroughLightingAnchorModeDefinitions, direction);
-		},
-		selectLightingMode: function(key) {
-			selectKnownStateMode("lightingModeKey", passthroughLightingModeDefinitions, key);
-		},
-		selectMixMode: function(key) {
-			selectKnownStateMode("mixModeKey", backgroundMixModeDefinitions, key);
-		},
-		selectEffectSemanticMode: function(key) {
-			selectKnownStateMode("effectSemanticModeKey", passthroughEffectSemanticModeDefinitions, key);
-		}
-	};
-};
-
-const createPassthroughDepthActions = function(args) {
-	const state = args.state;
-	const quantizeDepthEchoPhaseSpeed = args.quantizeDepthEchoPhaseSpeed;
-	const quantizeDepthEchoWavelength = args.quantizeDepthEchoWavelength;
-	const wrapEchoPhase = args.wrapEchoPhase;
-	const controlSetters = {
-		manualMix: function(value) {
-			state.manualMix = clampNumber(value, 0, 1);
-		},
-		audioReactiveIntensity: function(value) {
-			state.audioReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		flashlightRadius: function(value) {
-			state.flashlightRadius = clampNumber(value, 0.05, 0.45);
-		},
-		flashlightSoftness: function(value) {
-			state.flashlightSoftness = clampNumber(value, 0.01, 0.35);
-		},
-		lightingDarkness: function(value) {
-			state.lightingDarkness = clampNumber(value, 0, 1);
-		},
-		lightingAnchorMode: function(value) {
-			const nextIndex = clampNumber(Math.round(value), 0, passthroughLightingAnchorModeDefinitions.length - 1);
-			state.lightingAnchorModeKey = passthroughLightingAnchorModeDefinitions[nextIndex].key;
-		},
-		effectAdditiveShare: function(value) {
-			state.effectAdditiveShare = clampNumber(value, 0, 1);
-		},
-		effectAlphaBlendShare: function(value) {
-			state.effectAlphaBlendShare = clampNumber(value, 0, 1);
-		},
-		depthThreshold: function(value) {
-			state.depthThreshold = clampNumber(value, 0, 8);
-		},
-		depthFade: function(value) {
-			state.depthFade = clampNumber(value, 0, 2);
-		},
-		depthMotionCompensationFactor: function(value) {
-			state.depthMotionCompensationFactor = clampNumber(value, 0, 5);
-		},
-		depthDistanceReactiveIntensity: function(value) {
-			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		depthEchoPhase: function(value) {
-			state.depthEchoPhase = clampNumber(value, 0, Math.max(0.1, state.depthEchoWavelength));
-		},
-		depthEchoWavelength: function(value) {
-			state.depthEchoWavelength = quantizeDepthEchoWavelength(value);
-			state.depthEchoPhase = clampNumber(state.depthEchoPhase, 0, state.depthEchoWavelength);
-			state.depthEchoPhaseOffset = wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
-		},
-		depthEchoDutyCycle: function(value) {
-			state.depthEchoDutyCycle = clampNumber(value, 0, 1);
-		},
-		depthEchoFade: function(value) {
-			state.depthEchoFade = clampNumber(value, 0, 1);
-		},
-		depthEchoPhaseSpeed: function(value) {
-			state.depthEchoPhaseSpeed = quantizeDepthEchoPhaseSpeed(value);
-		},
-		depthEchoReactiveIntensity: function(value) {
-			state.depthEchoReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		depthMrRetain: function(value) {
-			state.depthMrRetain = clampNumber(value, 0, 1);
-			if (state.depthModeKey === "echo") {
-				state.depthEchoMrRetain = state.depthMrRetain;
-			} else {
-				state.depthDistanceMrRetain = state.depthMrRetain;
-			}
-		}
-	};
-	const echoReactiveStateKeys = {
-		depthEchoPhaseReactive: "depthEchoPhaseReactiveBool",
-		depthEchoPhaseSpeedReactive: "depthEchoPhaseSpeedReactiveBool",
-		depthEchoWavelengthReactive: "depthEchoWavelengthReactiveBool",
-		depthEchoDutyCycleReactive: "depthEchoDutyCycleReactiveBool",
-		depthEchoFadeReactive: "depthEchoFadeReactiveBool"
-	};
-	return {
-		getDepthProcessingConfig: function() {
-			if (!state.depthActiveBool) {
-				return null;
-			}
-			return {
-				reconstructionKey: state.depthReconstructionModeKey,
-				edgeAwareBool: state.depthReconstructionModeKey === "edgeAware",
-				heightmapBool: state.depthReconstructionModeKey === "heightmap",
-				label: state.depthReconstructionModeKey
-			};
-		},
-		setControlValue: function(key, value) {
-			if (controlSetters[key]) {
-				controlSetters[key](value);
-			}
-		},
-		toggleDepthDistanceReactive: function() {
-			state.depthDistanceReactiveBool = !state.depthDistanceReactiveBool;
-		},
-		toggleDepthEchoReactive: function(key) {
-			const stateKey = echoReactiveStateKeys[key];
-			if (stateKey) {
-				state[stateKey] = !state[stateKey];
-			}
-		}
-	};
-};
-
-// Runtime controller owns session state, fallback policy, and overlay assembly.
-const createPassthroughController = function(options) {
-	options = options || {};
-	const state = createPassthroughControllerState(options);
 
 	const getDepthModeFloat = function(depthModeKey) {
 		return depthModeKey === "echo" ? 1 : 0;
@@ -927,40 +614,287 @@ const createPassthroughController = function(options) {
 		}
 		return masks;
 	};
-
-	const queries = createPassthroughQueries({
+	const getUiState = function() {
+		const backgroundControlState = getBackgroundControlDefinitions(state);
+		const passthroughControlState = getPassthroughControlDefinitions(state);
+		const lightingControlState = getPassthroughLightingControlDefinitions(state);
+		return {
+			availableBool: state.availableBool,
+			fallbackBool: state.fallbackBool,
+			statusText: state.statusText,
+			mixModes: backgroundMixModeDefinitions,
+			selectedMixModeKey: state.mixModeKey,
+			mixModeVisibleBool: backgroundControlState.mixModeVisibleBool,
+			backgroundControls: backgroundControlState.controls || [],
+			flashlightActiveBool: state.flashlightActiveBool,
+			depthActiveBool: state.depthActiveBool,
+			depthRadialBool: state.depthRadialBool,
+			depthMotionCompensationBool: state.depthMotionCompensationBool,
+			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
+			selectedDepthReconstructionModeKey: state.depthReconstructionModeKey,
+			depthModes: passthroughDepthModeDefinitions,
+			selectedDepthModeKey: state.depthModeKey,
+			usableDepthAvailableBool: state.usableDepthAvailableBool,
+			passthroughControls: passthroughControlState.controls || [],
+			distanceReactiveControl: passthroughControlState.distanceReactiveControl || null,
+			echoReactiveControls: passthroughControlState.echoReactiveControls || [],
+			echoReactiveIntensityVisibleBool: !!passthroughControlState.echoReactiveIntensityVisibleBool,
+			lightingModes: passthroughLightingModeDefinitions,
+			lightingAnchorModes: passthroughLightingAnchorModeDefinitions,
+			selectedLightingModeKey: state.lightingModeKey,
+			selectedLightingAnchorModeKey: state.lightingAnchorModeKey,
+			lightingControls: lightingControlState.controls || [],
+			effectSemanticControls: lightingControlState.effectSemanticControls || [],
+			audioDrive: state.smoothedBlendDrive,
+			visibleShare: getPassthroughVisibleShare(state, state.smoothedBlendDrive),
+			effectSemanticModeKey: state.effectSemanticModeKey,
+			effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
+		};
+	};
+	const buildOverlayRenderState = function(queryArgs, depthRenderState) {
+		queryArgs = queryArgs || {};
+		const visibleShare = getPassthroughVisibleShare(state, state.smoothedBlendDrive);
+		const lightingState = queryArgs.sceneLightingState || null;
+		const lightingColor = getAveragedLightingColor(lightingState);
+		const additiveStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
+		const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
+		const lightLayerAdditiveScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 0 : clampNumber(state.effectAdditiveShare, 0, 1);
+		const lightLayerAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : clampNumber(state.effectAlphaBlendShare, 0, 1);
+		return {
+			visibleShare: visibleShare,
+			maskCount: 0,
+			masks: [],
+			depth: depthRenderState,
+			depthProjectionParams: buildPassthroughDepthProjectionParams(queryArgs.depthProjMatrix || queryArgs.projMatrix),
+			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix) : identityMatrix(),
+			darkAlpha: 1 - darkness,
+			additiveColor: lightingColor,
+			additiveStrength: additiveStrength,
+			lightingModeKey: state.lightingModeKey,
+			effectSemanticModeKey: state.effectSemanticModeKey,
+			lightLayerAdditiveScale: lightLayerAdditiveScale,
+			lightLayerAlphaBlendScale: lightLayerAlphaBlendScale,
+			lightLayers: buildProjectedLightLayers(queryArgs, state)
+		};
+	};
+	const getPunchRenderState = function(queryArgs) {
+		var depth = null;
+		var flashlight = null;
+		var worldMask = null;
+		if (state.depthActiveBool && state.depthVisualMaskingEnabledBool) {
+			depth = depthRuntime.buildDepthRenderState(queryArgs);
+			worldMask = depthRuntime.buildDepthRenderState(queryArgs);
+		}
+		if (state.flashlightActiveBool) {
+			var masks = getFlashlightMasks(queryArgs || {});
+			if (masks.length) {
+				flashlight = {masks: masks};
+			}
+		}
+		if (!depth && !flashlight && !worldMask) {
+			return null;
+		}
+		return {depth: depth, flashlight: flashlight, worldMask: worldMask};
+	};
+	const getBackgroundCompositeState = function() {
+		return {
+			alpha: clampNumber(1 - getPassthroughVisibleShare(state, state.smoothedBlendDrive), 0, 1),
+			maskCount: 0,
+			masks: []
+		};
+	};
+	const getOverlayRenderState = function(queryArgs) {
+		return buildOverlayRenderState(queryArgs, state.depthActiveBool && state.depthVisualMaskingEnabledBool ? depthRuntime.buildDepthRenderState(queryArgs) : null);
+	};
+	const toggleStateBool = function(key) {
+		state[key] = !state[key];
+	};
+	const cycleStateMode = function(key, definitions, direction) {
+		state[key] = cycleModeKey(definitions, state[key], direction < 0 ? -1 : 1);
+	};
+	const selectKnownStateMode = function(key, definitions, nextKey) {
+		state[key] = selectKnownModeKey(definitions, nextKey, state[key]);
+	};
+	const controlSetters = {
+		manualMix: function(value) {
+			state.manualMix = clampNumber(value, 0, 1);
+		},
+		audioReactiveIntensity: function(value) {
+			state.audioReactiveIntensity = clampNumber(value, -1, 1);
+		},
+		flashlightRadius: function(value) {
+			state.flashlightRadius = clampNumber(value, 0.05, 0.45);
+		},
+		flashlightSoftness: function(value) {
+			state.flashlightSoftness = clampNumber(value, 0.01, 0.35);
+		},
+		lightingDarkness: function(value) {
+			state.lightingDarkness = clampNumber(value, 0, 1);
+		},
+		lightingAnchorMode: function(value) {
+			const nextIndex = clampNumber(Math.round(value), 0, passthroughLightingAnchorModeDefinitions.length - 1);
+			state.lightingAnchorModeKey = passthroughLightingAnchorModeDefinitions[nextIndex].key;
+		},
+		effectAdditiveShare: function(value) {
+			state.effectAdditiveShare = clampNumber(value, 0, 1);
+		},
+		effectAlphaBlendShare: function(value) {
+			state.effectAlphaBlendShare = clampNumber(value, 0, 1);
+		},
+		depthThreshold: function(value) {
+			state.depthThreshold = clampNumber(value, 0, 8);
+		},
+		depthFade: function(value) {
+			state.depthFade = clampNumber(value, 0, 2);
+		},
+		depthMotionCompensationFactor: function(value) {
+			state.depthMotionCompensationFactor = clampNumber(value, 0, 5);
+		},
+		depthDistanceReactiveIntensity: function(value) {
+			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
+		},
+		depthEchoPhase: function(value) {
+			state.depthEchoPhase = clampNumber(value, 0, Math.max(0.1, state.depthEchoWavelength));
+		},
+		depthEchoWavelength: function(value) {
+			state.depthEchoWavelength = depthRuntime.quantizeDepthEchoWavelength(value);
+			state.depthEchoPhase = clampNumber(state.depthEchoPhase, 0, state.depthEchoWavelength);
+			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
+		},
+		depthEchoDutyCycle: function(value) {
+			state.depthEchoDutyCycle = clampNumber(value, 0, 1);
+		},
+		depthEchoFade: function(value) {
+			state.depthEchoFade = clampNumber(value, 0, 1);
+		},
+		depthEchoPhaseSpeed: function(value) {
+			state.depthEchoPhaseSpeed = depthRuntime.quantizeDepthEchoPhaseSpeed(value);
+		},
+		depthEchoReactiveIntensity: function(value) {
+			state.depthEchoReactiveIntensity = clampNumber(value, -1, 1);
+		},
+		depthMrRetain: function(value) {
+			state.depthMrRetain = clampNumber(value, 0, 1);
+			if (state.depthModeKey === "echo") {
+				state.depthEchoMrRetain = state.depthMrRetain;
+			} else {
+				state.depthDistanceMrRetain = state.depthMrRetain;
+			}
+		}
+	};
+	const echoReactiveStateKeys = {
+		depthEchoPhaseReactive: "depthEchoPhaseReactiveBool",
+		depthEchoPhaseSpeedReactive: "depthEchoPhaseSpeedReactiveBool",
+		depthEchoWavelengthReactive: "depthEchoWavelengthReactiveBool",
+		depthEchoDutyCycleReactive: "depthEchoDutyCycleReactiveBool",
+		depthEchoFadeReactive: "depthEchoFadeReactiveBool"
+	};
+	const updateFrame = function(frameArgs) {
+		frameArgs = frameArgs || {};
+		const targetDrive = getWeightedAudioDrive(frameArgs.audioMetrics);
+		const targetBlendDrive = getPassthroughBlendDrive(frameArgs.audioMetrics);
+		const delta = clampNumber(frameArgs.delta == null ? 1 / 60 : frameArgs.delta, 0, 0.1);
+		const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
+		state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
+		state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
+		let effectivePhaseSpeed = state.depthEchoPhaseSpeed;
+		if (state.depthEchoPhaseSpeedReactiveBool) {
+			effectivePhaseSpeed = clampNumber(
+				depthRuntime.applyReactiveDelta(state.depthEchoPhaseSpeed, state.depthEchoPhaseSpeed + (state.smoothedBlendDrive - 0.5) * 20, state.depthEchoReactiveIntensity),
+				-10,
+				10
+			);
+		}
+		state.depthEchoPhaseOffset += effectivePhaseSpeed * delta;
+		if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
+			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
+		}
+		updateDepthMotionCompensation(frameArgs.passthroughPose || null, delta);
+	};
+	const setDepthAvailability = function(availableBool) {
+		if (!!availableBool && !state.usableDepthAvailableBool) {
+			state.depthActiveBool = true;
+		}
+		state.usableDepthAvailableBool = !!availableBool;
+	};
+	return {
 		state: state,
-		buildDepthRenderState: depthRuntime.buildDepthRenderState,
-		getFlashlightMasks: getFlashlightMasks
-	});
-	const frameActions = createPassthroughFrameActions({
-		state: state,
-		getWeightedAudioDrive: getWeightedAudioDrive,
-		getPassthroughBlendDrive: getPassthroughBlendDrive,
-		updateDepthMotionCompensation: updateDepthMotionCompensation,
-		applyReactiveDelta: depthRuntime.applyReactiveDelta,
-		wrapEchoPhase: depthRuntime.wrapEchoPhase
-	});
-	const modeActions = createPassthroughModeActions({
-		state: state,
-		resetDepthMotionCompensationFilter: resetDepthMotionCompensationFilter,
-		getDepthMrRetainForMode: getDepthMrRetainForMode
-	});
-	const depthActions = createPassthroughDepthActions({
-		state: state,
-		quantizeDepthEchoPhaseSpeed: depthRuntime.quantizeDepthEchoPhaseSpeed,
-		quantizeDepthEchoWavelength: depthRuntime.quantizeDepthEchoWavelength,
-		wrapEchoPhase: depthRuntime.wrapEchoPhase
-	});
-	return Object.assign({
 		setSessionState: function(args) {
 			const availabilityState = getPassthroughAvailabilityState(args);
 			state.supportedBool = !!(args && args.supportedBool);
 			state.availableBool = availabilityState.availableBool;
 			state.fallbackBool = availabilityState.fallbackBool;
 			state.statusText = availabilityState.statusText;
-		}
-	}, frameActions, modeActions, depthActions, queries);
+		},
+		updateFrame: updateFrame,
+		setDepthAvailability: setDepthAvailability,
+		toggleFlashlight: function() {
+			toggleStateBool("flashlightActiveBool");
+		},
+		toggleDepth: function() {
+			toggleStateBool("depthActiveBool");
+		},
+		toggleDepthRadial: function() {
+			toggleStateBool("depthRadialBool");
+		},
+		toggleDepthMotionCompensation: function() {
+			toggleStateBool("depthMotionCompensationBool");
+			if (!state.depthMotionCompensationBool) {
+				resetDepthMotionCompensationFilter();
+			}
+		},
+		cycleDepthReconstructionMode: function(direction) {
+			cycleStateMode("depthReconstructionModeKey", passthroughDepthReconstructionModeDefinitions, direction);
+		},
+		cycleDepthMode: function(direction) {
+			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
+			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
+		},
+		cycleLightingMode: function(direction) {
+			cycleStateMode("lightingModeKey", passthroughLightingModeDefinitions, direction);
+		},
+		cycleLightingAnchorMode: function(direction) {
+			cycleStateMode("lightingAnchorModeKey", passthroughLightingAnchorModeDefinitions, direction);
+		},
+		selectLightingMode: function(key) {
+			selectKnownStateMode("lightingModeKey", passthroughLightingModeDefinitions, key);
+		},
+		selectMixMode: function(key) {
+			selectKnownStateMode("mixModeKey", backgroundMixModeDefinitions, key);
+		},
+		selectEffectSemanticMode: function(key) {
+			selectKnownStateMode("effectSemanticModeKey", passthroughEffectSemanticModeDefinitions, key);
+		},
+		getDepthProcessingConfig: function() {
+			if (!state.depthActiveBool) {
+				return null;
+			}
+			return {
+				reconstructionKey: state.depthReconstructionModeKey,
+				edgeAwareBool: state.depthReconstructionModeKey === "edgeAware",
+				heightmapBool: state.depthReconstructionModeKey === "heightmap",
+				label: state.depthReconstructionModeKey
+			};
+		},
+		setControlValue: function(key, value) {
+			if (controlSetters[key]) {
+				controlSetters[key](value);
+			}
+		},
+		toggleDepthDistanceReactive: function() {
+			state.depthDistanceReactiveBool = !state.depthDistanceReactiveBool;
+		},
+		toggleDepthEchoReactive: function(key) {
+			const stateKey = echoReactiveStateKeys[key];
+			if (stateKey) {
+				state[stateKey] = !state[stateKey];
+			}
+		},
+		getPunchRenderState: getPunchRenderState,
+		getBackgroundCompositeState: getBackgroundCompositeState,
+		getOverlayRenderState: getOverlayRenderState,
+		getUiState: getUiState
+	};
 };
 
 const applyVisualizerBackgroundComposite = function(visualizerEngine, compositeState) {

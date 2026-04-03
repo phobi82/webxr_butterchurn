@@ -67,8 +67,8 @@ const toroidal = function() {
 	});
 	let baseInit = base.init;
 	base.init = function(options) {
-		baseInit.call(this, options);
-		horizontalMirrorLoc = this.gl.getUniformLocation(this.programInfo.program, "horizontalMirror");
+		baseInit(options);
+		horizontalMirrorLoc = base.gl.getUniformLocation(base.programInfo.program, "horizontalMirror");
 	};
 	return base;
 };
@@ -134,14 +134,14 @@ const skysphere = function() {
 	});
 	let baseInit = base.init;
 	base.init = function(options) {
-		baseInit.call(this, options);
-		let program = this.programInfo.program;
-		camRightLoc = this.gl.getUniformLocation(program, "camRight");
-		camUpLoc = this.gl.getUniformLocation(program, "camUp");
-		camForwardLoc = this.gl.getUniformLocation(program, "camForward");
-		projParamsLoc = this.gl.getUniformLocation(program, "projParams");
-		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
-		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
+		baseInit(options);
+		let program = base.programInfo.program;
+		camRightLoc = base.gl.getUniformLocation(program, "camRight");
+		camUpLoc = base.gl.getUniformLocation(program, "camUp");
+		camForwardLoc = base.gl.getUniformLocation(program, "camForward");
+		projParamsLoc = base.gl.getUniformLocation(program, "projParams");
+		texScaleLoc = base.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = base.gl.getUniformLocation(program, "horizontalMirror");
 	};
 	return base;
 };
@@ -199,13 +199,13 @@ const skyToroid = function() {
 	});
 	let baseInit = base.init;
 	base.init = function(options) {
-		baseInit.call(this, options);
-		let program = this.programInfo.program;
-		projParamsLoc = this.gl.getUniformLocation(program, "projParams");
-		headOrientationLoc = this.gl.getUniformLocation(program, "headOrientation");
-		headRollLoc = this.gl.getUniformLocation(program, "headRoll");
-		texScaleLoc = this.gl.getUniformLocation(program, "texScale");
-		horizontalMirrorLoc = this.gl.getUniformLocation(program, "horizontalMirror");
+		baseInit(options);
+		let program = base.programInfo.program;
+		projParamsLoc = base.gl.getUniformLocation(program, "projParams");
+		headOrientationLoc = base.gl.getUniformLocation(program, "headOrientation");
+		headRollLoc = base.gl.getUniformLocation(program, "headRoll");
+		texScaleLoc = base.gl.getUniformLocation(program, "texScale");
+		horizontalMirrorLoc = base.gl.getUniformLocation(program, "horizontalMirror");
 	};
 	return base;
 };
@@ -228,7 +228,7 @@ const visualizerModeDefinitions = [
 // Fullscreen mode
 const createFullscreenTextureMode = function(spec) {
 	spec = spec || {};
-	return {
+	const mode = {
 		gl: null,
 		sourceBackend: null,
 		programInfo: null,
@@ -240,130 +240,109 @@ const createFullscreenTextureMode = function(spec) {
 		lastPreparedTimeSeconds: -1,
 		lastPreparedWidth: 0,
 		lastPreparedHeight: 0,
-		init: function(options) {
-			this.gl = options.gl;
-			this.sourceBackend = options.sourceBackend;
-			this.programInfo = createFullscreenProgramInfo(this.gl, spec.fragmentSource, !!spec.includeAudioUniformsBool, spec.label || "Visualizer mode");
-			this.positionBuffer = createFullscreenTriangleBuffer(this.gl);
-			this.sourceTexture = this.gl.createTexture();
-			this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
-			this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
-			this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
-			this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
-			this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
-		},
-		uploadSourceTexture: function(sourceCanvas) {
-			this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
-			this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
-			this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, sourceCanvas);
-			this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, false);
-		},
-		update: function() {
-		},
-		onPresetChanged: function() {
-			this.lastUploadedCanvasVersion = -1;
-			this.lastPreparedTimeSeconds = -1;
-		},
-		onAudioChanged: function() {
-			this.lastUploadedCanvasVersion = -1;
-			this.lastPreparedTimeSeconds = -1;
-		},
-		prepareSourceFrame: function(sourceWidth, sourceHeight, timeSeconds) {
-			this.sourceBackend.ensureCanvasSize(sourceWidth, sourceHeight);
-			this.sourceBackend.advanceFrame(timeSeconds);
-			if (this.lastPreparedTimeSeconds === timeSeconds && sourceWidth === this.lastPreparedWidth && sourceHeight === this.lastPreparedHeight) {
-				return this.sourceBackend.getState();
-			}
-			this.sourceBackend.renderCanvas(timeSeconds);
-			this.lastPreparedTimeSeconds = timeSeconds;
-			this.lastPreparedWidth = sourceWidth;
-			this.lastPreparedHeight = sourceHeight;
-			return this.sourceBackend.getState();
-		},
-		drawPreScene: function(sourceState, frameState) {
-			const viewport = this.gl.getParameter(this.gl.VIEWPORT);
+		update: function() {}
+	};
+	const init = function(options) {
+		mode.gl = options.gl;
+		mode.sourceBackend = options.sourceBackend;
+		mode.programInfo = createFullscreenProgramInfo(mode.gl, spec.fragmentSource, !!spec.includeAudioUniformsBool, spec.label || "Visualizer mode");
+		mode.positionBuffer = createFullscreenTriangleBuffer(mode.gl);
+		mode.sourceTexture = mode.gl.createTexture();
+		mode.gl.bindTexture(mode.gl.TEXTURE_2D, mode.sourceTexture);
+		mode.gl.texParameteri(mode.gl.TEXTURE_2D, mode.gl.TEXTURE_MIN_FILTER, mode.gl.LINEAR);
+		mode.gl.texParameteri(mode.gl.TEXTURE_2D, mode.gl.TEXTURE_MAG_FILTER, mode.gl.LINEAR);
+		mode.gl.texParameteri(mode.gl.TEXTURE_2D, mode.gl.TEXTURE_WRAP_S, mode.gl.CLAMP_TO_EDGE);
+		mode.gl.texParameteri(mode.gl.TEXTURE_2D, mode.gl.TEXTURE_WRAP_T, mode.gl.CLAMP_TO_EDGE);
+	};
+	const uploadSourceTexture = function(sourceCanvas) {
+		mode.gl.bindTexture(mode.gl.TEXTURE_2D, mode.sourceTexture);
+		mode.gl.pixelStorei(mode.gl.UNPACK_FLIP_Y_WEBGL, true);
+		mode.gl.texImage2D(mode.gl.TEXTURE_2D, 0, mode.gl.RGBA, mode.gl.RGBA, mode.gl.UNSIGNED_BYTE, sourceCanvas);
+		mode.gl.pixelStorei(mode.gl.UNPACK_FLIP_Y_WEBGL, false);
+	};
+	const resetPreparedSourceFrame = function() {
+		mode.lastUploadedCanvasVersion = -1;
+		mode.lastPreparedTimeSeconds = -1;
+	};
+	const prepareSourceFrame = function(sourceWidth, sourceHeight, timeSeconds) {
+		mode.sourceBackend.ensureCanvasSize(sourceWidth, sourceHeight);
+		mode.sourceBackend.advanceFrame(timeSeconds);
+		if (mode.lastPreparedTimeSeconds === timeSeconds && sourceWidth === mode.lastPreparedWidth && sourceHeight === mode.lastPreparedHeight) {
+			return mode.sourceBackend.state;
+		}
+		mode.sourceBackend.renderCanvas(timeSeconds);
+		mode.lastPreparedTimeSeconds = timeSeconds;
+		mode.lastPreparedWidth = sourceWidth;
+		mode.lastPreparedHeight = sourceHeight;
+		return mode.sourceBackend.state;
+	};
+	const drawPreScene = function(sourceState, frameState) {
+			const viewport = mode.gl.getParameter(mode.gl.VIEWPORT);
 			const width = viewport[2];
 			const height = viewport[3];
 			const sourceSize = spec.getSourceFrameSize ? spec.getSourceFrameSize(frameState, width, height) : null;
 			const sourceWidth = Math.max(1, sourceSize && sourceSize.width ? sourceSize.width | 0 : width | 0);
 			const sourceHeight = Math.max(1, sourceSize && sourceSize.height ? sourceSize.height | 0 : height | 0);
-			sourceState = this.prepareSourceFrame(sourceWidth, sourceHeight, frameState.timeSeconds);
+			sourceState = prepareSourceFrame(sourceWidth, sourceHeight, frameState.timeSeconds);
 			const sourceCanvas = sourceState.textureSource;
 			if (!sourceCanvas) {
 				return;
 			}
-			if (sourceState.canvasRenderVersion !== this.lastUploadedCanvasVersion || sourceWidth !== this.lastUploadedWidth || sourceHeight !== this.lastUploadedHeight) {
-				this.uploadSourceTexture(sourceCanvas);
-				this.lastUploadedCanvasVersion = sourceState.canvasRenderVersion;
-				this.lastUploadedWidth = sourceWidth;
-				this.lastUploadedHeight = sourceHeight;
+			if (sourceState.canvasRenderVersion !== mode.lastUploadedCanvasVersion || sourceWidth !== mode.lastUploadedWidth || sourceHeight !== mode.lastUploadedHeight) {
+				uploadSourceTexture(sourceCanvas);
+				mode.lastUploadedCanvasVersion = sourceState.canvasRenderVersion;
+				mode.lastUploadedWidth = sourceWidth;
+				mode.lastUploadedHeight = sourceHeight;
 			}
 			const orientationOffset = spec.getOrientationOffset ? spec.getOrientationOffset(sourceState, frameState) : {x: 0, y: 0};
-			this.gl.disable(this.gl.DEPTH_TEST);
-			this.gl.disable(this.gl.CULL_FACE);
-			this.gl.useProgram(this.programInfo.program);
-			this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-			this.gl.enableVertexAttribArray(this.programInfo.positionLoc);
-			this.gl.vertexAttribPointer(this.programInfo.positionLoc, 2, this.gl.FLOAT, false, 0, 0);
-			this.gl.activeTexture(this.gl.TEXTURE0);
-			this.gl.bindTexture(this.gl.TEXTURE_2D, this.sourceTexture);
-			this.gl.uniform1i(this.programInfo.sourceTextureLoc, 0);
-			this.gl.uniform2f(this.programInfo.viewportSizeLoc, width, height);
-			this.gl.uniform2f(this.programInfo.eyeCenterOffsetLoc, frameState.eyeCenterOffsetX, frameState.eyeCenterOffsetY);
-			this.gl.uniform2f(this.programInfo.orientationOffsetLoc, orientationOffset.x, orientationOffset.y);
-			if (this.programInfo.backgroundAlphaLoc) {
-				this.gl.uniform1f(this.programInfo.backgroundAlphaLoc, frameState.backgroundAlpha);
+			mode.gl.disable(mode.gl.DEPTH_TEST);
+			mode.gl.disable(mode.gl.CULL_FACE);
+			mode.gl.useProgram(mode.programInfo.program);
+			mode.gl.bindBuffer(mode.gl.ARRAY_BUFFER, mode.positionBuffer);
+			mode.gl.enableVertexAttribArray(mode.programInfo.positionLoc);
+			mode.gl.vertexAttribPointer(mode.programInfo.positionLoc, 2, mode.gl.FLOAT, false, 0, 0);
+			mode.gl.activeTexture(mode.gl.TEXTURE0);
+			mode.gl.bindTexture(mode.gl.TEXTURE_2D, mode.sourceTexture);
+			mode.gl.uniform1i(mode.programInfo.sourceTextureLoc, 0);
+			mode.gl.uniform2f(mode.programInfo.viewportSizeLoc, width, height);
+			mode.gl.uniform2f(mode.programInfo.eyeCenterOffsetLoc, frameState.eyeCenterOffsetX, frameState.eyeCenterOffsetY);
+			mode.gl.uniform2f(mode.programInfo.orientationOffsetLoc, orientationOffset.x, orientationOffset.y);
+			if (mode.programInfo.backgroundAlphaLoc) {
+				mode.gl.uniform1f(mode.programInfo.backgroundAlphaLoc, frameState.backgroundAlpha);
 			}
-			if (this.programInfo.backgroundMaskCountLoc) {
-				this.gl.uniform1f(this.programInfo.backgroundMaskCountLoc, frameState.backgroundMaskCount);
+			if (mode.programInfo.backgroundMaskCountLoc) {
+				mode.gl.uniform1f(mode.programInfo.backgroundMaskCountLoc, frameState.backgroundMaskCount);
 			}
-			if (this.programInfo.backgroundMaskCentersLoc) {
-				this.gl.uniform2fv(this.programInfo.backgroundMaskCentersLoc, frameState.backgroundMaskCenters);
+			if (mode.programInfo.backgroundMaskCentersLoc) {
+				mode.gl.uniform2fv(mode.programInfo.backgroundMaskCentersLoc, frameState.backgroundMaskCenters);
 			}
-			if (this.programInfo.backgroundMaskParamsLoc) {
-				this.gl.uniform2fv(this.programInfo.backgroundMaskParamsLoc, frameState.backgroundMaskParams);
+			if (mode.programInfo.backgroundMaskParamsLoc) {
+				mode.gl.uniform2fv(mode.programInfo.backgroundMaskParamsLoc, frameState.backgroundMaskParams);
 			}
-			if (this.programInfo.audioMetricsLoc) {
+			if (mode.programInfo.audioMetricsLoc) {
 				const audioMetrics = sourceState.audioMetrics || {level: 0, peak: 0, bass: 0, transient: 0, beatPulse: 0};
-				this.gl.uniform4f(this.programInfo.audioMetricsLoc, audioMetrics.level, audioMetrics.peak, audioMetrics.bass, audioMetrics.transient);
+				mode.gl.uniform4f(mode.programInfo.audioMetricsLoc, audioMetrics.level, audioMetrics.peak, audioMetrics.bass, audioMetrics.transient);
 			}
-			if (this.programInfo.beatPulseLoc) {
-				this.gl.uniform1f(this.programInfo.beatPulseLoc, sourceState.audioMetrics ? sourceState.audioMetrics.beatPulse : 0);
+			if (mode.programInfo.beatPulseLoc) {
+				mode.gl.uniform1f(mode.programInfo.beatPulseLoc, sourceState.audioMetrics ? sourceState.audioMetrics.beatPulse : 0);
 			}
 			if (spec.applyUniforms) {
-				spec.applyUniforms(this.gl, this.programInfo, sourceState, frameState);
+				spec.applyUniforms(mode.gl, mode.programInfo, sourceState, frameState);
 			}
-			this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);
-			this.gl.enable(this.gl.DEPTH_TEST);
-			this.gl.enable(this.gl.CULL_FACE);
-		}
+			mode.gl.drawArrays(mode.gl.TRIANGLES, 0, 3);
+			mode.gl.enable(mode.gl.DEPTH_TEST);
+			mode.gl.enable(mode.gl.CULL_FACE);
 	};
+	mode.init = init;
+	mode.uploadSourceTexture = uploadSourceTexture;
+	mode.onPresetChanged = resetPreparedSourceFrame;
+	mode.onAudioChanged = resetPreparedSourceFrame;
+	mode.prepareSourceFrame = prepareSourceFrame;
+	mode.drawPreScene = drawPreScene;
+	return mode;
 };
 
 // Engine
-const createVisualizerFrameState = function() {
-	return {
-		timeSeconds: 0,
-		headYaw: 0,
-		headPitch: 0,
-		horizontalMirrorBool: true,
-		headHorizontalFov: Math.PI / 2,
-		headVerticalFov: Math.PI / 2,
-		backgroundAlpha: 1,
-		backgroundMaskCount: 0,
-		backgroundMaskCenters: new Float32Array(4),
-		backgroundMaskParams: new Float32Array(4),
-		headPositionX: 0,
-		headPositionY: 0,
-		headPositionZ: 0,
-		eyeCenterOffsetX: 0,
-		eyeCenterOffsetY: 0,
-		viewMatrix: new Float32Array(16),
-		projMatrix: new Float32Array(16),
-		lastRawHeadYaw: undefined
-	};
-};
-
 const setVisualizerHeadYaw = function(frameState, rawYaw) {
 	if (frameState.lastRawHeadYaw === undefined) {
 		frameState.headYaw = rawYaw;
@@ -451,156 +430,150 @@ const createVisualizerModeRegistry = function(modeDefinitions, gl, sourceBackend
 
 const resolvedVisualizerActionPromise = Promise.resolve();
 
-const createVisualizerEngineDispatch = function(engine, frameState) {
-	const getSourceState = function() {
-		return engine.sourceBackend.getState();
-	};
-	const getActiveMode = function() {
-		return engine.modes[engine.modeNames[engine.currentModeIndex]] || null;
-	};
-	return {
-		getSourceState: getSourceState,
-		getActiveMode: getActiveMode,
-		notifyModes: function(methodName) {
-			const sourceState = getSourceState();
-			for (let i = 0; i < engine.modeNames.length; i += 1) {
-				const mode = engine.modes[engine.modeNames[i]];
-				if (mode && mode[methodName]) {
-					mode[methodName](sourceState, frameState);
-				}
-			}
-		},
-		drawPhase: function(methodName) {
-			const mode = getActiveMode();
-			if (!mode || !mode[methodName]) {
-				return;
-			}
-			mode[methodName](getSourceState(), frameState);
-		}
-	};
-};
-
 const createVisualizerEngine = function(options) {
 	const modeDefinitions = options.modes || [];
-	const frameState = createVisualizerFrameState();
-	const engine = {
+	const frameState = {
+		timeSeconds: 0,
+		headYaw: 0,
+		headPitch: 0,
+		horizontalMirrorBool: true,
+		headHorizontalFov: Math.PI / 2,
+		headVerticalFov: Math.PI / 2,
+		backgroundAlpha: 1,
+		backgroundMaskCount: 0,
+		backgroundMaskCenters: new Float32Array(4),
+		backgroundMaskParams: new Float32Array(4),
+		headPositionX: 0,
+		headPositionY: 0,
+		headPositionZ: 0,
+		eyeCenterOffsetX: 0,
+		eyeCenterOffsetY: 0,
+		viewMatrix: new Float32Array(16),
+		projMatrix: new Float32Array(16),
+		lastRawHeadYaw: undefined
+	};
+	const state = {
 		gl: null,
 		sourceBackend: null,
 		modeNames: [],
 		modes: {},
-		currentModeIndex: 0
+		currentModeIndex: 0,
+		horizontalMirrorBool: true
 	};
-	const dispatch = createVisualizerEngineDispatch(engine, frameState);
+	const notifyModes = function(methodName) {
+		const sourceState = state.sourceBackend ? state.sourceBackend.state : null;
+		for (let i = 0; i < state.modeNames.length; i += 1) {
+			const mode = state.modes[state.modeNames[i]];
+			if (mode && mode[methodName]) {
+				mode[methodName](sourceState, frameState);
+			}
+		}
+	};
+	const drawActiveMode = function(methodName) {
+		const mode = state.modes[state.modeNames[state.currentModeIndex]] || null;
+		if (!mode || !mode[methodName]) {
+			return;
+		}
+		mode[methodName](state.sourceBackend ? state.sourceBackend.state : null, frameState);
+	};
+	const engine = {
+		state
+	};
 	const init = function(args) {
 		const modeRegistry = createVisualizerModeRegistry(modeDefinitions, args.gl, args.sourceBackend);
-		engine.gl = args.gl;
-		engine.sourceBackend = args.sourceBackend;
-		engine.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
-		engine.modeNames = modeRegistry.modeNames;
-		engine.modes = modeRegistry.modes;
-		if (engine.currentModeIndex >= engine.modeNames.length) {
-			engine.currentModeIndex = 0;
+		state.gl = args.gl;
+		state.sourceBackend = args.sourceBackend;
+		engine.activateAudio = state.sourceBackend.activate;
+		state.sourceBackend.init(args.gl.drawingBufferWidth || 512, args.gl.drawingBufferHeight || 512);
+		state.modeNames = modeRegistry.modeNames;
+		state.modes = modeRegistry.modes;
+		if (state.currentModeIndex >= state.modeNames.length) {
+			state.currentModeIndex = 0;
 		}
+		frameState.horizontalMirrorBool = state.horizontalMirrorBool;
 	};
 	const update = function(timeSeconds) {
 		frameState.timeSeconds = timeSeconds;
-		engine.sourceBackend.advanceFrame(timeSeconds);
-		const activeMode = dispatch.getActiveMode();
+		state.sourceBackend.advanceFrame(timeSeconds);
+		const activeMode = state.modes[state.modeNames[state.currentModeIndex]] || null;
 		if (activeMode && activeMode.update) {
-			activeMode.update(dispatch.getSourceState(), frameState);
+			activeMode.update(state.sourceBackend.state, frameState);
 		}
 	};
 	const setBackgroundCompositeState = function(backgroundCompositeState) {
 		setVisualizerBackgroundCompositeState(frameState, backgroundCompositeState);
 	};
-	const getSelectionState = function() {
-		return {
-			modeNames: engine.modeNames.slice(),
-			currentModeIndex: engine.currentModeIndex,
-			horizontalMirrorBool: !!frameState.horizontalMirrorBool,
-			presetNames: engine.sourceBackend.getPresetNames(),
-			currentPresetIndex: engine.sourceBackend.getCurrentPresetIndex()
-		};
-	};
 	const selectPreset = async function(index) {
-		await engine.sourceBackend.selectPreset(index, 1.2);
-		engine.sourceBackend.lastCanvasRenderTimeSeconds = 0;
-		dispatch.notifyModes("onPresetChanged");
+		await state.sourceBackend.selectPreset(index, 1.2);
+		state.sourceBackend.state.lastCanvasRenderTimeSeconds = 0;
+		notifyModes("onPresetChanged");
 	};
 	const selectMode = function(index) {
-		if (!engine.modeNames.length) {
+		if (!state.modeNames.length) {
 			return resolvedVisualizerActionPromise;
 		}
-		engine.currentModeIndex = (index + engine.modeNames.length) % engine.modeNames.length;
+		state.currentModeIndex = (index + state.modeNames.length) % state.modeNames.length;
 		return resolvedVisualizerActionPromise;
 	};
 	const toggleHorizontalMirror = function() {
-		frameState.horizontalMirrorBool = !frameState.horizontalMirrorBool;
+		state.horizontalMirrorBool = !state.horizontalMirrorBool;
+		frameState.horizontalMirrorBool = state.horizontalMirrorBool;
 		return resolvedVisualizerActionPromise;
 	};
 	const startSession = function() {
-		engine.sourceBackend.startSession();
-		dispatch.notifyModes("onSessionStart");
+		state.sourceBackend.activate();
+		notifyModes("onSessionStart");
 	};
 	const endSession = function() {
-		engine.sourceBackend.endSession();
-		dispatch.notifyModes("onSessionEnd");
+		notifyModes("onSessionEnd");
 	};
-	return Object.assign(engine, {
-		init: init,
-		update: update,
-		setRenderView: function(viewMatrix, projectionMatrix) {
-			applyVisualizerRenderView(frameState, viewMatrix, projectionMatrix);
-		},
-		setPreviewView: function(viewMatrix, projectionMatrix) {
-			applyVisualizerPreviewView(frameState, viewMatrix, projectionMatrix);
-		},
-		setHeadPoseFromQuaternion: function(quaternion, projectionMatrix) {
-			applyVisualizerHeadPose(frameState, quaternion, projectionMatrix);
-		},
-		setHeadPosition: function(x, y, z) {
-			frameState.headPositionX = x;
-			frameState.headPositionY = y;
-			frameState.headPositionZ = z;
-		},
-		setBackgroundCompositeState: setBackgroundCompositeState,
-		setBackgroundBlend: function(passthroughMix, passthroughAvailableBool) {
-			setBackgroundCompositeState({
-				alpha: passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1,
-				maskCount: 0,
-				masks: []
-			});
-		},
-		drawPreScene: function() {
-			dispatch.drawPhase("drawPreScene");
-		},
-		drawWorld: function() {
-			dispatch.drawPhase("drawWorld");
-		},
-		drawPostScene: function() {
-			dispatch.drawPhase("drawPostScene");
-		},
-		setAudioStream: function(stream) {
-			engine.sourceBackend.setAudioStream(stream);
-			dispatch.notifyModes("onAudioChanged");
-		},
-		startDebugAudio: async function() {
-			await engine.sourceBackend.startDebugAudio();
-			dispatch.notifyModes("onAudioChanged");
-		},
-		activateAudio: function() {
-			return engine.sourceBackend.activate();
-		},
-		getAudioMetrics: function() {
-			return engine.sourceBackend.getAudioMetrics ? engine.sourceBackend.getAudioMetrics() : emptyAudioMetrics;
-		},
-		getSelectionState: getSelectionState,
-		selectPreset: selectPreset,
-		selectMode: selectMode,
-		toggleHorizontalMirror: toggleHorizontalMirror,
-		startSession: startSession,
-		endSession: endSession
-	});
+	engine.init = init;
+	engine.update = update;
+	engine.setRenderView = function(viewMatrix, projectionMatrix) {
+		applyVisualizerRenderView(frameState, viewMatrix, projectionMatrix);
+	};
+	engine.setPreviewView = function(viewMatrix, projectionMatrix) {
+		applyVisualizerPreviewView(frameState, viewMatrix, projectionMatrix);
+	};
+	engine.setHeadPoseFromQuaternion = function(quaternion, projectionMatrix) {
+		applyVisualizerHeadPose(frameState, quaternion, projectionMatrix);
+	};
+	engine.setHeadPosition = function(x, y, z) {
+		frameState.headPositionX = x;
+		frameState.headPositionY = y;
+		frameState.headPositionZ = z;
+	};
+	engine.setBackgroundCompositeState = setBackgroundCompositeState;
+	engine.setBackgroundBlend = function(passthroughMix, passthroughAvailableBool) {
+		setBackgroundCompositeState({
+			alpha: passthroughAvailableBool ? clampNumber(1 - (passthroughMix || 0), 0, 1) : 1,
+			maskCount: 0,
+			masks: []
+		});
+	};
+	engine.drawPreScene = function() {
+		drawActiveMode("drawPreScene");
+	};
+	engine.drawWorld = function() {
+		drawActiveMode("drawWorld");
+	};
+	engine.drawPostScene = function() {
+		drawActiveMode("drawPostScene");
+	};
+	engine.setAudioStream = function(stream) {
+		state.sourceBackend.setAudioStream(stream);
+		notifyModes("onAudioChanged");
+	};
+	engine.startDebugAudio = async function() {
+		await state.sourceBackend.startDebugAudio();
+		notifyModes("onAudioChanged");
+	};
+	engine.selectPreset = selectPreset;
+	engine.selectMode = selectMode;
+	engine.toggleHorizontalMirror = toggleHorizontalMirror;
+	engine.startSession = startSession;
+	engine.endSession = endSession;
+	return engine;
 };
 
 // Butterchurn source
@@ -614,32 +587,11 @@ const createButterchurnCanvasElement = function(documentRef, width, height) {
 	return canvas;
 };
 
-const createButterchurnSourceState = function() {
-	return {
-		canvas: null,
-		visualizer: null,
-		audioContext: null,
-		audioNode: null,
-		audioStream: null,
-		audioSourceKind: "none",
-		activatedBool: false,
-		presetNames: [],
-		presetMap: {},
-		currentPresetIndex: 0,
-		currentWidth: 0,
-		currentHeight: 0,
-		currentTimeSeconds: 0,
-		lastCanvasRenderTimeSeconds: 0,
-		presetVersion: 0,
-		audioVersion: 0,
-		canvasRenderVersion: 0
-	};
-};
-
 const initButterchurnPresetLibrary = function(source, butterchurnPresetsApi) {
 	source.presetMap = butterchurnPresetsApi ? butterchurnPresetsApi.getPresets() : {};
 	source.presetNames = Object.keys(source.presetMap).sort();
 	source.currentPresetIndex = Math.max(0, source.presetNames.indexOf(defaultPresetName));
+	source.presetName = source.presetNames[source.currentPresetIndex] || "";
 	source.presetVersion = 1;
 };
 
@@ -713,115 +665,115 @@ const createButterchurnSource = function(options) {
 	const butterchurnApi = options.butterchurnApi || (windowRef.butterchurn && windowRef.butterchurn.createVisualizer ? windowRef.butterchurn : windowRef.butterchurn && windowRef.butterchurn.default && windowRef.butterchurn.default.createVisualizer ? windowRef.butterchurn.default : null);
 	const butterchurnPresetsApi = options.butterchurnPresetsApi || (windowRef.butterchurnPresets && windowRef.butterchurnPresets.getPresets ? windowRef.butterchurnPresets : windowRef.butterchurnPresets && windowRef.butterchurnPresets.default && windowRef.butterchurnPresets.default.getPresets ? windowRef.butterchurnPresets.default : null);
 	const audioAnalyser = createAudioAnalyser();
-	const source = createButterchurnSourceState();
-	Object.assign(source, {
-		init: function(width, height) {
-			this.canvas = createButterchurnCanvasElement(documentRef, width, height);
-			this.currentWidth = width;
-			this.currentHeight = height;
-			initButterchurnPresetLibrary(this, butterchurnPresetsApi);
-		},
-		advanceFrame: function(timeSeconds) {
-			this.currentTimeSeconds = typeof timeSeconds === "number" ? timeSeconds : 0;
-			audioAnalyser.advanceFrame(this.currentTimeSeconds);
-		},
-		activate: async function() {
-			await activateButterchurnBackend(this, audioContextCtor, butterchurnApi);
-			if (!this.visualizer) {
-				return resolvedButterchurnReadyPromise;
-			}
-			await this.selectPreset(this.currentPresetIndex, 0);
-			await syncButterchurnAudioInput(this, audioAnalyser);
-			if (this.audioContext && this.audioContext.state === "suspended") {
-				return this.audioContext.resume().catch(function() {});
-			}
+	const state = {
+		canvas: null,
+		textureSource: null,
+		visualizer: null,
+		audioContext: null,
+		audioNode: null,
+		audioStream: null,
+		audioSourceKind: "none",
+		audioMetrics: emptyAudioMetrics,
+		activatedBool: false,
+		presetNames: [],
+		presetMap: {},
+		presetName: "",
+		currentPresetIndex: 0,
+		currentWidth: 0,
+		currentHeight: 0,
+		timeSeconds: 0,
+		currentTimeSeconds: 0,
+		lastCanvasRenderTimeSeconds: 0,
+		presetVersion: 0,
+		audioVersion: 0,
+		canvasRenderVersion: 0
+	};
+	const source = {
+		state
+	};
+	source.init = function(width, height) {
+		state.canvas = createButterchurnCanvasElement(documentRef, width, height);
+		state.textureSource = state.canvas;
+		state.currentWidth = width;
+		state.currentHeight = height;
+		initButterchurnPresetLibrary(state, butterchurnPresetsApi);
+	};
+	source.advanceFrame = function(timeSeconds) {
+		state.currentTimeSeconds = typeof timeSeconds === "number" ? timeSeconds : 0;
+		state.timeSeconds = state.currentTimeSeconds;
+		audioAnalyser.advanceFrame(state.currentTimeSeconds);
+		state.audioMetrics = audioAnalyser.getMetrics();
+	};
+	source.activate = async function() {
+		await activateButterchurnBackend(state, audioContextCtor, butterchurnApi);
+		if (!state.visualizer) {
 			return resolvedButterchurnReadyPromise;
-		},
-		ensureCanvasSize: function(width, height) {
-			width = Math.max(1, width | 0);
-			height = Math.max(1, height | 0);
-			if (!this.canvas || width === this.currentWidth && height === this.currentHeight) {
-				return;
-			}
-			this.currentWidth = width;
-			this.currentHeight = height;
-			this.canvas.width = width;
-			this.canvas.height = height;
-			if (this.visualizer) {
-				this.visualizer.setRendererSize(width, height, {meshWidth: 32, meshHeight: 24, pixelRatio: 1, textureRatio: 1});
-			}
-		},
-		setAudioStream: function(stream) {
-			if (this.audioSourceKind !== "stream" || this.audioStream !== stream) {
-				this.audioVersion += 1;
-			}
-			this.audioStream = stream;
-			this.audioSourceKind = stream ? "stream" : "none";
-			syncButterchurnAudioInput(this, audioAnalyser);
-		},
-		startDebugAudio: function() {
-			if (this.audioSourceKind !== "debug") {
-				this.audioVersion += 1;
-			}
-			this.audioStream = null;
-			this.audioSourceKind = "debug";
-			return syncButterchurnAudioInput(this, audioAnalyser);
-		},
-		selectPreset: function(index, blendTimeSeconds) {
-			if (!this.presetNames.length) {
-				return resolvedButterchurnReadyPromise;
-			}
-			const nextPresetIndex = (index + this.presetNames.length) % this.presetNames.length;
-			if (nextPresetIndex !== this.currentPresetIndex) {
-				this.currentPresetIndex = nextPresetIndex;
-				this.presetVersion += 1;
-			}
-			if (!this.visualizer) {
-				return resolvedButterchurnReadyPromise;
-			}
-			this.visualizer.loadPreset(this.presetMap[this.presetNames[this.currentPresetIndex]], blendTimeSeconds || 0);
-			return resolvedButterchurnReadyPromise;
-		},
-		renderCanvas: function(timeSeconds) {
-			this.advanceFrame(timeSeconds);
-			if (!this.visualizer) {
-				return;
-			}
-			let elapsedTimeSeconds = 1 / 60;
-			if (this.lastCanvasRenderTimeSeconds > 0) {
-				elapsedTimeSeconds = clampNumber(timeSeconds - this.lastCanvasRenderTimeSeconds, 1 / 240, 0.25);
-			}
-			this.lastCanvasRenderTimeSeconds = timeSeconds;
-			this.visualizer.render({elapsedTime: elapsedTimeSeconds});
-			this.canvasRenderVersion += 1;
-		},
-		getPresetNames: function() {
-			return this.presetNames.slice();
-		},
-		getCurrentPresetIndex: function() {
-			return this.currentPresetIndex;
-		},
-		getAudioMetrics: function() {
-			return audioAnalyser.getMetrics();
-		},
-		getState: function() {
-			const presetName = this.presetNames[this.currentPresetIndex] || "";
-			return {
-				presetName: presetName,
-				presetVersion: this.presetVersion,
-				audioVersion: this.audioVersion,
-				canvasRenderVersion: this.canvasRenderVersion,
-				canvas: this.canvas,
-				textureSource: this.canvas,
-				audioMetrics: audioAnalyser.getMetrics(),
-				timeSeconds: this.currentTimeSeconds
-			};
-		},
-		startSession: function() {
-			this.activate();
-		},
-		endSession: function() {
 		}
-	});
+		await source.selectPreset(state.currentPresetIndex, 0);
+		await syncButterchurnAudioInput(state, audioAnalyser);
+		if (state.audioContext && state.audioContext.state === "suspended") {
+			return state.audioContext.resume().catch(function() {});
+		}
+		return resolvedButterchurnReadyPromise;
+	};
+	source.ensureCanvasSize = function(width, height) {
+		width = Math.max(1, width | 0);
+		height = Math.max(1, height | 0);
+		if (!state.canvas || width === state.currentWidth && height === state.currentHeight) {
+			return;
+		}
+		state.currentWidth = width;
+		state.currentHeight = height;
+		state.canvas.width = width;
+		state.canvas.height = height;
+		if (state.visualizer) {
+			state.visualizer.setRendererSize(width, height, {meshWidth: 32, meshHeight: 24, pixelRatio: 1, textureRatio: 1});
+		}
+	};
+	source.setAudioStream = function(stream) {
+		if (state.audioSourceKind !== "stream" || state.audioStream !== stream) {
+			state.audioVersion += 1;
+		}
+		state.audioStream = stream;
+		state.audioSourceKind = stream ? "stream" : "none";
+		syncButterchurnAudioInput(state, audioAnalyser);
+	};
+	source.startDebugAudio = function() {
+		if (state.audioSourceKind !== "debug") {
+			state.audioVersion += 1;
+		}
+		state.audioStream = null;
+		state.audioSourceKind = "debug";
+		return syncButterchurnAudioInput(state, audioAnalyser);
+	};
+	source.selectPreset = function(index, blendTimeSeconds) {
+		if (!state.presetNames.length) {
+			return resolvedButterchurnReadyPromise;
+		}
+		const nextPresetIndex = (index + state.presetNames.length) % state.presetNames.length;
+		if (nextPresetIndex !== state.currentPresetIndex) {
+			state.currentPresetIndex = nextPresetIndex;
+			state.presetName = state.presetNames[state.currentPresetIndex] || "";
+			state.presetVersion += 1;
+		}
+		if (!state.visualizer) {
+			return resolvedButterchurnReadyPromise;
+		}
+		state.visualizer.loadPreset(state.presetMap[state.presetNames[state.currentPresetIndex]], blendTimeSeconds || 0);
+		return resolvedButterchurnReadyPromise;
+	};
+	source.renderCanvas = function(timeSeconds) {
+		source.advanceFrame(timeSeconds);
+		if (!state.visualizer) {
+			return;
+		}
+		let elapsedTimeSeconds = 1 / 60;
+		if (state.lastCanvasRenderTimeSeconds > 0) {
+			elapsedTimeSeconds = clampNumber(timeSeconds - state.lastCanvasRenderTimeSeconds, 1 / 240, 0.25);
+		}
+		state.lastCanvasRenderTimeSeconds = timeSeconds;
+		state.visualizer.render({elapsedTime: elapsedTimeSeconds});
+		state.canvasRenderVersion += 1;
+	};
 	return source;
 };

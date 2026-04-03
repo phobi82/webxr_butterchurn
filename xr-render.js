@@ -894,23 +894,19 @@ const createSceneRenderer = function(options) {
 	const reusableRayEnd = {x: 0, y: 0, z: 0};
 	const reusableAdjustedEye = {x: 0, y: 0, z: 0};
 	const emptyMenuController = {
-		getState: function() {
-			return {
-				floorAlpha: 0.72,
-				menuOpenBool: false,
-				plane: {
-					center: {x: 0, y: 0, z: 0},
-					right: {x: 1, y: 0, z: 0},
-					up: {x: 0, y: 1, z: 0},
-					normal: {x: 0, y: 0, z: 1}
-				},
-				planeWidth: options.menuWidth || 0.74,
-				planeHeight: (options.menuWidth || 0.74) * 0.75
-			};
+		state: {
+			floorAlpha: 0.72,
+			menuOpenBool: false,
+			plane: {
+				center: {x: 0, y: 0, z: 0},
+				right: {x: 1, y: 0, z: 0},
+				up: {x: 0, y: 1, z: 0},
+				normal: {x: 0, y: 0, z: 1}
+			},
+			planeWidth: options.menuWidth || 0.74,
+			planeHeight: (options.menuWidth || 0.74) * 0.75
 		},
-		getControllerRays: function() {
-			return [];
-		},
+		controllerRays: [],
 		renderTexture: function() {}
 	};
 
@@ -1075,7 +1071,8 @@ const createSceneRenderer = function(options) {
 	};
 
 	const drawWorldLayer = function(args) {
-		const menuState = args.menuController ? args.menuController.getState() : emptyMenuController.getState();
+		const menuController = args.menuController || emptyMenuController;
+		const menuState = menuController.state;
 		if (menuState.floorAlpha > 0.001) {
 			drawFloor(args.sceneLighting, args.getReactiveFloorColors());
 		}
@@ -1096,10 +1093,6 @@ const createSceneRenderer = function(options) {
 		gl.bindFramebuffer(gl.FRAMEBUFFER, args.outputFramebuffer || null);
 		gl.viewport(args.targetViewport.x, args.targetViewport.y, args.targetViewport.width, args.targetViewport.height);
 		worldMaskCompositeRenderer.compositeWorld(worldMaskState, args.processedDepthInfo, args.processedDepthFrameKind || "", args.processedDepthProfile);
-	};
-
-	const createProcessedDepthRenderer = function() {
-		return createDepthProcessingRenderer({gl: gl, webgl2Bool: webgl2Bool});
 	};
 
 	const createWorldMaskCompositeRenderer = function() {
@@ -1437,22 +1430,22 @@ const createSceneRenderer = function(options) {
 	const createSceneFrameState = function(args) {
 		const menuController = args.menuController || emptyMenuController;
 		const passthroughController = args.passthroughController || null;
-		const controllerRays = menuController.getControllerRays();
+		const controllerRays = menuController.controllerRays || [];
 		const punchState = passthroughController && passthroughController.getPunchRenderState ? passthroughController.getPunchRenderState({
 			viewMatrix: currentView,
 			projMatrix: currentProj,
 			controllerRays: controllerRays
 		}) : null;
 		return {
-			menuController: menuController,
-			menuState: menuController.getState(),
-			passthroughController: passthroughController,
+			menuController,
+			menuState: menuController.state,
+			passthroughController,
 			visualizerBackgroundEnabledBool: args.visualizerBackgroundEnabledBool !== false,
-			controllerRays: controllerRays,
+			controllerRays,
 			sceneLightingState: args.sceneLighting && args.sceneLighting.getState ? args.sceneLighting.getState() : null,
 			passthroughViewMatrix: args.passthroughViewMatrix || currentView,
 			passthroughProjMatrix: args.passthroughProjMatrix || currentProj,
-			punchState: punchState,
+			punchState,
 			worldMaskActiveBool: !!(worldMaskCompositeRenderer && punchState && punchState.worldMask && args.processedDepthInfo && (args.transparentBackgroundBool || args.passthroughFallbackBool))
 		};
 	};
@@ -1682,7 +1675,7 @@ const createSceneRenderer = function(options) {
 		mrLightingRenderer.init(gl);
 		punchRenderer = createPunchRenderer();
 		punchRenderer.init(gl);
-		processedDepthRenderer = createProcessedDepthRenderer();
+		processedDepthRenderer = createDepthProcessingRenderer({gl: gl, webgl2Bool: webgl2Bool});
 		processedDepthRenderer.init();
 		worldMaskCompositeRenderer = createWorldMaskCompositeRenderer();
 		worldMaskCompositeRenderer.init();
@@ -1712,8 +1705,8 @@ const createSceneRenderer = function(options) {
 	};
 
 	return {
-		init: init,
+		init,
 		renderPreviewFrame: renderPreviewPass,
-		renderXrViews: renderXrViews
+		renderXrViews
 	};
 };
