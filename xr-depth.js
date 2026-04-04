@@ -18,6 +18,7 @@ const createDepthProcessingRuntimeState = function() {
 		heightmapLocs: null,
 		cpuDepthTexture: null,
 		cpuUploadBuffer: null,
+		cpuDepthTexParamsSet: false,
 		processedTargetConfig: null,
 		depthUvTransform: new Float32Array(16),
 		identityUvTransform: identityMatrix(),
@@ -132,10 +133,8 @@ const createDepthProcessingSourceBinding = function(gl, webgl2Bool, runtimeState
 			if (!runtimeState.cpuUploadBuffer || runtimeState.cpuUploadBuffer.length < pixelCount) {
 				runtimeState.cpuUploadBuffer = new Float32Array(pixelCount);
 			}
-			const src = new Uint16Array(depthInfo.data);
-			for (let i = 0; i < pixelCount; i += 1) {
-				runtimeState.cpuUploadBuffer[i] = src[i];
-			}
+			// Convert Uint16 depth data to Float32 using native .set() instead of element-by-element loop
+			runtimeState.cpuUploadBuffer.set(new Uint16Array(depthInfo.data));
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, runtimeState.cpuDepthTexture);
 			if (webgl2Bool) {
@@ -143,10 +142,13 @@ const createDepthProcessingSourceBinding = function(gl, webgl2Bool, runtimeState
 			} else {
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, runtimeState.cpuUploadBuffer.subarray(0, pixelCount));
 			}
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			if (!runtimeState.cpuDepthTexParamsSet) {
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+				runtimeState.cpuDepthTexParamsSet = true;
+			}
 			return true;
 		},
 		prepareSourceTexture: function(args) {

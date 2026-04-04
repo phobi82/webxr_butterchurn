@@ -381,12 +381,13 @@ const pushFixtureGroup = function(state, args) {
 	return group;
 };
 
+// Sort in-place since fixture groups are rebuilt each frame by the active preset
 const getRankedFixtureGroups = function(fixtureGroups) {
-	const rankedGroups = (fixtureGroups || []).slice(0);
-	rankedGroups.sort(function(a, b) {
+	if (!fixtureGroups || !fixtureGroups.length) { return fixtureGroups || []; }
+	fixtureGroups.sort(function(a, b) {
 		return (b.intensity || 0) - (a.intensity || 0);
 	});
-	return rankedGroups;
+	return fixtureGroups;
 };
 
 const getFixtureDirection = function(group) {
@@ -934,6 +935,10 @@ const getRealWorldRoomPoint = function(point, controllerState, args) {
 	};
 };
 
+// Reusable buffers for anchor matrix computation (avoids per-call allocations)
+const anchorWorldFromView = new Float32Array(16);
+const anchorCombinedMatrix = new Float32Array(16);
+
 const getAnchoredRoomPoint = function(args, point, controllerState) {
 	if (!point) {
 		return null;
@@ -946,7 +951,7 @@ const getAnchoredRoomPoint = function(args, point, controllerState) {
 		return point;
 	}
 	return transformPointByMatrix(
-		multiplyMatrices(buildWorldFromViewMatrix(args.viewMatrix), args.renderViewMatrix),
+		multiplyMatrices(buildWorldFromViewMatrix(args.viewMatrix, anchorWorldFromView), args.renderViewMatrix, anchorCombinedMatrix),
 		point
 	);
 };

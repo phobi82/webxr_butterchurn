@@ -887,12 +887,13 @@ const createSceneRenderer = function(options) {
 	const currentProj = new Float32Array(16);
 	const currentPassthroughView = new Float32Array(16);
 	const currentPassthroughProj = new Float32Array(16);
-	const adjustedView = new Float32Array(16);
 	const colorVec4 = new Float32Array(4);
 	// pre-allocated buffers to avoid per-frame garbage in render loop
 	const overlayLineData = new Float32Array(6);
+	const reusableFloorMatrix = new Float32Array(16);
+	const reusableBoxMatrix = new Float32Array(16);
+	const reusableMenuPlaneMatrix = new Float32Array(16);
 	const reusableRayEnd = {x: 0, y: 0, z: 0};
-	const reusableAdjustedEye = {x: 0, y: 0, z: 0};
 	const emptyMenuController = {
 		state: {
 			floorAlpha: 0.72,
@@ -940,43 +941,31 @@ const createSceneRenderer = function(options) {
 		]);
 	};
 
-	const invertRigidViewMatrix = function(target, matrix, eyeX, eyeY, eyeZ) {
-		target[0] = matrix[0];
-		target[1] = matrix[4];
-		target[2] = matrix[8];
-		target[3] = 0;
-		target[4] = matrix[1];
-		target[5] = matrix[5];
-		target[6] = matrix[9];
-		target[7] = 0;
-		target[8] = matrix[2];
-		target[9] = matrix[6];
-		target[10] = matrix[10];
-		target[11] = 0;
-		target[12] = -(target[0] * eyeX + target[4] * eyeY + target[8] * eyeZ);
-		target[13] = -(target[1] * eyeX + target[5] * eyeY + target[9] * eyeZ);
-		target[14] = -(target[2] * eyeX + target[6] * eyeY + target[10] * eyeZ);
-		target[15] = 1;
-	};
-
-	const getAdjustedEyePosition = function(view, pose, eyeDistanceMeters) {
+	// Apply IPD delta as view-matrix translation offset.
+	// Uses native view.transform.inverse.matrix as base to preserve ATW precision,
+	// then shifts only by the difference between desired and native eye position.
+	const applyEyeDistanceDelta = function(viewMatrix, view, pose, eyeDistanceMeters) {
 		const center = pose.transform.position;
 		const eye = view.transform.position;
 		const offsetX = eye.x - center.x;
 		const offsetY = eye.y - center.y;
 		const offsetZ = eye.z - center.z;
-		const offsetLength = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
-		if (offsetLength < 0.000001) {
-			reusableAdjustedEye.x = eye.x;
-			reusableAdjustedEye.y = eye.y;
-			reusableAdjustedEye.z = eye.z;
-			return reusableAdjustedEye;
+		const nativeHalfIpd = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
+		if (nativeHalfIpd < 0.000001) {
+			return;
 		}
-		const scale = (eyeDistanceMeters * 0.5) / offsetLength;
-		reusableAdjustedEye.x = center.x + offsetX * scale;
-		reusableAdjustedEye.y = center.y + offsetY * scale;
-		reusableAdjustedEye.z = center.z + offsetZ * scale;
-		return reusableAdjustedEye;
+		const scaleDelta = (eyeDistanceMeters * 0.5) / nativeHalfIpd - 1;
+		if (Math.abs(scaleDelta) < 0.0001) {
+			return;
+		}
+		// World-space camera shift = eye offset * scaleDelta
+		const dx = offsetX * scaleDelta;
+		const dy = offsetY * scaleDelta;
+		const dz = offsetZ * scaleDelta;
+		// Translate view matrix: subtract R^T * delta from translation column
+		viewMatrix[12] -= viewMatrix[0] * dx + viewMatrix[4] * dy + viewMatrix[8] * dz;
+		viewMatrix[13] -= viewMatrix[1] * dx + viewMatrix[5] * dy + viewMatrix[9] * dz;
+		viewMatrix[14] -= viewMatrix[2] * dx + viewMatrix[6] * dy + viewMatrix[10] * dz;
 	};
 
 	const setColorUniform = function(uniformLoc, color) {
@@ -1043,10 +1032,11 @@ const createSceneRenderer = function(options) {
 	const drawFloor = function(sceneLighting, reactiveColors) {
 		const worldAlpha = reactiveColors.floor[3];
 		gl.disable(gl.CULL_FACE);
+		const floorMatrix = translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize, reusableFloorMatrix);
 		if (floorReceivesSceneLightingBool) {
-			drawLitColor(geometry.floorBuffer, geometry.floorNormalBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor, sceneLighting);
+			drawLitColor(geometry.floorBuffer, geometry.floorNormalBuffer, 6, gl.TRIANGLES, floorMatrix, reactiveColors.floor, sceneLighting);
 		} else {
-			drawColor(geometry.floorBuffer, 6, gl.TRIANGLES, translateScale(0, -0.01, 0, options.floorHalfSize, 1, options.floorHalfSize), reactiveColors.floor);
+			drawColor(geometry.floorBuffer, 6, gl.TRIANGLES, floorMatrix, reactiveColors.floor);
 		}
 		drawColor(geometry.gridBuffer, geometry.gridVertexCount, gl.LINES, identityMatrix(), reactiveColors.grid);
 		for (let i = 0; i < options.levelBoxes.length; i += 1) {
@@ -1057,7 +1047,7 @@ const createSceneRenderer = function(options) {
 				geometry.boxNormalBuffer,
 				36,
 				gl.TRIANGLES,
-				translateScale(box.x, box.y, box.z, box.width, box.height, box.depth),
+				translateScale(box.x, box.y, box.z, box.width, box.height, box.depth, reusableBoxMatrix),
 				[
 					options.clampNumber(box.color[0] + pulse * 0.25, 0, 1),
 					options.clampNumber(box.color[1] + pulse * 0.25, 0, 1),
@@ -1506,7 +1496,7 @@ const createSceneRenderer = function(options) {
 			frameState.menuController.renderTexture(gl, menuTexture, args.menuContentState);
 			gl.disable(gl.DEPTH_TEST);
 			gl.disable(gl.CULL_FACE);
-			drawTexturedPlane(basisScale(frameState.menuState.plane.center.x, frameState.menuState.plane.center.y, frameState.menuState.plane.center.z, frameState.menuState.plane.right, frameState.menuState.plane.up, frameState.menuState.plane.normal, frameState.menuState.planeWidth, frameState.menuState.planeHeight, 1));
+			drawTexturedPlane(basisScale(frameState.menuState.plane.center.x, frameState.menuState.plane.center.y, frameState.menuState.plane.center.z, frameState.menuState.plane.right, frameState.menuState.plane.up, frameState.menuState.plane.normal, frameState.menuState.planeWidth, frameState.menuState.planeHeight, 1, reusableMenuPlaneMatrix));
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);
 		}
@@ -1569,19 +1559,14 @@ const createSceneRenderer = function(options) {
 	const prepareXrViewState = function(args, view, viewIndex) {
 		const viewport = args.baseLayer.getViewport(view);
 		gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-		const eye = getAdjustedEyePosition(view, args.pose, args.eyeDistanceMeters);
-		invertRigidViewMatrix(adjustedView, view.transform.matrix, eye.x, eye.y, eye.z);
-		currentView.set(adjustedView);
+		// Use native inverse matrix from the XR runtime for ATW-correct precision
+		currentView.set(view.transform.inverse.matrix);
 		currentProj.set(view.projectionMatrix);
+		// Apply eye distance (IPD) adjustment as translation delta for scale effect
+		applyEyeDistanceDelta(currentView, view, args.pose, args.eyeDistanceMeters);
 		if (args.passthroughPose && args.passthroughPose.views && args.passthroughPose.views[viewIndex]) {
 			const passthroughView = args.passthroughPose.views[viewIndex];
-			invertRigidViewMatrix(
-				currentPassthroughView,
-				passthroughView.transform.matrix,
-				passthroughView.transform.position.x,
-				passthroughView.transform.position.y,
-				passthroughView.transform.position.z
-			);
+			currentPassthroughView.set(passthroughView.transform.inverse.matrix);
 			currentPassthroughProj.set(passthroughView.projectionMatrix);
 		} else {
 			currentPassthroughView.set(currentView);

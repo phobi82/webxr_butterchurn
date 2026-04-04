@@ -651,6 +651,8 @@ const createPassthroughController = function(options) {
 			effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
 		};
 	};
+	// Reusable buffer for view-world matrix in overlay render state
+	const reusableViewWorldMatrix = new Float32Array(16);
 	const buildOverlayRenderState = function(queryArgs, depthRenderState) {
 		queryArgs = queryArgs || {};
 		const visibleShare = getPassthroughVisibleShare(state, state.smoothedBlendDrive);
@@ -666,7 +668,7 @@ const createPassthroughController = function(options) {
 			masks: [],
 			depth: depthRenderState,
 			depthProjectionParams: buildPassthroughDepthProjectionParams(queryArgs.depthProjMatrix || queryArgs.projMatrix),
-			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix) : identityMatrix(),
+			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix, reusableViewWorldMatrix) : IDENTITY_MATRIX,
 			darkAlpha: 1 - darkness,
 			additiveColor: lightingColor,
 			additiveStrength: additiveStrength,
@@ -919,6 +921,7 @@ const createPunchRenderer = function() {
 	let texture2dLocs = null;
 	let cpuDepthTexture = null;
 	let cpuUploadBuffer = null;
+	let cpuDepthTexParamsSet = false;
 	let depthDiagLoggedBool = false;
 	const depthUvTransform = new Float32Array(16);
 	let flashlightProgram = null;
@@ -1142,10 +1145,8 @@ const createPunchRenderer = function() {
 			if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
 				cpuUploadBuffer = new Float32Array(pixelCount);
 			}
-			var src = new Uint16Array(depthInfo.data);
-			for (var p = 0; p < pixelCount; p += 1) {
-				cpuUploadBuffer[p] = src[p];
-			}
+			// Convert Uint16 depth data to Float32 using native .set() instead of element-by-element loop
+			cpuUploadBuffer.set(new Uint16Array(depthInfo.data));
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
 			if (webgl2Bool) {
@@ -1153,10 +1154,13 @@ const createPunchRenderer = function() {
 			} else {
 				gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
 			}
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+			if (!cpuDepthTexParamsSet) {
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+				cpuDepthTexParamsSet = true;
+			}
 			cpuTextureBound = true;
 		} else if (!depthInfo.texture) {
 			return;

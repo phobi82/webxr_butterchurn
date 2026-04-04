@@ -201,67 +201,68 @@ const extractCameraPositionFromViewMatrix = function(viewMatrix) {
 	return reusableCameraPosition;
 };
 
+// Shared read-only identity matrix; do not mutate — used as default fallback by multiple callers
+const IDENTITY_MATRIX = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
 // XR rendering frequently needs the inverse rigid camera transform as a world matrix.
-const buildWorldFromViewMatrix = function(viewMatrix) {
+// Optional out parameter avoids per-call allocation in render loops.
+const buildWorldFromViewMatrix = function(viewMatrix, out) {
 	const cameraPosition = extractCameraPositionFromViewMatrix(viewMatrix);
-	return new Float32Array([
-		viewMatrix[0], viewMatrix[4], viewMatrix[8], 0,
-		viewMatrix[1], viewMatrix[5], viewMatrix[9], 0,
-		viewMatrix[2], viewMatrix[6], viewMatrix[10], 0,
-		cameraPosition.x, cameraPosition.y, cameraPosition.z, 1
-	]);
+	const o = out || new Float32Array(16);
+	o[0] = viewMatrix[0]; o[1] = viewMatrix[4]; o[2] = viewMatrix[8]; o[3] = 0;
+	o[4] = viewMatrix[1]; o[5] = viewMatrix[5]; o[6] = viewMatrix[9]; o[7] = 0;
+	o[8] = viewMatrix[2]; o[9] = viewMatrix[6]; o[10] = viewMatrix[10]; o[11] = 0;
+	o[12] = cameraPosition.x; o[13] = cameraPosition.y; o[14] = cameraPosition.z; o[15] = 1;
+	return o;
 };
 
 const identityMatrix = function() {
-	return new Float32Array([
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		0, 0, 0, 1
-	]);
+	return IDENTITY_MATRIX;
 };
 
-const multiplyMatrices = function(a, b) {
-	const out = new Float32Array(16);
+// Optional out parameter avoids per-call allocation in render loops.
+const multiplyMatrices = function(a, b, out) {
+	const o = out || new Float32Array(16);
 	for (let column = 0; column < 4; column += 1) {
 		for (let row = 0; row < 4; row += 1) {
-			out[column * 4 + row] =
+			o[column * 4 + row] =
 				a[0 * 4 + row] * b[column * 4 + 0] +
 				a[1 * 4 + row] * b[column * 4 + 1] +
 				a[2 * 4 + row] * b[column * 4 + 2] +
 				a[3 * 4 + row] * b[column * 4 + 3];
 		}
 	}
-	return out;
+	return o;
 };
 
-const translateScale = function(tx, ty, tz, sx, sy, sz) {
-	return new Float32Array([
-		sx, 0, 0, 0,
-		0, sy, 0, 0,
-		0, 0, sz, 0,
-		tx, ty, tz, 1
-	]);
+// Optional out parameter avoids per-call allocation in render loops.
+const translateScale = function(tx, ty, tz, sx, sy, sz, out) {
+	const o = out || new Float32Array(16);
+	o[0] = sx; o[1] = 0; o[2] = 0; o[3] = 0;
+	o[4] = 0; o[5] = sy; o[6] = 0; o[7] = 0;
+	o[8] = 0; o[9] = 0; o[10] = sz; o[11] = 0;
+	o[12] = tx; o[13] = ty; o[14] = tz; o[15] = 1;
+	return o;
 };
 
-const translateRotateYScale = function(tx, ty, tz, yaw, sx, sy, sz) {
+const translateRotateYScale = function(tx, ty, tz, yaw, sx, sy, sz, out) {
 	const cosYaw = Math.cos(yaw);
 	const sinYaw = Math.sin(yaw);
-	return new Float32Array([
-		cosYaw * sx, 0, -sinYaw * sx, 0,
-		0, sy, 0, 0,
-		sinYaw * sz, 0, cosYaw * sz, 0,
-		tx, ty, tz, 1
-	]);
+	const o = out || new Float32Array(16);
+	o[0] = cosYaw * sx; o[1] = 0; o[2] = -sinYaw * sx; o[3] = 0;
+	o[4] = 0; o[5] = sy; o[6] = 0; o[7] = 0;
+	o[8] = sinYaw * sz; o[9] = 0; o[10] = cosYaw * sz; o[11] = 0;
+	o[12] = tx; o[13] = ty; o[14] = tz; o[15] = 1;
+	return o;
 };
 
-const basisScale = function(tx, ty, tz, right, up, forward, sx, sy, sz) {
-	return new Float32Array([
-		right.x * sx, right.y * sx, right.z * sx, 0,
-		up.x * sy, up.y * sy, up.z * sy, 0,
-		forward.x * sz, forward.y * sz, forward.z * sz, 0,
-		tx, ty, tz, 1
-	]);
+const basisScale = function(tx, ty, tz, right, up, forward, sx, sy, sz, out) {
+	const o = out || new Float32Array(16);
+	o[0] = right.x * sx; o[1] = right.y * sx; o[2] = right.z * sx; o[3] = 0;
+	o[4] = up.x * sy; o[5] = up.y * sy; o[6] = up.z * sy; o[7] = 0;
+	o[8] = forward.x * sz; o[9] = forward.y * sz; o[10] = forward.z * sz; o[11] = 0;
+	o[12] = tx; o[13] = ty; o[14] = tz; o[15] = 1;
+	return o;
 };
 
 const lerpNumber = function(startValue, endValue, mixValue) {

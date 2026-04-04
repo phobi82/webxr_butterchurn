@@ -777,9 +777,11 @@ const createRuntime = function(options) {
 		const delta = state.lastRenderTime === 0 ? 0 : (time - state.lastRenderTime) / 1000;
 		state.lastRenderTime = time;
 		state.sceneTimeSeconds = time * 0.001;
-		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: pose, dispatchMenuAction: dispatchMenuAction});
+		// Run locomotion before menu input so the reference space is up-to-date
+		// when controller rays and menu pose are computed — prevents jitter and ray lag.
 		applyXrLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
+		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: renderPose, dispatchMenuAction: dispatchMenuAction});
 		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
 		if (state.depthSensingActiveBool && state.xrSession && state.xrSession.depthActive === false) {
 			try { state.xrSession.resumeDepthSensing(); } catch (e) { console.warn("[Depth] resumeDepthSensing failed:", e.message || e); }

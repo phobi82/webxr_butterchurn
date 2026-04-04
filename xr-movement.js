@@ -8,15 +8,22 @@ const createCollisionWorld = function(options) {
 	const playerRadius = options.playerRadius || 0.32;
 	const stepHeight = options.stepHeight || 0.5;
 
+	// Reusable array to avoid per-call allocation of combined box list
+	let combinedBoxes = [];
 	const getBoxes = function() {
-		const boxes = staticBoxes.slice();
+		let count = staticBoxes.length;
 		for (let i = 0; i < dynamicBoxSources.length; i += 1) {
 			const sourceBoxes = dynamicBoxSources[i]() || [];
 			for (let j = 0; j < sourceBoxes.length; j += 1) {
-				boxes.push(sourceBoxes[j]);
+				combinedBoxes[count] = sourceBoxes[j];
+				count += 1;
 			}
 		}
-		return boxes;
+		for (let i = 0; i < staticBoxes.length; i += 1) {
+			combinedBoxes[i] = staticBoxes[i];
+		}
+		combinedBoxes.length = count;
+		return combinedBoxes;
 	};
 
 	const getBoxBounds = function(box) {
