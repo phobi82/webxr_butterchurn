@@ -135,6 +135,7 @@ The menu exposes these sections:
 ## Run Locally
 
 There is no build step and no backend.
+Repository text files use `LF` line endings by policy; `.gitattributes` and `.editorconfig` keep that stable across editors on Windows, macOS, and Linux.
 
 1. Clone or download the repository.
 2. Open [`index.html`](./index.html) in a modern browser.

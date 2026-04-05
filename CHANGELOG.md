@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Added repo-wide line-ending policy files (`.gitattributes`, `.editorconfig`) and normalized mixed XR source files to `LF` so routine edits on Windows stop producing stray line-ending diffs.
 - Added a passthrough lighting `Anchor` mode cycler (`Auto`, `VR World`, `Real World`) under `Scene Lighting`, with `Auto` preferring real-world anchoring when usable depth is available and otherwise falling back to VR-world anchoring.
 - Rebuilt passthrough light projection around one general surface path: when processed fullscreen depth is available, the overlay renderer binds MR light masks directly against that geometry; otherwise they fall back to the hypothetical room shell.
 - Replaced per-frame passthrough light object packing with one shared `lightLayers` typed-array buffer, so projection and overlay rendering now reuse the same frame data directly.
