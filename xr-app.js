@@ -84,7 +84,7 @@ const DEFAULT_APP_CONFIG = {
 		eyeDistanceMax: 0.2,
 		floorAlphaMin: 0,
 		floorAlphaMax: 1,
-		desktopMenuPreviewWidthPixels: 420,
+		desktopMenuPreviewWidthPixels: 800,
 		jumpModeDoubleMinU: 0.1,
 		jumpModeDoubleMaxU: 0.45,
 		jumpModeMultiMinU: 0.55,

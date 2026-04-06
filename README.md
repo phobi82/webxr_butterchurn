@@ -121,6 +121,8 @@ The menu exposes these sections:
 - **Session**: Exit VR button
 - **Audio Meters**: Level, Bass, Kick, Bass Hit, Transient, Beat Pulse, Strobe, Fill, Left Hit, Right Hit
 
+The main control deck is laid out in multiple numbered columns: audio meters run across the full top row, `Background` now sits in the left stack directly under `World Opacity`, `Passthrough` and `Scene Lighting` occupy the second column, and `Exit VR` is reserved for the footer at the bottom. The menu texture is wider than the original single-column version, while the in-headset plane stays smaller than a literal 2x expansion.
+
 ## Requirements
 
 | Requirement | Enables |
@@ -157,6 +159,8 @@ Use `start-local-https-server.bat` to start a small HTTPS static server on port 
 ### Quest Debugging Over Wi-Fi
 
 For longer debugging sessions, switch `adb` from USB to Wi-Fi:
+
+Run `switch-quest-adb-to-wifi.bat` from the repo root to execute the full sequence automatically. The script auto-detects one USB-connected Quest even when other `adb` targets are present, reports if a Quest is already connected over Wi-Fi without USB, and stops if multiple Quest headsets are connected over USB at the same time.
 
 1. Connect the Quest once over USB and confirm USB debugging on the headset.
 2. Run `adb tcpip 5555`.

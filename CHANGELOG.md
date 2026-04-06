@@ -8,7 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Added `switch-quest-adb-to-wifi.bat` in the repo root so Quest USB-to-Wi-Fi `adb` switching can be run as one local helper script, auto-detecting a single USB-connected Quest even when other `adb` targets exist, reporting when a Quest is already connected over Wi-Fi without USB, retrying after `adb tcpip`, and falling back to `getprop` IP lookup before `adb connect`.
 - Added repo-wide line-ending policy files (`.gitattributes`, `.editorconfig`) and normalized mixed XR source files to `LF` so routine edits on Windows stop producing stray line-ending diffs.
+- Rebuilt the main VR Control Deck menu into a more flexible multi-column layout: audio meters now span the full top row, `Background` sits in the left control stack under `World Opacity`, `Passthrough` and `Scene Lighting` remain in the second column, `Exit VR` is reserved for the footer, and slider dragging now uses per-section track geometry again.
+- Increased the in-headset menu plane scale by about 25% so the full multi-column deck reads larger without changing its internal section layout.
 - Added a passthrough lighting `Anchor` mode cycler (`Auto`, `VR World`, `Real World`) under `Scene Lighting`, with `Auto` preferring real-world anchoring when usable depth is available and otherwise falling back to VR-world anchoring.
 - Rebuilt passthrough light projection around one general surface path: when processed fullscreen depth is available, the overlay renderer binds MR light masks directly against that geometry; otherwise they fall back to the hypothetical room shell.
 - Replaced per-frame passthrough light object packing with one shared `lightLayers` typed-array buffer, so projection and overlay rendering now reuse the same frame data directly.

@@ -33,6 +33,8 @@ const createMenuSectionState = function(args) {
 	args = args || {};
 	return {
 		key: args.key || "",
+		columnIndex: args.columnIndex == null ? 1 : args.columnIndex,
+		footerBool: !!args.footerBool,
 		title: args.title || "",
 		badgeText: args.badgeText || "",
 		statusText: args.statusText || "",
@@ -89,6 +91,8 @@ const createSessionMenuSectionState = function(args) {
 	}
 	return createMenuSectionState({
 		key: "session",
+		columnIndex: args.columnIndex,
+		footerBool: !!args.footerBool,
 		title: "Session",
 		statusText: "Leave the current immersive session.",
 		controls: [
@@ -118,7 +122,7 @@ const createSliderMenuControlState = function(args) {
 		key: args.key || "",
 		label: args.label || "",
 		valueText: args.valueText || "",
-		sliderU: args.sliderU || 0,
+		sliderT: args.sliderT == null ? 0 : args.sliderT,
 		minLabel: args.minLabel || "",
 		maxLabel: args.maxLabel || "",
 		hoveredBool: !!args.hoveredBool,
@@ -139,7 +143,7 @@ const appendSliderMenuControls = function(targetControls, sliderControls) {
 			key: sliderControl.control.key,
 			label: sliderControl.control.label,
 			valueText: sliderControl.control.valueText || formatMenuPercentText(sliderControl.control.value),
-			sliderU: sliderControl.sliderU || 0,
+			sliderT: sliderControl.sliderT == null ? 0 : sliderControl.sliderT,
 			minLabel: sliderControl.control.minLabel,
 			maxLabel: sliderControl.control.maxLabel,
 			hoveredBool: !!sliderControl.hoveredBool,
@@ -154,6 +158,7 @@ const createJumpModeMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
 		key: "jumpMode",
+		columnIndex: args.columnIndex,
 		title: "Jump Mode",
 		controls: [
 			createChoiceRowMenuControlState({
@@ -188,6 +193,7 @@ const createWorldOpacityMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
 		key: "worldOpacity",
+		columnIndex: args.columnIndex,
 		title: "World Opacity",
 		badgeText: formatMenuPercentText(args.value || 0),
 		controls: [
@@ -195,7 +201,7 @@ const createWorldOpacityMenuSectionState = function(args) {
 				key: "floorAlpha",
 				label: "",
 				valueText: "",
-				sliderU: args.sliderU || 0,
+				sliderT: args.sliderT == null ? 0 : args.sliderT,
 				minLabel: "Invisible",
 				maxLabel: "Solid",
 				hoveredBool: !!args.hoveredBool,
@@ -211,6 +217,7 @@ const createEyeDistanceMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
 		key: "eyeDistance",
+		columnIndex: args.columnIndex,
 		title: "Eye Distance",
 		badgeText: Math.round((args.value || 0) * 1000) + " mm",
 		controls: [
@@ -218,7 +225,7 @@ const createEyeDistanceMenuSectionState = function(args) {
 				key: "eyeDistance",
 				label: "",
 				valueText: "",
-				sliderU: args.sliderU || 0,
+				sliderT: args.sliderT == null ? 0 : args.sliderT,
 				minLabel: Math.round((args.min || 0) * 1000) + " mm",
 				maxLabel: Math.round((args.max || 0) * 1000) + " mm",
 				hoveredBool: !!args.hoveredBool,
@@ -234,6 +241,7 @@ const createVisualizerModeMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
 		key: "visualizerMode",
+		columnIndex: args.columnIndex,
 		title: "Visualizer Mode",
 		controls: [
 			createCyclerMenuControlState({
@@ -264,6 +272,7 @@ const createButterchurnPresetMenuSectionState = function(args) {
 	args = args || {};
 	return createMenuSectionState({
 		key: "butterchurnPreset",
+		columnIndex: args.columnIndex,
 		title: "Butterchurn Preset",
 		controls: [
 			createCyclerMenuControlState({
@@ -302,6 +311,7 @@ const createBackgroundMenuSectionState = function(args) {
 	appendSliderMenuControls(controls, args.sliderControls);
 	return createMenuSectionState({
 		key: "background",
+		columnIndex: args.columnIndex,
 		title: "Background",
 		badgeText: formatMenuPercentText(uiState.visibleShare || 0),
 		controls: controls
@@ -326,7 +336,7 @@ const createPassthroughMenuSectionState = function(args) {
 			key: sliderControl.control.key,
 			label: sliderControl.control.label,
 			valueText: sliderControl.control.valueText || formatMenuPercentText(sliderControl.control.value),
-			sliderU: sliderControl.sliderU || 0,
+			sliderT: sliderControl.sliderT == null ? 0 : sliderControl.sliderT,
 			minLabel: sliderControl.control.minLabel,
 			maxLabel: sliderControl.control.maxLabel,
 			hoveredBool: !!sliderControl.hoveredBool,
@@ -376,6 +386,7 @@ const createPassthroughMenuSectionState = function(args) {
 				{
 					key: "passthroughDepthRadialToggle",
 					label: "real Distance Metric",
+					valueText: uiState.depthRadialBool ? "radial" : "planar",
 					checkedBool: !!uiState.depthRadialBool,
 					hoveredBool: hasHoveredActionKey(args, "passthroughDepthRadialToggle:toggle"),
 					action: {type: "passthroughDepthRadial.toggle"},
@@ -384,6 +395,7 @@ const createPassthroughMenuSectionState = function(args) {
 				{
 					key: "passthroughDepthMotionCompensationToggle",
 					label: "Motion compensation",
+					valueText: uiState.depthMotionCompensationBool ? "On" : "Off",
 					checkedBool: !!uiState.depthMotionCompensationBool,
 					hoveredBool: hasHoveredActionKey(args, "passthroughDepthMotionCompensationToggle:toggle"),
 					action: {type: "passthroughDepthMotionCompensation.toggle"},
@@ -459,6 +471,7 @@ const createPassthroughMenuSectionState = function(args) {
 	}
 	return createMenuSectionState({
 		key: "passthrough",
+		columnIndex: args.columnIndex,
 		title: "Passthrough",
 		statusText: uiState.statusText || "",
 		statusTone: uiState.availableBool ? "muted" : "warning",
@@ -505,6 +518,7 @@ const createSceneLightingMenuSectionState = function(args) {
 	appendSliderMenuControls(controls, args.sliderControls);
 	return createMenuSectionState({
 		key: "sceneLighting",
+		columnIndex: args.columnIndex,
 		title: "Scene Lighting",
 		controls: controls
 	});
@@ -516,31 +530,36 @@ const createLowerMenuSections = function(args) {
 	return [
 		createJumpModeMenuSectionState({
 			selectedJumpMode: args.selectedJumpMode,
-			hoveredActionKeys: args.hoveredActionKeys
+			hoveredActionKeys: args.hoveredActionKeys,
+			columnIndex: 1
 		}),
 		createEyeDistanceMenuSectionState({
 			value: args.eyeDistanceMeters,
 			min: args.eyeDistanceMin,
 			max: args.eyeDistanceMax,
-			sliderU: args.eyeDistanceSliderU,
+			sliderT: args.eyeDistanceSliderT,
 			hoveredBool: args.eyeDistanceHoverBool,
-			activeBool: args.eyeDistanceActiveBool
+			activeBool: args.eyeDistanceActiveBool,
+			columnIndex: 1
 		}),
 		createWorldOpacityMenuSectionState({
 			value: args.floorAlpha,
-			sliderU: args.floorAlphaSliderU,
+			sliderT: args.floorAlphaSliderT,
 			hoveredBool: args.floorAlphaHoverBool,
-			activeBool: args.floorAlphaActiveBool
+			activeBool: args.floorAlphaActiveBool,
+			columnIndex: 1
 		}),
 		createBackgroundMenuSectionState({
 			uiState: args.passthroughUiState,
 			hoveredActionKeys: args.hoveredActionKeys,
-			sliderControls: args.backgroundControls
+			sliderControls: args.backgroundControls,
+			columnIndex: 1
 		}),
 		createPassthroughMenuSectionState({
 			uiState: args.passthroughUiState,
 			hoveredActionKeys: args.hoveredActionKeys,
-			sliderControls: args.passthroughControls
+			sliderControls: args.passthroughControls,
+			columnIndex: 2
 		}),
 		createSceneLightingMenuSectionState({
 			lightingModes: args.lightingModes,
@@ -550,23 +569,28 @@ const createLowerMenuSections = function(args) {
 			hoveredActionKeys: args.hoveredActionKeys,
 			currentLightPresetName: args.currentLightPresetName,
 			currentLightPresetDescription: args.currentLightPresetDescription,
-			sliderControls: args.sceneLightingControls
+			sliderControls: args.sceneLightingControls,
+			columnIndex: 2
 		}),
 		createVisualizerModeMenuSectionState({
 			valueText: args.currentShaderModeName,
 			metaText: args.shaderModeMetaText,
 			hoveredActionKeys: args.hoveredActionKeys,
 			horizontalMirrorBool: args.horizontalMirrorBool,
-			checkboxValueText: args.horizontalMirrorBool ? "On" : "Off"
+			checkboxValueText: args.horizontalMirrorBool ? "On" : "Off",
+			columnIndex: 1
 		}),
 		createButterchurnPresetMenuSectionState({
 			valueText: args.currentPresetName,
 			metaText: args.presetMetaText,
-			hoveredActionKeys: args.hoveredActionKeys
+			hoveredActionKeys: args.hoveredActionKeys,
+			columnIndex: 1
 		}),
 		createSessionMenuSectionState({
 			xrSessionActiveBool: !!args.xrSessionActiveBool,
-			hoveredActionKeys: args.hoveredActionKeys
+			hoveredActionKeys: args.hoveredActionKeys,
+			columnIndex: 1,
+			footerBool: true
 		})
 	].filter(Boolean);
 };
@@ -664,6 +688,9 @@ const createMenuView = function(options) {
 	const emptyModeNames = ["No mode"];
 	const emptyPresetNames = ["No preset"];
 	const titleText = options.titleText || "VR Control Deck";
+	const defaultWideMenuLayoutWidth = 2080;
+	const menuWorldScale = options.menuWorldScale == null ? 1.25 : options.menuWorldScale;
+	const multiColumnWorldWidthStep = options.multiColumnWorldWidthStep == null ? 0.22 : options.multiColumnWorldWidthStep;
 	const buildAudioBarItems = options.getAudioBarItems || function(audioMetrics) {
 		audioMetrics = audioMetrics || emptyAudioMetrics;
 		return [
@@ -681,7 +708,7 @@ const createMenuView = function(options) {
 	};
 	const documentRef = options.documentRef || document;
 	const previewParentElement = options.previewParentElement || options.parentElement || documentRef.body;
-	const menuLayoutWidth = options.canvasWidth || 1280;
+	const menuLayoutWidth = options.canvasWidth || defaultWideMenuLayoutWidth;
 	const menuCanvas = documentRef.createElement("canvas");
 	menuCanvas.width = menuLayoutWidth;
 	menuCanvas.height = options.canvasHeight || 960;
@@ -692,7 +719,7 @@ const createMenuView = function(options) {
 	previewCanvas.setAttribute("role", "img");
 	previewCanvas.setAttribute("aria-label", "Desktop menu preview");
 	const previewCtx = previewCanvas.getContext("2d");
-	const previewWidthPixels = options.desktopMenuPreviewWidthPixels || 420;
+	const previewWidthPixels = options.desktopMenuPreviewWidthPixels || 800;
 	previewCanvas.width = menuCanvas.width;
 	previewCanvas.height = menuCanvas.height;
 	applyStyles(previewCanvas, {
@@ -710,7 +737,7 @@ const createMenuView = function(options) {
 	});
 	applyStyles(previewCanvas, options.previewStyle);
 	previewParentElement.appendChild(previewCanvas);
-	const getSectionPanelLayout = function(panelTop, section) {
+	const getSectionPanelLayout = function(panelLeft, panelWidth, panelTop, section) {
 		section = section || {};
 		const controls = section.controls || [];
 		let cursorY = panelTop + 72;
@@ -756,6 +783,10 @@ const createMenuView = function(options) {
 		}
 		return {
 			key: section.key,
+			panelLeft: panelLeft,
+			panelWidth: panelWidth,
+			panelRight: panelLeft + panelWidth,
+			centerX: panelLeft + panelWidth * 0.5,
 			panelTop: panelTop,
 			panelHeight: cursorY - panelTop + 18,
 			titleY: panelTop + 38,
@@ -764,21 +795,90 @@ const createMenuView = function(options) {
 			controlLayouts: controlLayouts
 		};
 	};
-	const getSectionLayouts = function(menuSections, startTop, sectionGap) {
+	const getColumnSectionLayouts = function(menuSections, startTop, sectionGap, panelLeft, panelWidth) {
 		const layouts = [];
 		const layoutByKey = {};
+		const controlLayoutByKey = {};
 		let currentTop = startTop;
 		for (let i = 0; i < menuSections.length; i += 1) {
-			const sectionLayout = getSectionPanelLayout(currentTop, menuSections[i]);
+			const sectionLayout = getSectionPanelLayout(panelLeft, panelWidth, currentTop, menuSections[i]);
 			layouts.push(sectionLayout);
 			layoutByKey[menuSections[i].key] = sectionLayout;
+			for (let j = 0; j < sectionLayout.controlLayouts.length; j += 1) {
+				if (!sectionLayout.controlLayouts[j].key) {
+					continue;
+				}
+				controlLayoutByKey[sectionLayout.controlLayouts[j].key] = {
+					sectionLayout: sectionLayout,
+					controlLayout: sectionLayout.controlLayouts[j]
+				};
+			}
 			currentTop += sectionLayout.panelHeight + sectionGap;
 		}
 		return {
 			layouts: layouts,
 			layoutByKey: layoutByKey,
+			controlLayoutByKey: controlLayoutByKey,
 			nextTop: currentTop
 		};
+	};
+	const getCyclerGeometry = function(sectionLayout) {
+		const edgeInset = 18;
+		const buttonWidth = Math.min(96, Math.max(74, sectionLayout.panelWidth * 0.16));
+		return {
+			prevX: sectionLayout.panelLeft + edgeInset,
+			prevWidth: buttonWidth,
+			nextX: sectionLayout.panelRight - edgeInset - buttonWidth,
+			nextWidth: buttonWidth,
+			centerX: sectionLayout.centerX
+		};
+	};
+	const getChoiceRowGeometry = function(sectionLayout, control) {
+		const rowInset = 18;
+		const items = control.items || [];
+		const checkboxRowBool = control.rowStyle === "checkbox";
+		const rowStartX = sectionLayout.panelLeft + rowInset;
+		const rowEndX = sectionLayout.panelRight - rowInset;
+		const rowWidth = rowEndX - rowStartX;
+		const gap = checkboxRowBool ? 18 : 26;
+		const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
+		return {
+			rowStartX: rowStartX,
+			rowEndX: rowEndX,
+			rowWidth: rowWidth,
+			gap: gap,
+			buttonWidth: buttonWidth
+		};
+	};
+	const getCheckboxGeometry = function(sectionLayout) {
+		const rowInset = 18;
+		return {
+			rowStartX: sectionLayout.panelLeft + rowInset,
+			rowEndX: sectionLayout.panelRight - rowInset,
+			rowWidth: sectionLayout.panelWidth - rowInset * 2
+		};
+	};
+	const getSliderTrackGeometry = function(sectionLayout) {
+		const trackInset = Math.max(78, sectionLayout.panelWidth * 0.16);
+		return {
+			trackStartX: sectionLayout.panelLeft + trackInset,
+			trackEndX: sectionLayout.panelRight - trackInset
+		};
+	};
+	const getSliderKnobX = function(sectionLayout, sliderT) {
+		const sliderTrack = getSliderTrackGeometry(sectionLayout);
+		return sliderTrack.trackStartX + clampNumber(sliderT, 0, 1) * (sliderTrack.trackEndX - sliderTrack.trackStartX);
+	};
+	const getSliderTFromCanvasX = function(sectionLayout, x) {
+		const sliderTrack = getSliderTrackGeometry(sectionLayout);
+		return clampNumber((x - sliderTrack.trackStartX) / (sliderTrack.trackEndX - sliderTrack.trackStartX), 0, 1);
+	};
+	const getSliderTForControlAtCanvasX = function(layout, controlKey, x) {
+		const controlEntry = layout.controlLayoutByKey[controlKey];
+		if (!controlEntry || !controlEntry.sectionLayout) {
+			return clampNumber(x / menuLayoutWidth, 0, 1);
+		}
+		return getSliderTFromCanvasX(controlEntry.sectionLayout, x);
 	};
 	let cachedLayoutKey = "";
 	let cachedLayoutResult = null;
@@ -786,7 +886,7 @@ const createMenuView = function(options) {
 		let key = menuSections.length + ":";
 		for (let i = 0; i < menuSections.length; i += 1) {
 			const controls = menuSections[i].controls || [];
-			key += menuSections[i].key + controls.length;
+			key += menuSections[i].key + menuSections[i].columnIndex + (menuSections[i].footerBool ? "f" : "c") + controls.length;
 			for (let ci = 0; ci < controls.length; ci += 1) {
 				key += controls[ci].type || "";
 			}
@@ -802,47 +902,84 @@ const createMenuView = function(options) {
 			return cachedLayoutResult;
 		}
 		const audioBarItems = buildAudioBarItems(emptyAudioMetrics).length;
-		const innerFrameInset = 24;
 		const audioPanelTop = 108;
 		const audioBarTop = 116;
 		const audioBarSpacing = 12;
 		const audioPanelHeight = (audioBarTop - audioPanelTop) + (audioBarItems - 1) * audioBarSpacing + 18;
 		const sectionGap = 12;
-		const lowerSections = getSectionLayouts(menuSections, audioPanelTop + audioPanelHeight + sectionGap, sectionGap);
-		const prevX = menuLayoutWidth * options.presetPrevMinU;
-		const prevWidth = menuLayoutWidth * (options.presetPrevMaxU - options.presetPrevMinU);
-		const nextX = menuLayoutWidth * options.presetNextMinU;
-		const nextWidth = menuLayoutWidth * (options.presetNextMaxU - options.presetNextMinU);
-		const centerX = menuLayoutWidth * 0.5;
-		const trackStartX = menuLayoutWidth * options.menuSliderMinU;
-		const trackEndX = menuLayoutWidth * options.menuSliderMaxU;
+		const lowerStartTop = audioPanelTop + audioPanelHeight + sectionGap;
+		const columnSections = [];
+		const footerSections = [];
+		let columnCount = 1;
+		for (let i = 0; i < menuSections.length; i += 1) {
+			if (menuSections[i].footerBool) {
+				footerSections.push(menuSections[i]);
+				continue;
+			}
+			columnSections.push(menuSections[i]);
+			columnCount = Math.max(columnCount, menuSections[i].columnIndex == null ? 1 : menuSections[i].columnIndex);
+		}
+		const innerFrameInset = 24;
+		const contentLeft = innerFrameInset + 18;
+		const contentRight = menuLayoutWidth - innerFrameInset - 18;
+		const contentWidth = contentRight - contentLeft;
+		const columnGap = columnCount > 1 ? 24 : 0;
+		const columnWidth = (contentWidth - columnGap * Math.max(0, columnCount - 1)) / Math.max(1, columnCount);
+		const columnLayouts = [];
+		const sectionLayoutByKey = {};
+		const controlLayoutByKey = {};
+		const sectionLayouts = [];
+		let columnBottom = audioPanelTop + audioPanelHeight;
+		for (let columnIndex = 1; columnIndex <= columnCount; columnIndex += 1) {
+			const columnSectionsForIndex = columnSections.filter(function(section) {
+				return (section.columnIndex == null ? 1 : section.columnIndex) === columnIndex;
+			});
+			const columnLayout = getColumnSectionLayouts(
+				columnSectionsForIndex,
+				lowerStartTop,
+				sectionGap,
+				contentLeft + (columnIndex - 1) * (columnWidth + columnGap),
+				columnWidth
+			);
+			columnLayouts.push(columnLayout);
+			columnBottom = Math.max(columnBottom, columnLayout.layouts.length ? columnLayout.layouts[columnLayout.layouts.length - 1].panelTop + columnLayout.layouts[columnLayout.layouts.length - 1].panelHeight : audioPanelTop + audioPanelHeight);
+			Object.assign(sectionLayoutByKey, columnLayout.layoutByKey);
+			Object.assign(controlLayoutByKey, columnLayout.controlLayoutByKey);
+			Array.prototype.push.apply(sectionLayouts, columnLayout.layouts);
+		}
+		const footerStartTop = footerSections.length ? columnBottom + sectionGap : columnBottom;
+		const footerLayout = footerSections.length ? getColumnSectionLayouts(footerSections, footerStartTop, sectionGap, contentLeft, contentWidth) : {
+			layouts: [],
+			layoutByKey: {},
+			controlLayoutByKey: {},
+			nextTop: footerStartTop
+		};
 		const sliderReachPadPx = 28;
-		const lastSectionBottom = lowerSections.layouts.length ? lowerSections.layouts[lowerSections.layouts.length - 1].panelTop + lowerSections.layouts[lowerSections.layouts.length - 1].panelHeight : audioPanelTop + audioPanelHeight;
+		const footerBottom = footerLayout.layouts.length ? footerLayout.layouts[footerLayout.layouts.length - 1].panelTop + footerLayout.layouts[footerLayout.layouts.length - 1].panelHeight : columnBottom;
+		const lastSectionBottom = Math.max(columnBottom, footerBottom);
 		const canvasHeight = Math.ceil(lastSectionBottom + 30 + sectionGap);
-		const contentInset = canvasHeight - innerFrameInset - lastSectionBottom;
-		const contentLeft = innerFrameInset + contentInset;
-		const contentRight = menuLayoutWidth - innerFrameInset - contentInset;
+		Object.assign(sectionLayoutByKey, footerLayout.layoutByKey);
+		Object.assign(controlLayoutByKey, footerLayout.controlLayoutByKey);
+		Array.prototype.push.apply(sectionLayouts, footerLayout.layouts);
 		cachedLayoutResult = Object.assign({
 			contentLeft: contentLeft,
-			contentWidth: contentRight - contentLeft,
+			contentWidth: contentWidth,
 			contentRight: contentRight,
 			canvasHeight: canvasHeight,
 			audioPanelTop: audioPanelTop,
 			audioBarTop: audioBarTop,
 			audioBarSpacing: audioBarSpacing,
 			audioPanelHeight: audioPanelHeight,
-			prevX: prevX,
-			prevWidth: prevWidth,
-			nextX: nextX,
-			nextWidth: nextWidth,
-			centerX: centerX,
-			trackStartX: trackStartX,
-			trackEndX: trackEndX,
+			centerX: menuLayoutWidth * 0.5,
+			columnCount: columnCount,
+			columnGap: columnGap,
+			columnWidth: columnWidth,
 			sliderReachPadPx: sliderReachPadPx,
 			sliderHalfHeightPx: options.menuSliderHalfHeight * canvasHeight,
 			menuSections: menuSections,
-			sectionLayoutByKey: lowerSections.layoutByKey,
-			sectionLayouts: lowerSections.layouts
+			sectionLayoutByKey: sectionLayoutByKey,
+			controlLayoutByKey: controlLayoutByKey,
+			sectionLayouts: sectionLayouts
 		});
 		cachedLayoutKey = layoutKey;
 		return cachedLayoutResult;
@@ -863,7 +1000,7 @@ const createMenuView = function(options) {
 	};
 	const getMenuPlaneDimensions = function(menuSections) {
 		const layout = getLayoutMetrics(menuSections);
-		const worldMenuWidth = options.menuWorldWidth || options.menuWidth || 0.74;
+		const worldMenuWidth = (options.menuWorldWidth || options.menuWidth || 0.74) * menuWorldScale * (1 + Math.max(0, layout.columnCount - 1) * multiColumnWorldWidthStep);
 		return {
 			width: worldMenuWidth,
 			height: worldMenuWidth * (layout.canvasHeight / menuLayoutWidth)
@@ -884,6 +1021,7 @@ const createMenuView = function(options) {
 		let action = null;
 		let hoverKey = "";
 		let moduleSliderControlKey = "";
+		let sliderT = 0;
 		for (let i = 0; i < layout.menuSections.length; i += 1) {
 			const section = layout.menuSections[i];
 			const sectionLayout = layout.sectionLayoutByKey[section.key];
@@ -894,37 +1032,40 @@ const createMenuView = function(options) {
 				const controlLayout = sectionLayout.controlLayouts[j];
 				const control = section.controls[j];
 				if (control.type === "cycler" && y >= controlLayout.arrowButtonTop && y <= controlLayout.arrowButtonTop + controlLayout.arrowButtonHeight) {
-					if (x >= layout.prevX && x <= layout.prevX + layout.prevWidth) {
+					const cyclerGeometry = getCyclerGeometry(sectionLayout);
+					if (x >= cyclerGeometry.prevX && x <= cyclerGeometry.prevX + cyclerGeometry.prevWidth) {
 						action = control.prevAction || null;
 						hoverKey = control.prevHoverKey || "";
-					} else if (x >= layout.nextX && x <= layout.nextX + layout.nextWidth) {
+					} else if (x >= cyclerGeometry.nextX && x <= cyclerGeometry.nextX + cyclerGeometry.nextWidth) {
 						action = control.nextAction || null;
 						hoverKey = control.nextHoverKey || "";
 					}
 				}
 				if (control.type === "choiceRow" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight) {
 					const items = control.items || [];
-					const checkboxRowBool = control.rowStyle === "checkbox";
-					const gap = checkboxRowBool ? 28 : 100;
-					const rowStartX = layout.prevX;
-					const rowEndX = layout.nextX + layout.nextWidth;
-					const rowWidth = rowEndX - rowStartX;
-					const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
+					const rowGeometry = getChoiceRowGeometry(sectionLayout, control);
 					for (let k = 0; k < items.length; k += 1) {
-						const itemX = rowStartX + k * (buttonWidth + gap);
-						if (x >= itemX && x <= itemX + buttonWidth) {
+						const itemX = rowGeometry.rowStartX + k * (rowGeometry.buttonWidth + rowGeometry.gap);
+						if (x >= itemX && x <= itemX + rowGeometry.buttonWidth) {
 							action = items[k].action || null;
 							hoverKey = items[k].hoverKey || "";
 						}
 					}
 				}
-				if (control.type === "checkbox" && y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight && x >= layout.prevX && x <= layout.nextX + layout.nextWidth) {
-					action = control.action || null;
-					hoverKey = control.hoverKey || "";
+				if (control.type === "checkbox") {
+					const checkboxGeometry = getCheckboxGeometry(sectionLayout);
+					if (y >= controlLayout.rowTop && y <= controlLayout.rowTop + controlLayout.rowHeight && x >= checkboxGeometry.rowStartX && x <= checkboxGeometry.rowEndX) {
+						action = control.action || null;
+						hoverKey = control.hoverKey || "";
+					}
 				}
-				if (control.type === "slider" && y >= controlLayout.hitTop && y <= controlLayout.hitBottom && x >= layout.contentLeft + 20 && x <= layout.contentRight - 20) {
-					moduleSliderControlKey = control.sliderKey || control.key;
-					hoverKey = control.hoverKey || moduleSliderControlKey;
+				if (control.type === "slider") {
+					const sliderTrack = getSliderTrackGeometry(sectionLayout);
+					if (y >= controlLayout.hitTop && y <= controlLayout.hitBottom && x >= sliderTrack.trackStartX - 20 && x <= sliderTrack.trackEndX + 20) {
+						moduleSliderControlKey = control.sliderKey || control.key;
+						sliderT = getSliderTFromCanvasX(sectionLayout, x);
+						hoverKey = control.hoverKey || moduleSliderControlKey;
+					}
 				}
 			}
 		}
@@ -934,7 +1075,9 @@ const createMenuView = function(options) {
 		return {
 			action: action,
 			hoverKey: hoverKey,
-			moduleSliderControlKey: moduleSliderControlKey
+			moduleSliderControlKey: moduleSliderControlKey,
+			sliderT: moduleSliderControlKey ? sliderT : 0,
+			u: clampNumber(x / menuLayoutWidth, 0, 1)
 		};
 	};
 	return {
@@ -946,8 +1089,15 @@ const createMenuView = function(options) {
 		getInteractionAtUv: function(u, v, moduleSections) {
 			const layout = getLayoutMetrics(moduleSections);
 			const x = u * menuLayoutWidth;
-			const y = v * layout.canvasHeight;
-			return getSectionInteraction(layout, x, y);
+			const interaction = getSectionInteraction(layout, x, v * layout.canvasHeight);
+			if (!interaction.moduleSliderControlKey) {
+				interaction.u = clampNumber(u, 0, 1);
+			}
+			return interaction;
+		},
+		getSliderTAtUv: function(u, v, moduleSections, controlKey) {
+			const layout = getLayoutMetrics(moduleSections);
+			return getSliderTForControlAtCanvasX(layout, controlKey, u * menuLayoutWidth);
 		},
 		render: function(renderState) {
 			renderState = renderState || {};
@@ -1015,27 +1165,23 @@ const createMenuView = function(options) {
 				menuCtx.fillStyle = accentColor;
 				menuCtx.fillText(Math.round(item.value * 100) + "%", layout.contentRight - 16, rowY);
 			}
-			const drawChoiceRow = function(control, controlLayout) {
+			const drawChoiceRow = function(sectionLayout, control, controlLayout) {
 				const items = control.items || [];
 				const checkboxRowBool = control.rowStyle === "checkbox";
-				const gap = checkboxRowBool ? 28 : 100;
-				const rowStartX = layout.prevX;
-				const rowEndX = layout.nextX + layout.nextWidth;
-				const rowWidth = rowEndX - rowStartX;
-				const buttonWidth = (rowWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length);
+				const rowGeometry = getChoiceRowGeometry(sectionLayout, control);
 				for (let i = 0; i < items.length; i += 1) {
 					const item = items[i];
-					const itemX = rowStartX + i * (buttonWidth + gap);
+					const itemX = rowGeometry.rowStartX + i * (rowGeometry.buttonWidth + rowGeometry.gap);
 					if (checkboxRowBool) {
 						const boxSize = 28;
 						const boxX = itemX + 14;
 						const boxY = controlLayout.rowTop + (controlLayout.rowHeight - boxSize) * 0.5;
 						const rowCenterY = controlLayout.rowTop + controlLayout.rowHeight * 0.5;
 						menuCtx.fillStyle = item.hoveredBool ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)";
-						menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.fillRect(itemX, controlLayout.rowTop, rowGeometry.buttonWidth, controlLayout.rowHeight);
 						menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
 						menuCtx.lineWidth = 2;
-						menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.strokeRect(itemX, controlLayout.rowTop, rowGeometry.buttonWidth, controlLayout.rowHeight);
 						menuCtx.fillStyle = item.checkedBool ? accentSoft : "rgba(255,255,255,0.08)";
 						menuCtx.fillRect(boxX, boxY, boxSize, boxSize);
 						menuCtx.strokeStyle = item.hoveredBool || item.checkedBool ? accentColor : "rgba(255,255,255,0.35)";
@@ -1059,23 +1205,23 @@ const createMenuView = function(options) {
 							menuCtx.textAlign = "right";
 							menuCtx.fillStyle = accentColor;
 							menuCtx.font = "bold 18px Arial";
-							menuCtx.fillText(item.valueText, itemX + buttonWidth - 14, rowCenterY);
+							menuCtx.fillText(item.valueText, itemX + rowGeometry.buttonWidth - 14, rowCenterY);
 						}
 					} else {
 						menuCtx.textBaseline = "top";
 						menuCtx.fillStyle = item.selectedBool ? accentSoft : item.hoveredBool ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)";
-						menuCtx.fillRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.fillRect(itemX, controlLayout.rowTop, rowGeometry.buttonWidth, controlLayout.rowHeight);
 						menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
 						menuCtx.lineWidth = 2;
-						menuCtx.strokeRect(itemX, controlLayout.rowTop, buttonWidth, controlLayout.rowHeight);
+						menuCtx.strokeRect(itemX, controlLayout.rowTop, rowGeometry.buttonWidth, controlLayout.rowHeight);
 						menuCtx.fillStyle = "#ffffff";
 						menuCtx.font = "bold 30px Arial";
 						menuCtx.textAlign = "center";
-						menuCtx.fillText(item.label, itemX + buttonWidth * 0.5, controlLayout.rowTop + 16);
+						menuCtx.fillText(item.label, itemX + rowGeometry.buttonWidth * 0.5, controlLayout.rowTop + 16);
 						if (item.metaText) {
 							menuCtx.fillStyle = "rgba(255,255,255,0.7)";
 							menuCtx.font = "20px Arial";
-							menuCtx.fillText(item.metaText, itemX + buttonWidth * 0.5, controlLayout.rowTop + 48);
+							menuCtx.fillText(item.metaText, itemX + rowGeometry.buttonWidth * 0.5, controlLayout.rowTop + 48);
 						}
 					}
 				}
@@ -1089,18 +1235,18 @@ const createMenuView = function(options) {
 				}
 				menuCtx.textAlign = "left";
 				menuCtx.fillStyle = "rgba(6,14,24,0.82)";
-				menuCtx.fillRect(layout.contentLeft, sectionLayout.panelTop, layout.contentWidth, sectionLayout.panelHeight);
+				menuCtx.fillRect(sectionLayout.panelLeft, sectionLayout.panelTop, sectionLayout.panelWidth, sectionLayout.panelHeight);
 				menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
 				menuCtx.lineWidth = 2;
-				menuCtx.strokeRect(layout.contentLeft, sectionLayout.panelTop, layout.contentWidth, sectionLayout.panelHeight);
+				menuCtx.strokeRect(sectionLayout.panelLeft, sectionLayout.panelTop, sectionLayout.panelWidth, sectionLayout.panelHeight);
 				menuCtx.textBaseline = "middle";
 				menuCtx.fillStyle = "#ffffff";
 				menuCtx.font = "bold 30px Arial";
-				menuCtx.fillText(section.title, layout.contentLeft + 28, sectionLayout.titleY);
+				menuCtx.fillText(section.title, sectionLayout.panelLeft + 28, sectionLayout.titleY);
 				if (section.badgeText) {
 					menuCtx.textAlign = "right";
 					menuCtx.fillStyle = accentColor;
-					menuCtx.fillText(section.badgeText, layout.contentRight - 28, sectionLayout.badgeY);
+					menuCtx.fillText(section.badgeText, sectionLayout.panelRight - 28, sectionLayout.badgeY);
 					menuCtx.textAlign = "left";
 				}
 				menuCtx.textBaseline = "top";
@@ -1108,29 +1254,30 @@ const createMenuView = function(options) {
 					const control = section.controls[i];
 					const controlLayout = sectionLayout.controlLayouts[i];
 					if (control.type === "cycler") {
+						const cyclerGeometry = getCyclerGeometry(sectionLayout);
 						menuCtx.textBaseline = "top";
 						if (control.label) {
 							menuCtx.fillStyle = "rgba(255,255,255,0.82)";
 							menuCtx.font = "bold 20px Arial";
 							menuCtx.textAlign = "center";
-							menuCtx.fillText(control.label, layout.centerX, controlLayout.labelY);
+							menuCtx.fillText(control.label, sectionLayout.centerX, controlLayout.labelY);
 						}
 						menuCtx.fillStyle = control.hoveredAction === "prev" ? accentSoft : "rgba(255,255,255,0.12)";
-						menuCtx.fillRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
+						menuCtx.fillRect(cyclerGeometry.prevX, controlLayout.arrowButtonTop, cyclerGeometry.prevWidth, controlLayout.arrowButtonHeight);
 						menuCtx.strokeStyle = "rgba(255,255,255,0.18)";
 						menuCtx.lineWidth = 2;
-						menuCtx.strokeRect(layout.prevX, controlLayout.arrowButtonTop, layout.prevWidth, controlLayout.arrowButtonHeight);
+						menuCtx.strokeRect(cyclerGeometry.prevX, controlLayout.arrowButtonTop, cyclerGeometry.prevWidth, controlLayout.arrowButtonHeight);
 						menuCtx.fillStyle = control.hoveredAction === "next" ? accentSoft : "rgba(255,255,255,0.12)";
-						menuCtx.fillRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
-						menuCtx.strokeRect(layout.nextX, controlLayout.arrowButtonTop, layout.nextWidth, controlLayout.arrowButtonHeight);
+						menuCtx.fillRect(cyclerGeometry.nextX, controlLayout.arrowButtonTop, cyclerGeometry.nextWidth, controlLayout.arrowButtonHeight);
+						menuCtx.strokeRect(cyclerGeometry.nextX, controlLayout.arrowButtonTop, cyclerGeometry.nextWidth, controlLayout.arrowButtonHeight);
 						menuCtx.fillStyle = "#ffffff";
 						menuCtx.font = "bold 44px Arial";
 						menuCtx.textAlign = "center";
-						menuCtx.fillText("<", layout.prevX + layout.prevWidth * 0.5, controlLayout.rowTop + 14);
-						menuCtx.fillText(">", layout.nextX + layout.nextWidth * 0.5, controlLayout.rowTop + 14);
-						drawCenteredFittedText(control.valueText || "", layout.centerX, controlLayout.valueY, menuLayoutWidth * 0.42, 28, 18, "#ffffff", "bold");
+						menuCtx.fillText("<", cyclerGeometry.prevX + cyclerGeometry.prevWidth * 0.5, controlLayout.rowTop + 14);
+						menuCtx.fillText(">", cyclerGeometry.nextX + cyclerGeometry.nextWidth * 0.5, controlLayout.rowTop + 14);
+						drawCenteredFittedText(control.valueText || "", sectionLayout.centerX, controlLayout.valueY, sectionLayout.panelWidth * 0.46, 28, 18, "#ffffff", "bold");
 						if (control.metaText) {
-							drawCenteredFittedText(control.metaText, layout.centerX, controlLayout.metaY, menuLayoutWidth * 0.56, 18, 14, "rgba(255,255,255,0.65)");
+							drawCenteredFittedText(control.metaText, sectionLayout.centerX, controlLayout.metaY, sectionLayout.panelWidth * 0.66, 18, 14, "rgba(255,255,255,0.65)");
 						}
 						menuCtx.textAlign = "left";
 					}
@@ -1138,23 +1285,21 @@ const createMenuView = function(options) {
 						if (control.label) {
 							menuCtx.fillStyle = "#ffffff";
 							menuCtx.font = "bold 24px Arial";
-							menuCtx.fillText(control.label, layout.contentLeft + 28, controlLayout.labelY);
+							menuCtx.fillText(control.label, sectionLayout.panelLeft + 28, controlLayout.labelY);
 						}
-						drawChoiceRow(control, controlLayout);
+						drawChoiceRow(sectionLayout, control, controlLayout);
 					}
 					if (control.type === "checkbox") {
-						const rowStartX = layout.prevX;
-						const rowEndX = layout.nextX + layout.nextWidth;
-						const rowWidth = rowEndX - rowStartX;
+						const checkboxGeometry = getCheckboxGeometry(sectionLayout);
 						const boxSize = 34;
-						const boxX = rowStartX + 18;
+						const boxX = checkboxGeometry.rowStartX + 18;
 						const boxY = controlLayout.rowTop + 10;
 						const rowCenterY = controlLayout.rowTop + controlLayout.rowHeight * 0.5;
 						menuCtx.fillStyle = control.hoveredBool ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)";
-						menuCtx.fillRect(rowStartX, controlLayout.rowTop, rowWidth, controlLayout.rowHeight);
+						menuCtx.fillRect(checkboxGeometry.rowStartX, controlLayout.rowTop, checkboxGeometry.rowWidth, controlLayout.rowHeight);
 						menuCtx.strokeStyle = "rgba(255,255,255,0.15)";
 						menuCtx.lineWidth = 2;
-						menuCtx.strokeRect(rowStartX, controlLayout.rowTop, rowWidth, controlLayout.rowHeight);
+						menuCtx.strokeRect(checkboxGeometry.rowStartX, controlLayout.rowTop, checkboxGeometry.rowWidth, controlLayout.rowHeight);
 						menuCtx.fillStyle = control.checkedBool ? accentSoft : "rgba(255,255,255,0.08)";
 						menuCtx.fillRect(boxX, boxY, boxSize, boxSize);
 						menuCtx.strokeStyle = control.hoveredBool || control.checkedBool ? accentColor : "rgba(255,255,255,0.35)";
@@ -1178,35 +1323,36 @@ const createMenuView = function(options) {
 							menuCtx.textAlign = "right";
 							menuCtx.fillStyle = accentColor;
 							menuCtx.font = "bold 22px Arial";
-							menuCtx.fillText(control.valueText, rowEndX - 18, rowCenterY);
+							menuCtx.fillText(control.valueText, checkboxGeometry.rowEndX - 18, rowCenterY);
 							menuCtx.textAlign = "left";
 						}
 						menuCtx.textBaseline = "top";
 					}
 					if (control.type === "slider") {
-						const knobX = menuLayoutWidth * control.sliderU;
+						const sliderTrack = getSliderTrackGeometry(sectionLayout);
+						const knobX = getSliderKnobX(sectionLayout, control.sliderT);
 						if (control.label || control.valueText) {
 							menuCtx.textBaseline = "middle";
 							menuCtx.fillStyle = "#ffffff";
-							menuCtx.font = "bold 26px Arial";
+							menuCtx.font = "bold 24px Arial";
 							menuCtx.textAlign = "left";
-							menuCtx.fillText(control.label, layout.contentLeft + 28, controlLayout.trackY);
+							menuCtx.fillText(control.label, sectionLayout.panelLeft + 28, controlLayout.trackY);
 							menuCtx.textAlign = "right";
 							menuCtx.fillStyle = accentColor;
-							menuCtx.fillText(control.valueText || "", layout.contentRight - 28, controlLayout.trackY);
+							menuCtx.fillText(control.valueText || "", sectionLayout.panelRight - 28, controlLayout.trackY);
 							menuCtx.textBaseline = "top";
 						}
 						menuCtx.strokeStyle = "rgba(255,255,255,0.14)";
 						menuCtx.lineWidth = 18;
 						menuCtx.beginPath();
-						menuCtx.moveTo(layout.trackStartX, controlLayout.trackY);
-						menuCtx.lineTo(layout.trackEndX, controlLayout.trackY);
+						menuCtx.moveTo(sliderTrack.trackStartX, controlLayout.trackY);
+						menuCtx.lineTo(sliderTrack.trackEndX, controlLayout.trackY);
 						menuCtx.stroke();
 						menuCtx.strokeStyle = accentColor;
 						menuCtx.lineWidth = 10;
 						menuCtx.beginPath();
-						menuCtx.moveTo(layout.trackStartX, controlLayout.trackY);
-						menuCtx.lineTo(layout.trackEndX, controlLayout.trackY);
+						menuCtx.moveTo(sliderTrack.trackStartX, controlLayout.trackY);
+						menuCtx.lineTo(sliderTrack.trackEndX, controlLayout.trackY);
 						menuCtx.stroke();
 						menuCtx.fillStyle = control.hoveredBool || control.activeBool ? accentColor : "#ffffff";
 						menuCtx.beginPath();
@@ -1216,9 +1362,9 @@ const createMenuView = function(options) {
 						menuCtx.font = "18px Arial";
 						menuCtx.textBaseline = "top";
 						menuCtx.textAlign = "left";
-						menuCtx.fillText(control.minLabel || "", layout.trackStartX, controlLayout.trackY + 24);
+						menuCtx.fillText(control.minLabel || "", sliderTrack.trackStartX, controlLayout.trackY + 24);
 						menuCtx.textAlign = "right";
-						menuCtx.fillText(control.maxLabel || "", layout.trackEndX, controlLayout.trackY + 24);
+						menuCtx.fillText(control.maxLabel || "", sliderTrack.trackEndX, controlLayout.trackY + 24);
 						menuCtx.textBaseline = "top";
 						menuCtx.textAlign = "left";
 					}
@@ -1228,7 +1374,7 @@ const createMenuView = function(options) {
 					menuCtx.fillStyle = section.statusTone === "warning" ? "rgba(255,160,160,0.9)" : "rgba(255,255,255,0.68)";
 					menuCtx.font = "18px Arial";
 					menuCtx.textBaseline = "top";
-					menuCtx.fillText(section.statusText, layout.centerX, sectionLayout.statusY);
+					menuCtx.fillText(section.statusText, sectionLayout.centerX, sectionLayout.statusY);
 					menuCtx.textAlign = "left";
 				}
 			};
@@ -1377,24 +1523,24 @@ const createMenuController = function(options) {
 	};
 	const createSliderMapping = function(minValue, maxValue) {
 		return {
-			toSliderU: function(value) {
-				return options.menuSliderMinU + (clampNumber(value, minValue, maxValue) - minValue) / (maxValue - minValue) * (options.menuSliderMaxU - options.menuSliderMinU);
+			toSliderT: function(value) {
+				return (clampNumber(value, minValue, maxValue) - minValue) / (maxValue - minValue);
 			},
-			fromSliderU: function(u) {
-				return minValue + clampNumber((u - options.menuSliderMinU) / (options.menuSliderMaxU - options.menuSliderMinU), 0, 1) * (maxValue - minValue);
+			fromSliderT: function(sliderT) {
+				return minValue + clampNumber(sliderT, 0, 1) * (maxValue - minValue);
 			}
 		};
 	};
 	const eyeDistanceSlider = createSliderMapping(options.eyeDistanceMin, options.eyeDistanceMax);
 	const floorAlphaSlider = createSliderMapping(options.floorAlphaMin, options.floorAlphaMax);
-	const getControlSliderU = function(control) {
+	const getControlSliderT = function(control) {
 		if (!control) {
-			return eyeDistanceSlider.toSliderU(options.eyeDistanceMin);
+			return 0;
 		}
-		return options.menuSliderMinU + (clampNumber(control.value, control.min, control.max) - control.min) / (control.max - control.min) * (options.menuSliderMaxU - options.menuSliderMinU);
+		return (clampNumber(control.value, control.min, control.max) - control.min) / (control.max - control.min);
 	};
-	const getControlValueFromSliderU = function(control, u) {
-		return control.min + clampNumber((u - options.menuSliderMinU) / (options.menuSliderMaxU - options.menuSliderMinU), 0, 1) * (control.max - control.min);
+	const getControlValueFromSliderT = function(control, sliderT) {
+		return control.min + clampNumber(sliderT, 0, 1) * (control.max - control.min);
 	};
 	const readPassthroughUiState = passthroughController && passthroughController.getUiState ? passthroughController.getUiState : null;
 	const updateCachedSceneLightingState = function(externalState) {
@@ -1455,7 +1601,7 @@ const createMenuController = function(options) {
 		const createMenuSliderState = function(control) {
 			return {
 				control,
-				sliderU: getControlSliderU(control),
+				sliderT: getControlSliderT(control),
 				hoveredBool: !!state.hoveredActionKeys[control.key],
 				activeBool: isMenuSliderControlActive(control.key)
 			};
@@ -1464,7 +1610,7 @@ const createMenuController = function(options) {
 			selectedJumpMode: state.jumpMode,
 			hoveredActionKeys: state.hoveredActionKeys,
 			floorAlpha: state.floorAlpha,
-			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha),
+			floorAlphaSliderT: floorAlphaSlider.toSliderT(state.floorAlpha),
 			floorAlphaHoverBool: !!state.hoveredActionKeys.floorAlpha,
 			floorAlphaActiveBool: !!state.activeFloorAlphaSliderHand,
 			passthroughUiState,
@@ -1473,7 +1619,7 @@ const createMenuController = function(options) {
 			eyeDistanceMeters: state.eyeDistanceMeters,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
-			eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
+			eyeDistanceSliderT: eyeDistanceSlider.toSliderT(state.eyeDistanceMeters),
 			eyeDistanceHoverBool: !!state.hoveredActionKeys.eyeDistance,
 			eyeDistanceActiveBool: !!state.activeSliderHand,
 			currentShaderModeName: shaderModeNames[currentShaderModeIndex],
@@ -1528,8 +1674,14 @@ const createMenuController = function(options) {
 		}
 		return getActiveMenuSliderControlKey(hand);
 	};
+	const getMenuViewSliderT = function(moduleSections, controlKey, u, v) {
+		if (!controlKey || !menuView.getSliderTAtUv) {
+			return clampNumber(u, 0, 1);
+		}
+		return menuView.getSliderTAtUv(u, v, moduleSections, controlKey);
+	};
 	// Keep raw hover data intact and only promote the captured slider during an active drag.
-	const applySliderCaptureState = function(hit, hand) {
+	const applySliderCaptureState = function(hit, hand, moduleSections) {
 		if (!hit) {
 			return hit;
 		}
@@ -1539,6 +1691,7 @@ const createMenuController = function(options) {
 			hit.moduleSliderControlKey = capturedModuleSliderControlKey;
 			hit.action = null;
 			hit.hoverKey = capturedModuleSliderControlKey;
+			hit.sliderT = getMenuViewSliderT(moduleSections, capturedModuleSliderControlKey, hit.u, hit.v);
 		}
 		return hit;
 	};
@@ -1569,8 +1722,8 @@ const createMenuController = function(options) {
 			currentPresetIndex: externalState.currentPresetIndex,
 			eyeDistanceMin: options.eyeDistanceMin,
 			eyeDistanceMax: options.eyeDistanceMax,
-			eyeDistanceSliderU: eyeDistanceSlider.toSliderU(state.eyeDistanceMeters),
-			floorAlphaSliderU: floorAlphaSlider.toSliderU(state.floorAlpha)
+			eyeDistanceSliderT: eyeDistanceSlider.toSliderT(state.eyeDistanceMeters),
+			floorAlphaSliderT: floorAlphaSlider.toSliderT(state.floorAlpha)
 		};
 	};
 	const syncDerivedState = function() {
@@ -1604,25 +1757,25 @@ const createMenuController = function(options) {
 		const activeKey = getActiveMenuSliderControlKey(hand);
 		if (activeKey) { setHoveredActionKey(activeKey); }
 	};
-	const applyEyeDistanceSliderHit = function(hand, sliderU) {
+	const applyEyeDistanceSliderHit = function(hand, sliderT) {
 		state.activeSliderHand = hand;
 		setActiveMenuSliderControlKey(hand, "");
 		if (state.activeFloorAlphaSliderHand === hand) {
 			state.activeFloorAlphaSliderHand = "";
 		}
-		state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(sliderU);
+		state.eyeDistanceMeters = eyeDistanceSlider.fromSliderT(sliderT);
 		syncDerivedState();
 	};
-	const applyFloorAlphaSliderHit = function(hand, sliderU) {
+	const applyFloorAlphaSliderHit = function(hand, sliderT) {
 		state.activeFloorAlphaSliderHand = hand;
 		setActiveMenuSliderControlKey(hand, "");
 		if (state.activeSliderHand === hand) {
 			state.activeSliderHand = "";
 		}
-		state.floorAlpha = floorAlphaSlider.fromSliderU(sliderU);
+		state.floorAlpha = floorAlphaSlider.fromSliderT(sliderT);
 		syncDerivedState();
 	};
-	const applyMenuSliderControlHit = function(hand, sliderU, menuSliderControl) {
+	const applyMenuSliderControlHit = function(hand, sliderT, menuSliderControl) {
 		if (!menuSliderControl || !passthroughController || !passthroughController.setControlValue) {
 			return;
 		}
@@ -1633,7 +1786,7 @@ const createMenuController = function(options) {
 		if (state.activeFloorAlphaSliderHand === hand) {
 			state.activeFloorAlphaSliderHand = "";
 		}
-		passthroughController.setControlValue(menuSliderControl.key, getControlValueFromSliderU(menuSliderControl, sliderU));
+		passthroughController.setControlValue(menuSliderControl.key, getControlValueFromSliderT(menuSliderControl, sliderT));
 		syncDerivedState();
 	};
 	const applyDesktopHoverState = function(pointerLockedBool, xrSessionActiveBool) {
@@ -1650,14 +1803,14 @@ const createMenuController = function(options) {
 		setHoveredActionKey(hit.hoverKey);
 		setActiveSliderHoverKeys("desktop");
 		if (state.activeSliderHand === "desktop") {
-			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderU(state.desktopPointerU);
+			state.eyeDistanceMeters = eyeDistanceSlider.fromSliderT(getMenuViewSliderT(moduleSections, "eyeDistance", state.desktopPointerU, state.desktopPointerV));
 		}
 		if (state.activeFloorAlphaSliderHand === "desktop") {
-			state.floorAlpha = floorAlphaSlider.fromSliderU(state.desktopPointerU);
+			state.floorAlpha = floorAlphaSlider.fromSliderT(getMenuViewSliderT(moduleSections, "floorAlpha", state.desktopPointerU, state.desktopPointerV));
 		}
 		const activeMenuSliderControl = getMenuSliderControlByKey(passthroughUiState, getActiveMenuSliderControlKey("desktop"));
 		if (activeMenuSliderControl && passthroughController && passthroughController.setControlValue) {
-			passthroughController.setControlValue(activeMenuSliderControl.key, getControlValueFromSliderU(activeMenuSliderControl, state.desktopPointerU));
+			passthroughController.setControlValue(activeMenuSliderControl.key, getControlValueFromSliderT(activeMenuSliderControl, getMenuViewSliderT(moduleSections, activeMenuSliderControl.key, state.desktopPointerU, state.desktopPointerV)));
 		}
 		syncDerivedState();
 	};
@@ -1687,18 +1840,22 @@ const createMenuController = function(options) {
 			if (state.activeSliderHand !== ray.hand && state.activeFloorAlphaSliderHand !== ray.hand && !getActiveMenuSliderControlKey(ray.hand)) {
 				return null;
 			}
+			const clampedU = clampNumber(u, 0, 1);
+			const clampedV = clampNumber(v, 0, 1);
+			const capturedModuleSliderControlKey = getCapturedModuleSliderKey(ray.hand);
 			return {
 				distance: distance,
 				point: point,
-				u: clampNumber(u, 0, 1),
-				v: clampNumber(v, 0, 1),
-				capturedModuleSliderControlKey: getCapturedModuleSliderKey(ray.hand),
+				u: clampedU,
+				v: clampedV,
+				sliderT: getMenuViewSliderT(moduleSections, capturedModuleSliderControlKey, clampedU, clampedV),
+				capturedModuleSliderControlKey: capturedModuleSliderControlKey,
 				action: null,
-				hoverKey: getCapturedModuleSliderKey(ray.hand),
-				moduleSliderControlKey: getCapturedModuleSliderKey(ray.hand)
+				hoverKey: capturedModuleSliderControlKey,
+				moduleSliderControlKey: capturedModuleSliderControlKey
 			};
 		}
-		return applySliderCaptureState(Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v, moduleSections)), ray.hand);
+		return applySliderCaptureState(Object.assign({distance: distance, point: point, u: u, v: v}, menuView.getInteractionAtUv(u, v, moduleSections)), ray.hand, moduleSections);
 	};
 	const updateControllerRays = function(frame, xrSession, xrRefSpace) {
 		controllerRays.length = 0;
@@ -1801,14 +1958,14 @@ const createMenuController = function(options) {
 			dispatchMenuAction(ray.hit.action);
 		}
 		if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "eyeDistance" && (!wasTriggerPressedBool || state.activeSliderHand === hand)) {
-			applyEyeDistanceSliderHit(hand, ray.hit.u);
+			applyEyeDistanceSliderHit(hand, ray.hit.sliderT);
 		}
 		if (triggerPressedBool && ray.hit && ray.hit.moduleSliderControlKey === "floorAlpha" && (!wasTriggerPressedBool || state.activeFloorAlphaSliderHand === hand)) {
-			applyFloorAlphaSliderHit(hand, ray.hit.u);
+			applyFloorAlphaSliderHit(hand, ray.hit.sliderT);
 		}
 		const menuSliderControl = getMenuSliderControlByKey(passthroughUiState, ray.hit && ray.hit.moduleSliderControlKey);
 		if (triggerPressedBool && ray.hit && (!wasTriggerPressedBool || getActiveMenuSliderControlKey(hand) === (menuSliderControl && menuSliderControl.key))) {
-			applyMenuSliderControlHit(hand, ray.hit.u, menuSliderControl);
+			applyMenuSliderControlHit(hand, ray.hit.sliderT, menuSliderControl);
 		}
 		if (!triggerPressedBool && wasTriggerPressedBool) {
 			releaseSliderHand(hand);
@@ -1877,13 +2034,13 @@ const createMenuController = function(options) {
 			dispatchMenuAction(hit.action);
 		}
 		if (hit.moduleSliderControlKey === "eyeDistance") {
-			applyEyeDistanceSliderHit("desktop", state.desktopPointerU);
+			applyEyeDistanceSliderHit("desktop", hit.sliderT);
 		}
 		if (hit.moduleSliderControlKey === "floorAlpha") {
-			applyFloorAlphaSliderHit("desktop", state.desktopPointerU);
+			applyFloorAlphaSliderHit("desktop", hit.sliderT);
 		}
 		const menuSliderControl = getMenuSliderControlByKey(passthroughUiState, hit.moduleSliderControlKey);
-		applyMenuSliderControlHit("desktop", state.desktopPointerU, menuSliderControl);
+		applyMenuSliderControlHit("desktop", hit.sliderT, menuSliderControl);
 		return true;
 	};
 	const resetSessionState = function() {
