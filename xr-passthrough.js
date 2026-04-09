@@ -791,6 +791,8 @@ const createPunchRenderer = function() {
 	let cpuDepthTexParamsSet = false;
 	let depthDiagLoggedBool = false;
 	const depthUvTransform = new Float32Array(16);
+	const spatialDepthNearGuardMeters = 0.06;
+	const spatialDepthClipMargin = 1.02;
 	let flashlightProgram = null;
 	let flashlightLocs = null;
 	const flashlightMaskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
@@ -929,6 +931,13 @@ const createPunchRenderer = function() {
 		"out float vPlanarDepthMeters;",
 		"out float vRadialDepthMeters;",
 		"out float vDepthValid;",
+		"bool isTargetPointUsable(vec4 targetViewPoint, vec4 clip){",
+		"if(-targetViewPoint.z<" + spatialDepthNearGuardMeters.toFixed(3) + "){return false;}",
+		"if(clip.w<=0.0001){return false;}",
+		"if(abs(clip.x)>clip.w*" + spatialDepthClipMargin.toFixed(3) + "){return false;}",
+		"if(abs(clip.y)>clip.w*" + spatialDepthClipMargin.toFixed(3) + "){return false;}",
+		"return true;",
+		"}",
 		"vec3 getSourceViewPoint(vec2 uv,float depthMeters){",
 		"vec2 ndc=uv*2.0-1.0;",
 		"vec2 viewRay=vec2((ndc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(ndc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
@@ -947,10 +956,18 @@ const createPunchRenderer = function() {
 		"float depthMeters=normalizedDepth*rawValueToMeters;",
 		"vec4 worldPoint=sourceWorldFromView*vec4(getSourceViewPoint(sourceUv,depthMeters),1.0);",
 		"vec4 targetViewPoint=targetView*worldPoint;",
-		"vDepthValid=step(0.0001,-targetViewPoint.z);",
+		"vec4 clip=targetProj*targetViewPoint;",
+		"if(!isTargetPointUsable(targetViewPoint,clip)){",
+		"vDepthValid=0.0;",
+		"vPlanarDepthMeters=0.0;",
+		"vRadialDepthMeters=0.0;",
+		"gl_Position=vec4(2.0,2.0,1.0,1.0);",
+		"return;",
+		"}",
+		"vDepthValid=1.0;",
 		"vPlanarDepthMeters=max(0.0,-targetViewPoint.z);",
 		"vRadialDepthMeters=length(targetViewPoint.xyz);",
-		"gl_Position=targetProj*targetViewPoint;",
+		"gl_Position=clip;",
 		"}"
 	].join("");
 
@@ -992,7 +1009,7 @@ const createPunchRenderer = function() {
 		"}",
 		"void main(){",
 		"float normalizedDepth=texture(depthTexture,vSourceUv).r;",
-		"float valid=vDepthValid*step(0.0001,normalizedDepth);",
+		"float valid=step(0.999,vDepthValid)*step(0.0001,normalizedDepth);",
 		"if(valid<=0.0){discard;}",
 		"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
 		"float mask=computeDepthMask(depthMeters);",
