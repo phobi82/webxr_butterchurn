@@ -678,14 +678,15 @@ const createDepthProcessingRenderer = function(options) {
 		gl.drawArrays(gl.TRIANGLES, 0, 3);
 		return true;
 	};
-	const buildProcessedDepthState = function(targetState) {
+	const buildProcessedDepthState = function(targetState, reprojectionState) {
 		return {
 			texture: targetState.texture,
 			width: targetState.width,
 			height: targetState.height,
 			rawValueToMeters: processedDepthMaxMeters,
 			normDepthBufferFromNormView: runtimeState.identityUvTransform,
-			textureType: "texture-2d"
+			textureType: "texture-2d",
+			depthReprojectionState: reprojectionState || null
 		};
 	};
 	return {
@@ -716,7 +717,7 @@ const createDepthProcessingRenderer = function(options) {
 			}
 			gl.bindFramebuffer(gl.FRAMEBUFFER, args.outputFramebuffer || null);
 			gl.activeTexture(gl.TEXTURE0);
-			return buildProcessedDepthState(targetState);
+			return buildProcessedDepthState(targetState, args.depthReprojectionState || null);
 		}
 	};
 };

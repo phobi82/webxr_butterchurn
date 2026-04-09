@@ -122,7 +122,8 @@ const DEFAULT_APP_CONFIG = {
 		desktopMouseSensitivity: 0.0024,
 		stickDeadzone: 0.08,
 		stanceStickDeadzone: 0.22,
-		stanceVerticalDominanceMargin: 0.12
+		stanceVerticalDominanceMargin: 0.12,
+		depthMatchDepthViewBool: false
 	},
 	scene: {
 		floorHalfSize: 40,
@@ -255,7 +256,8 @@ const createApp = function(projectConfig) {
 		xrApi: navigatorRef.xr || null,
 		xrWebGLLayer: windowRef.XRWebGLLayer || null,
 		xrWebGLBinding: windowRef.XRWebGLBinding || null,
-		xrRigidTransform: windowRef.XRRigidTransform || null
+		xrRigidTransform: windowRef.XRRigidTransform || null,
+		matchDepthViewBool: config.runtime.depthMatchDepthViewBool
 	});
 	const sceneRenderer = createSceneRenderer({
 		canvas: shell.canvas,

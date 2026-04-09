@@ -160,18 +160,6 @@ const getPassthroughControlDefinitions = function(state) {
 				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
 			);
 		}
-		if (state.depthMotionCompensationBool) {
-			controls.push({
-				key: "depthMotionCompensationFactor",
-				label: "Comp.Factor",
-				value: state.depthMotionCompensationFactor,
-				min: 0,
-				max: 5,
-				minLabel: "0.0",
-				maxLabel: "5.0",
-				valueText: state.depthMotionCompensationFactor.toFixed(2)
-			});
-		}
 		controls.push(
 			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
 		);
@@ -228,8 +216,6 @@ const getPassthroughLightingControlDefinitions = function(state) {
 };
 
 // Controller
-const PASSTHROUGH_DEPTH_MOTION_SMOOTHING_SECONDS = 0.05;
-
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_CURRENT = "current";
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY = "additiveOnly";
 const PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY = "alphaBlendOnly";
@@ -345,8 +331,6 @@ const createPassthroughController = function(options) {
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
 		depthModeKey: options.initialDepthModeKey || "distance",
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
-		depthMotionCompensationBool: options.initialDepthMotionCompensationBool == null ? true : !!options.initialDepthMotionCompensationBool,
-		depthMotionCompensationFactor: options.initialDepthMotionCompensationFactor == null ? 2.8 : options.initialDepthMotionCompensationFactor,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
 		depthDistanceReactiveBool: false,
@@ -369,9 +353,6 @@ const createPassthroughController = function(options) {
 		depthMrRetain: 0,
 		usableDepthAvailableBool: false,
 		depthVisualMaskingEnabledBool: options.depthVisualMaskingEnabledBool == null ? true : !!options.depthVisualMaskingEnabledBool,
-		depthMotionCompensationByView: [],
-		filteredDepthMotionVelocityByView: [],
-		previousDepthMotionPoseByView: [],
 		smoothedAudioDrive: 0,
 		smoothedBlendDrive: 0
 	};
@@ -382,113 +363,6 @@ const createPassthroughController = function(options) {
 
 	const getDepthMrRetainForMode = function(depthModeKey) {
 		return depthModeKey === "echo" ? state.depthEchoMrRetain : state.depthDistanceMrRetain;
-	};
-
-	const buildOrientationBasis = function(quaternion) {
-		return {
-			right: {
-				x: 1 - 2 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z),
-				y: 2 * (quaternion.x * quaternion.y + quaternion.w * quaternion.z),
-				z: 2 * (quaternion.x * quaternion.z - quaternion.w * quaternion.y)
-			},
-			up: {
-				x: 2 * (quaternion.x * quaternion.y - quaternion.w * quaternion.z),
-				y: 1 - 2 * (quaternion.x * quaternion.x + quaternion.z * quaternion.z),
-				z: 2 * (quaternion.y * quaternion.z + quaternion.w * quaternion.x)
-			}
-		};
-	};
-
-	const getDepthMotionSmoothingAlpha = function(delta) {
-		const safeDelta = Math.max(1 / 240, delta || 1 / 240);
-		const tau = Math.max(0.001, PASSTHROUGH_DEPTH_MOTION_SMOOTHING_SECONDS);
-		return 1 - Math.exp(-safeDelta / tau);
-	};
-
-	const clearDepthMotionCompensation = function() {
-		state.depthMotionCompensationByView.length = 0;
-	};
-
-	const resetDepthMotionCompensationFilter = function() {
-		clearDepthMotionCompensation();
-		state.filteredDepthMotionVelocityByView.length = 0;
-		state.previousDepthMotionPoseByView.length = 0;
-	};
-
-	const updateDepthMotionCompensation = function(passthroughPose, delta) {
-		clearDepthMotionCompensation();
-		if (!state.depthMotionCompensationBool || !passthroughPose || !passthroughPose.views || !passthroughPose.views.length || !Number.isFinite(delta) || delta <= 0) {
-			resetDepthMotionCompensationFilter();
-			return;
-		}
-		for (let i = 0; i < passthroughPose.views.length; i += 1) {
-			const view = passthroughPose.views[i];
-			const transform = view && view.transform;
-			const orientation = transform && transform.orientation;
-			const position = transform && transform.position;
-			if (!orientation || !position || !view.projectionMatrix) {
-				state.previousDepthMotionPoseByView[i] = null;
-				state.depthMotionCompensationByView[i] = {x: 0, y: 0};
-				state.filteredDepthMotionVelocityByView[i] = {x: 0, y: 0};
-				continue;
-			}
-			const currentYawPitch = extractForwardYawPitchFromQuaternion(orientation);
-			const previousPose = state.previousDepthMotionPoseByView[i];
-			let velocityX = 0;
-			let velocityY = 0;
-			if (previousPose && previousPose.position && previousPose.orientation) {
-				const previousYaw = previousPose.yaw;
-				const previousPitch = previousPose.pitch;
-				const yawDelta = unwrapAngle(currentYawPitch.yaw, previousYaw) - previousYaw;
-				const pitchDelta = unwrapAngle(currentYawPitch.pitch, previousPitch) - previousPitch;
-				const positionDeltaX = position.x - previousPose.position.x;
-				const positionDeltaY = position.y - previousPose.position.y;
-				const positionDeltaZ = position.z - previousPose.position.z;
-				const orientationBasis = buildOrientationBasis(orientation);
-				const localDeltaX =
-					positionDeltaX * orientationBasis.right.x +
-					positionDeltaY * orientationBasis.right.y +
-					positionDeltaZ * orientationBasis.right.z;
-				const localDeltaY =
-					positionDeltaX * orientationBasis.up.x +
-					positionDeltaY * orientationBasis.up.y +
-					positionDeltaZ * orientationBasis.up.z;
-				const projectionParams = buildPassthroughDepthProjectionParams(view.projectionMatrix);
-				const referenceDepth = Math.max(state.depthModeKey === "distance" ? state.depthThreshold : 1, 0.35);
-				const safeDelta = Math.max(delta, 1 / 240);
-				velocityX = ((yawDelta + (localDeltaX / referenceDepth)) * projectionParams.xScale * 0.5) / safeDelta;
-				velocityY = ((pitchDelta + (localDeltaY / referenceDepth)) * projectionParams.yScale * 0.5) / safeDelta;
-			}
-			const rawVelocity = {
-				x: clampNumber(velocityX, -7.5, 7.5),
-				y: clampNumber(velocityY, -7.5, 7.5)
-			};
-			const previousFilteredVelocity = state.filteredDepthMotionVelocityByView[i] || {x: 0, y: 0};
-			const velocityAlpha = getDepthMotionSmoothingAlpha(delta);
-			const filteredVelocity = {
-				x: lerpNumber(previousFilteredVelocity.x, rawVelocity.x, velocityAlpha),
-				y: lerpNumber(previousFilteredVelocity.y, rawVelocity.y, velocityAlpha)
-			};
-			if (Math.abs(filteredVelocity.x) < 0.005) {
-				filteredVelocity.x = 0;
-			}
-			if (Math.abs(filteredVelocity.y) < 0.005) {
-				filteredVelocity.y = 0;
-			}
-			state.filteredDepthMotionVelocityByView[i] = filteredVelocity;
-			const compensationScale = clampNumber(state.depthMotionCompensationFactor, 0, 5);
-			state.depthMotionCompensationByView[i] = {
-				x: clampNumber(filteredVelocity.x * delta * compensationScale, -0.35, 0.35),
-				y: clampNumber(filteredVelocity.y * delta * compensationScale, -0.35, 0.35)
-			};
-			state.previousDepthMotionPoseByView[i] = {
-				position: {x: position.x, y: position.y, z: position.z},
-				orientation: {x: orientation.x, y: orientation.y, z: orientation.z, w: orientation.w},
-				yaw: currentYawPitch.yaw,
-				pitch: currentYawPitch.pitch
-			};
-		}
-		state.previousDepthMotionPoseByView.length = passthroughPose.views.length;
 	};
 
 	state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
@@ -574,9 +448,8 @@ const createPassthroughController = function(options) {
 		buildDepthRenderState: function(args) {
 			const baseState = state.depthModeKey === "echo" ? depthRuntime.getEffectiveEchoDepthState() : depthRuntime.getEffectiveDistanceDepthState();
 			baseState.depthProjectionParams = buildPassthroughDepthProjectionParams(args && (args.depthProjMatrix || args.projMatrix));
-			const viewIndex = args && args.viewIndex != null ? args.viewIndex : 0;
-			const motionCompensation = state.depthMotionCompensationByView[viewIndex];
-			baseState.depthMotionCompensation = motionCompensation ? {x: motionCompensation.x, y: motionCompensation.y} : {x: 0, y: 0};
+			baseState.depthViewMatrix = args && (args.depthViewMatrix || args.viewMatrix) ? (args.depthViewMatrix || args.viewMatrix) : identityMatrix();
+			baseState.depthProjMatrix = args && (args.depthProjMatrix || args.projMatrix) ? (args.depthProjMatrix || args.projMatrix) : identityMatrix();
 			return baseState;
 		}
 	};
@@ -629,7 +502,6 @@ const createPassthroughController = function(options) {
 			flashlightActiveBool: state.flashlightActiveBool,
 			depthActiveBool: state.depthActiveBool,
 			depthRadialBool: state.depthRadialBool,
-			depthMotionCompensationBool: state.depthMotionCompensationBool,
 			depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
 			selectedDepthReconstructionModeKey: state.depthReconstructionModeKey,
 			depthModes: passthroughDepthModeDefinitions,
@@ -668,6 +540,8 @@ const createPassthroughController = function(options) {
 			masks: [],
 			depth: depthRenderState,
 			depthProjectionParams: buildPassthroughDepthProjectionParams(queryArgs.depthProjMatrix || queryArgs.projMatrix),
+			depthViewMatrix: queryArgs.depthViewMatrix || queryArgs.viewMatrix || IDENTITY_MATRIX,
+			depthProjMatrix: queryArgs.depthProjMatrix || queryArgs.projMatrix || IDENTITY_MATRIX,
 			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix, reusableViewWorldMatrix) : IDENTITY_MATRIX,
 			darkAlpha: 1 - darkness,
 			additiveColor: lightingColor,
@@ -749,9 +623,6 @@ const createPassthroughController = function(options) {
 		depthFade: function(value) {
 			state.depthFade = clampNumber(value, 0, 2);
 		},
-		depthMotionCompensationFactor: function(value) {
-			state.depthMotionCompensationFactor = clampNumber(value, 0, 5);
-		},
 		depthDistanceReactiveIntensity: function(value) {
 			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
 		},
@@ -811,7 +682,6 @@ const createPassthroughController = function(options) {
 		if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
 			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
 		}
-		updateDepthMotionCompensation(frameArgs.passthroughPose || null, delta);
 	};
 	const setDepthAvailability = function(availableBool) {
 		if (!!availableBool && !state.usableDepthAvailableBool) {
@@ -838,12 +708,6 @@ const createPassthroughController = function(options) {
 		},
 		toggleDepthRadial: function() {
 			toggleStateBool("depthRadialBool");
-		},
-		toggleDepthMotionCompensation: function() {
-			toggleStateBool("depthMotionCompensationBool");
-			if (!state.depthMotionCompensationBool) {
-				resetDepthMotionCompensationFilter();
-			}
 		},
 		cycleDepthReconstructionMode: function(direction) {
 			cycleStateMode("depthReconstructionModeKey", passthroughDepthReconstructionModeDefinitions, direction);
@@ -915,10 +779,13 @@ const applyVisualizerBackgroundComposite = function(visualizerEngine, compositeS
 const createPunchRenderer = function() {
 	let gl = null;
 	let buffer = null;
+	let reprojectionGrid = null;
 	let gpuArrayProgram = null;
 	let gpuArrayLocs = null;
 	let texture2dProgram = null;
 	let texture2dLocs = null;
+	let spatialProgram = null;
+	let spatialLocs = null;
 	let cpuDepthTexture = null;
 	let cpuUploadBuffer = null;
 	let cpuDepthTexParamsSet = false;
@@ -944,7 +811,6 @@ const createPunchRenderer = function() {
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform float depthMetricMode;",
-		"uniform vec2 depthMotionCompensation;",
 		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
@@ -968,14 +834,12 @@ const createPunchRenderer = function() {
 		"}",
 		"float resolveDepthMetric(float depthMeters){",
 		"if(depthMetricMode<0.5){return depthMeters;}",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 ndc=compensatedScreenUv*2.0-1.0;",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
 		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 		"}",
 		"void main(){",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture2D(depthTexture,depthUv).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
@@ -1012,7 +876,6 @@ const createPunchRenderer = function() {
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform float depthMetricMode;",
-		"uniform vec2 depthMotionCompensation;",
 		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"in vec2 vScreenUv;",
@@ -1037,18 +900,102 @@ const createPunchRenderer = function() {
 		"}",
 		"float resolveDepthMetric(float depthMeters){",
 		"if(depthMetricMode<0.5){return depthMeters;}",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 ndc=compensatedScreenUv*2.0-1.0;",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
 		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 		"}",
 		"void main(){",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
 		"float valid=step(0.001,rawDepth);",
 		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
+		"float punchMask=mix(1.0,mask,valid);",
+		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
+		"}"
+	].join("");
+
+	const spatialVertSource = [
+		"#version 300 es\n",
+		"precision highp float;",
+		"uniform sampler2D depthTexture;",
+		"uniform float rawValueToMeters;",
+		"uniform vec4 sourceProjectionParams;",
+		"uniform mat4 sourceWorldFromView;",
+		"uniform mat4 targetView;",
+		"uniform mat4 targetProj;",
+		"in vec2 sourceUv;",
+		"out vec2 vSourceUv;",
+		"out float vPlanarDepthMeters;",
+		"out float vRadialDepthMeters;",
+		"out float vDepthValid;",
+		"vec3 getSourceViewPoint(vec2 uv,float depthMeters){",
+		"vec2 ndc=uv*2.0-1.0;",
+		"vec2 viewRay=vec2((ndc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(ndc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
+		"return vec3(viewRay*depthMeters,-depthMeters);",
+		"}",
+		"void main(){",
+		"vSourceUv=sourceUv;",
+		"float normalizedDepth=texture(depthTexture,sourceUv).r;",
+		"if(normalizedDepth<=0.0001){",
+		"vDepthValid=0.0;",
+		"vPlanarDepthMeters=0.0;",
+		"vRadialDepthMeters=0.0;",
+		"gl_Position=vec4(2.0,2.0,1.0,1.0);",
+		"return;",
+		"}",
+		"float depthMeters=normalizedDepth*rawValueToMeters;",
+		"vec4 worldPoint=sourceWorldFromView*vec4(getSourceViewPoint(sourceUv,depthMeters),1.0);",
+		"vec4 targetViewPoint=targetView*worldPoint;",
+		"vDepthValid=step(0.0001,-targetViewPoint.z);",
+		"vPlanarDepthMeters=max(0.0,-targetViewPoint.z);",
+		"vRadialDepthMeters=length(targetViewPoint.xyz);",
+		"gl_Position=targetProj*targetViewPoint;",
+		"}"
+	].join("");
+
+	const spatialFragSource = [
+		"#version 300 es\n",
+		"precision highp float;",
+		"uniform sampler2D depthTexture;",
+		"uniform float depthMode;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
+		"uniform float depthMrRetain;",
+		"uniform float depthMetricMode;",
+		"in vec2 vSourceUv;",
+		"in float vPlanarDepthMeters;",
+		"in float vRadialDepthMeters;",
+		"in float vDepthValid;",
+		"out vec4 fragColor;",
+		"float computeDepthMask(float depthMeters){",
+		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+		"float wavelength=max(depthEchoWavelength,0.0001);",
+		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+		"float visibleWidth=wavelength*dutyCycle;",
+		"if(visibleWidth<=0.0001){return 0.0;}",
+		"if(visibleWidth>=wavelength-0.0001){return 1.0;}",
+		"float halfPeriod=wavelength*0.5;",
+		"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+		"float distanceFromBandCenter=abs(centeredPhase);",
+		"float hiddenWidth=wavelength-visibleWidth;",
+		"float visibleHalfWidth=visibleWidth*0.5;",
+		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+		"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+		"}",
+		"void main(){",
+		"float normalizedDepth=texture(depthTexture,vSourceUv).r;",
+		"float valid=vDepthValid*step(0.0001,normalizedDepth);",
+		"if(valid<=0.0){discard;}",
+		"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
+		"float mask=computeDepthMask(depthMeters);",
 		"float punchMask=mix(1.0,mask,valid);",
 		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -1089,9 +1036,29 @@ const createPunchRenderer = function() {
 			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
 			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
-			depthMotionCompensation: gl.getUniformLocation(prog, "depthMotionCompensation"),
 			depthProjectionParams: gl.getUniformLocation(prog, "depthProjectionParams"),
 			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
+		};
+	};
+
+	const buildSpatialLocs = function(prog) {
+		return {
+			sourceUv: gl.getAttribLocation(prog, "sourceUv"),
+			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
+			depthMode: gl.getUniformLocation(prog, "depthMode"),
+			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
+			depthFade: gl.getUniformLocation(prog, "depthFade"),
+			depthEchoWavelength: gl.getUniformLocation(prog, "depthEchoWavelength"),
+			depthEchoDutyCycle: gl.getUniformLocation(prog, "depthEchoDutyCycle"),
+			depthEchoFade: gl.getUniformLocation(prog, "depthEchoFade"),
+			depthPhaseOffset: gl.getUniformLocation(prog, "depthPhaseOffset"),
+			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
+			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
+			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
+			sourceProjectionParams: gl.getUniformLocation(prog, "sourceProjectionParams"),
+			sourceWorldFromView: gl.getUniformLocation(prog, "sourceWorldFromView"),
+			targetView: gl.getUniformLocation(prog, "targetView"),
+			targetProj: gl.getUniformLocation(prog, "targetProj")
 		};
 	};
 
@@ -1132,8 +1099,57 @@ const createPunchRenderer = function() {
 		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 	};
 
+	const drawSpatialDepthPunch = function(depthInfo, punchState) {
+		const reprojectionState = depthInfo && depthInfo.depthReprojectionState;
+		if (!reprojectionState || !reprojectionState.enabledBool || !punchState || !reprojectionState.sourceWorldFromViewMatrix || !punchState.depthViewMatrix || !punchState.depthProjMatrix) {
+			return false;
+		}
+		if (!spatialProgram) {
+			spatialProgram = createProgram(gl, spatialVertSource, spatialFragSource, "Depth punch spatial reprojection");
+			spatialLocs = buildSpatialLocs(spatialProgram);
+		}
+		gl.useProgram(spatialProgram);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.CULL_FACE);
+		gl.blendFuncSeparate(gl.ZERO, gl.SRC_ALPHA, gl.ZERO, gl.SRC_ALPHA);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+		gl.uniform1i(spatialLocs.depthTexture, 0);
+		gl.uniform1f(spatialLocs.depthMode, punchState.depthMode == null ? 0 : punchState.depthMode);
+		gl.uniform1f(spatialLocs.depthThreshold, punchState.depthThreshold);
+		gl.uniform1f(spatialLocs.depthFade, punchState.depthFade);
+		gl.uniform1f(spatialLocs.depthEchoWavelength, punchState.depthEchoWavelength == null ? 1 : punchState.depthEchoWavelength);
+		gl.uniform1f(spatialLocs.depthEchoDutyCycle, punchState.depthEchoDutyCycle == null ? 0.5 : punchState.depthEchoDutyCycle);
+		gl.uniform1f(spatialLocs.depthEchoFade, punchState.depthEchoFade == null ? 0 : punchState.depthEchoFade);
+		gl.uniform1f(spatialLocs.depthPhaseOffset, punchState.depthPhaseOffset == null ? 0 : punchState.depthPhaseOffset);
+		gl.uniform1f(spatialLocs.depthMrRetain, punchState.depthMrRetain || 0);
+		gl.uniform1f(spatialLocs.rawValueToMeters, depthInfo.rawValueToMeters || 16);
+		gl.uniform1f(spatialLocs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
+		gl.uniform4f(
+			spatialLocs.sourceProjectionParams,
+			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
+			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
+			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
+			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
+		);
+		gl.uniformMatrix4fv(spatialLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
+		gl.uniformMatrix4fv(spatialLocs.targetView, false, punchState.depthViewMatrix);
+		gl.uniformMatrix4fv(spatialLocs.targetProj, false, punchState.depthProjMatrix);
+		gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
+		gl.enableVertexAttribArray(spatialLocs.sourceUv);
+		gl.vertexAttribPointer(spatialLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
+		gl.enable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+		return true;
+	};
+
 	const drawDepthPunch = function(depthInfo, depthFrameKind, punchState, webgl2Bool, depthProfile) {
 		if (!depthInfo) { return; }
+		if (webgl2Bool && depthFrameKind === "gpu-texture" && depthInfo.texture && drawSpatialDepthPunch(depthInfo, punchState)) {
+			return;
+		}
 		let cpuTextureBound = false;
 		var profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
 		if (depthFrameKind === "cpu") {
@@ -1207,11 +1223,6 @@ const createPunchRenderer = function() {
 		gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 		gl.uniform1f(locs.depthNearZ, profile.nearZ);
 		gl.uniform1f(locs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
-		gl.uniform2f(
-			locs.depthMotionCompensation,
-			punchState.depthMotionCompensation ? punchState.depthMotionCompensation.x : 0,
-			punchState.depthMotionCompensation ? punchState.depthMotionCompensation.y : 0
-		);
 		gl.uniform4f(
 			locs.depthProjectionParams,
 			punchState.depthProjectionParams ? punchState.depthProjectionParams.xScale : 1,
@@ -1243,6 +1254,7 @@ const createPunchRenderer = function() {
 		init: function(glContext) {
 			gl = glContext;
 			buffer = createFullscreenTriangleBuffer(gl);
+			reprojectionGrid = createUvGridTriangleBuffer(gl, 140, 104);
 		},
 		draw: function(punchState, depthInfo, depthFrameKind, webgl2Bool, depthProfile) {
 			if (!punchState) { return; }

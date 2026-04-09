@@ -362,3 +362,33 @@ const createFullscreenTriangleBuffer = function(gl) {
 	return buffer;
 };
 
+// Dense UV grid used when depth has to be projected through world space instead of sampled as a screen quad.
+const createUvGridTriangleBuffer = function(gl, columns, rows) {
+	const safeColumns = Math.max(1, columns | 0);
+	const safeRows = Math.max(1, rows | 0);
+	const triangleCount = safeColumns * safeRows * 2;
+	const vertices = new Float32Array(triangleCount * 3 * 2);
+	let writeIndex = 0;
+	for (let y = 0; y < safeRows; y += 1) {
+		const v0 = y / safeRows;
+		const v1 = (y + 1) / safeRows;
+		for (let x = 0; x < safeColumns; x += 1) {
+			const u0 = x / safeColumns;
+			const u1 = (x + 1) / safeColumns;
+			vertices[writeIndex] = u0; vertices[writeIndex + 1] = v0;
+			vertices[writeIndex + 2] = u1; vertices[writeIndex + 3] = v0;
+			vertices[writeIndex + 4] = u0; vertices[writeIndex + 5] = v1;
+			vertices[writeIndex + 6] = u0; vertices[writeIndex + 7] = v1;
+			vertices[writeIndex + 8] = u1; vertices[writeIndex + 9] = v0;
+			vertices[writeIndex + 10] = u1; vertices[writeIndex + 11] = v1;
+			writeIndex += 12;
+		}
+	}
+	const buffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+	gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+	return {
+		buffer: buffer,
+		vertexCount: triangleCount * 3
+	};
+};

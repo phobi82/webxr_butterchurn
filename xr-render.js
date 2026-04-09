@@ -305,6 +305,7 @@ const createMrLightingRenderer = function() {
 	let program = null;
 	let depthTexture2dProgram = null;
 	let depthGpuArrayProgram = null;
+	let spatialProgram = null;
 	let positionLoc = null;
 	let darkAlphaLoc = null;
 	let visibleShareLoc = null;
@@ -326,8 +327,10 @@ const createMrLightingRenderer = function() {
 	let lightLayerAdditiveScaleLoc = null;
 	let lightLayerAlphaBlendScaleLoc = null;
 	let buffer = null;
+	let reprojectionGrid = null;
 	let depthTexture2dLocs = null;
 	let depthGpuArrayLocs = null;
+	let spatialLocs = null;
 	let cpuDepthTexture = null;
 	let cpuUploadBuffer = null;
 	const depthUvTransform = new Float32Array(16);
@@ -433,8 +436,7 @@ const createMrLightingRenderer = function() {
 		"if(depthMetricMode<0.5){",
 		"return depthMeters;",
 		"}",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 ndc=compensatedScreenUv*2.0-1.0;",
+		"vec2 ndc=vScreenUv*2.0-1.0;",
 		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 		"}",
@@ -442,8 +444,7 @@ const createMrLightingRenderer = function() {
 		"if(depthMrRetain<=0.0001){",
 		"return baseVisibleShare;",
 		"}",
-		"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-		"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
+		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=sampleDepth(depthUv);",
 		"float valid=step(0.001,rawDepth);",
 		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
@@ -485,7 +486,6 @@ const createMrLightingRenderer = function() {
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform float depthMetricMode;",
-		"uniform vec2 depthMotionCompensation;",
 		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"uniform mat4 worldFromView;",
@@ -569,7 +569,6 @@ const createMrLightingRenderer = function() {
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
 		"uniform float depthMetricMode;",
-		"uniform vec2 depthMotionCompensation;",
 		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"uniform mat4 worldFromView;",
@@ -609,6 +608,137 @@ const createMrLightingRenderer = function() {
 		"fragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
 		"}"
 	].join("");
+	const spatialVertexSource = [
+		"#version 300 es\n",
+		"precision highp float;",
+		"uniform sampler2D depthTexture;",
+		"uniform float rawValueToMeters;",
+		"uniform vec4 sourceProjectionParams;",
+		"uniform mat4 sourceWorldFromView;",
+		"uniform mat4 targetView;",
+		"uniform mat4 targetProj;",
+		"in vec2 sourceUv;",
+		"out vec2 vCurrentUv;",
+		"out vec3 vWorldPoint;",
+		"out float vPlanarDepthMeters;",
+		"out float vRadialDepthMeters;",
+		"out float vDepthValid;",
+		"vec3 getSourceViewPoint(vec2 uv,float depthMeters){",
+		"vec2 ndc=uv*2.0-1.0;",
+		"vec2 viewRay=vec2((ndc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(ndc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
+		"return vec3(viewRay*depthMeters,-depthMeters);",
+		"}",
+		"void main(){",
+		"float normalizedDepth=texture(depthTexture,sourceUv).r;",
+		"if(normalizedDepth<=0.0001){",
+		"vDepthValid=0.0;",
+		"vCurrentUv=vec2(-1.0);",
+		"vWorldPoint=vec3(0.0);",
+		"vPlanarDepthMeters=0.0;",
+		"vRadialDepthMeters=0.0;",
+		"gl_Position=vec4(2.0,2.0,1.0,1.0);",
+		"return;",
+		"}",
+		"float depthMeters=normalizedDepth*rawValueToMeters;",
+		"vec4 worldPoint=sourceWorldFromView*vec4(getSourceViewPoint(sourceUv,depthMeters),1.0);",
+		"vec4 targetViewPoint=targetView*worldPoint;",
+		"vec4 clip=targetProj*targetViewPoint;",
+		"vDepthValid=step(0.0001,-targetViewPoint.z)*step(0.0001,clip.w);",
+		"vCurrentUv=clip.xy/max(clip.w,0.0001)*0.5+0.5;",
+		"vWorldPoint=worldPoint.xyz;",
+		"vPlanarDepthMeters=max(0.0,-targetViewPoint.z);",
+		"vRadialDepthMeters=length(targetViewPoint.xyz);",
+		"gl_Position=clip;",
+		"}"
+	].join("");
+	const spatialFragmentSource = [
+		"#version 300 es\n",
+		"precision highp float;",
+		"uniform float darkAlpha;",
+		"uniform float visibleShare;",
+		"uniform vec3 additiveColor;",
+		"uniform float additiveStrength;",
+		"uniform float lightLayerCount;",
+		"uniform vec4 lightLayerColors[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec2 lightLayerCenters[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec4 lightLayerEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform float lightLayerAlphaBlendStrengths[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec4 lightLayerEffectParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec3 lightLayerWorldCenters[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec3 lightLayerWorldBasisX[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec3 lightLayerWorldBasisY[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform vec4 lightLayerWorldEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
+		"uniform float lightLayerAdditiveScale;",
+		"uniform float lightLayerAlphaBlendScale;",
+		"uniform float depthMode;",
+		"uniform float depthThreshold;",
+		"uniform float depthFade;",
+		"uniform float depthEchoWavelength;",
+		"uniform float depthEchoDutyCycle;",
+		"uniform float depthEchoFade;",
+		"uniform float depthPhaseOffset;",
+		"uniform float depthMrRetain;",
+		"uniform float depthMetricMode;",
+		"in vec2 vCurrentUv;",
+		"in vec3 vWorldPoint;",
+		"in float vPlanarDepthMeters;",
+		"in float vRadialDepthMeters;",
+		"in float vDepthValid;",
+		"out vec4 fragColor;",
+		"float ellipseMask(vec2 uv, vec2 center, vec4 params){float radiusX=max(params.x,0.0001);float radiusY=max(params.y,0.0001);float softness=max(params.z,0.0001);float rotation=params.w;vec2 delta=uv-center;float cosAngle=cos(rotation);float sinAngle=sin(rotation);vec2 local=vec2(delta.x*cosAngle+delta.y*sinAngle,-delta.x*sinAngle+delta.y*cosAngle);float normalizedDistance=length(vec2(local.x/radiusX,local.y/radiusY));float edge=max(softness/max(radiusX,radiusY),0.0001);return 1.0-smoothstep(max(0.0,1.0-edge),1.0,normalizedDistance);}",
+		fixtureEffectFragmentSource,
+		"float worldEllipseMask(vec3 worldPoint,vec3 center,vec3 basisX,vec3 basisY,vec4 worldParams){float radiusX=max(worldParams.x,0.0001);float radiusY=max(worldParams.y,0.0001);float softness=max(worldParams.z,0.0001);float planeWidth=max(worldParams.w,0.0001);vec3 delta=worldPoint-center;vec3 tangentX=normalize(basisX);vec3 tangentY=normalize(basisY);vec3 normal=normalize(cross(tangentX,tangentY));float localX=dot(delta,tangentX);float localY=dot(delta,tangentY);float localZ=abs(dot(delta,normal));float normalizedDistance=length(vec2(localX/radiusX,localY/radiusY));float edge=max(softness/max(radiusX,radiusY),0.0001);float ellipse=1.0-smoothstep(max(0.0,1.0-edge),1.0,normalizedDistance);float plane=1.0-smoothstep(planeWidth,planeWidth+max(planeWidth*0.8,0.04),localZ);return ellipse*plane;}",
+		"float computeDepthMask(float depthMeters){",
+		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+		"float wavelength=max(depthEchoWavelength,0.0001);",
+		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+		"float visibleWidth=wavelength*dutyCycle;",
+		"if(visibleWidth<=0.0001){return 0.0;}",
+		"if(visibleWidth>=wavelength-0.0001){return 1.0;}",
+		"float halfPeriod=wavelength*0.5;",
+		"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+		"float distanceFromBandCenter=abs(centeredPhase);",
+		"float hiddenWidth=wavelength-visibleWidth;",
+		"float visibleHalfWidth=visibleWidth*0.5;",
+		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+		"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+		"}",
+		"float computeDepthRetainShare(float baseVisibleShare,float depthMeters,float valid){",
+		"if(depthMrRetain<=0.0001||valid<=0.0){return baseVisibleShare;}",
+		"float mask=computeDepthMask(depthMeters);",
+		"return max(baseVisibleShare,depthMrRetain*(1.0-mask));",
+		"}",
+		"void main(){",
+		"if(vDepthValid<=0.0||vCurrentUv.x<0.0||vCurrentUv.x>1.0||vCurrentUv.y<0.0||vCurrentUv.y>1.0){discard;}",
+		"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
+		"float baseShare=visibleShare;",
+		"float targetShare=computeDepthRetainShare(baseShare,depthMeters,vDepthValid);",
+		"float shareDelta=max(0.0,targetShare-baseShare);",
+		"vec3 color=additiveColor*additiveStrength*shareDelta;",
+		"float baseAlphaBlendOpen=0.0;",
+		"float targetAlphaBlendOpen=0.0;",
+		"for(int i=0;i<" + PASSTHROUGH_MAX_LIGHT_LAYERS + ";i+=1){",
+		"if(float(i)>=lightLayerCount){break;}",
+		"float baseMask=ellipseMask(vCurrentUv,lightLayerCenters[i],lightLayerEllipseParams[i]);",
+		"float targetMask=baseMask;",
+		"if(lightLayerWorldEllipseParams[i].x>0.0001){targetMask=worldEllipseMask(vWorldPoint,lightLayerWorldCenters[i],lightLayerWorldBasisX[i],lightLayerWorldBasisY[i],lightLayerWorldEllipseParams[i]);}",
+		"vec2 effectMask=lightLayerEffect(vCurrentUv,lightLayerCenters[i],lightLayerEllipseParams[i],lightLayerEffectParams[i]);",
+		"float baseStrength=lightLayerColors[i].a*baseMask*effectMask.x*baseShare*lightLayerAdditiveScale;",
+		"float targetStrength=lightLayerColors[i].a*targetMask*effectMask.x*targetShare*lightLayerAdditiveScale;",
+		"color+=lightLayerColors[i].rgb*max(0.0,targetStrength-baseStrength);",
+		"baseAlphaBlendOpen=max(baseAlphaBlendOpen,clamp(lightLayerColors[i].a*baseMask*effectMask.y*lightLayerAlphaBlendStrengths[i]*1.65*baseShare*lightLayerAlphaBlendScale,0.0,1.0));",
+		"targetAlphaBlendOpen=max(targetAlphaBlendOpen,clamp(lightLayerColors[i].a*targetMask*effectMask.y*lightLayerAlphaBlendStrengths[i]*1.65*targetShare*lightLayerAlphaBlendScale,0.0,1.0));",
+		"}",
+		"float baseAlpha=darkAlpha*baseShare*(1.0-baseAlphaBlendOpen);",
+		"float targetAlpha=darkAlpha*targetShare*(1.0-targetAlphaBlendOpen);",
+		"float alphaDelta=max(0.0,targetAlpha-baseAlpha);",
+		"if(alphaDelta<=0.0001&&dot(color,color)<=0.000001){discard;}",
+		"fragColor=vec4(color,alphaDelta);",
+		"}"
+	].join("");
 	const buildOverlayLocs = function(targetProgram) {
 		return {
 			position: gl.getAttribLocation(targetProgram, "position"),
@@ -644,10 +774,45 @@ const createMrLightingRenderer = function() {
 			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(targetProgram, "depthNearZ"),
 			depthMetricMode: gl.getUniformLocation(targetProgram, "depthMetricMode"),
-			depthMotionCompensation: gl.getUniformLocation(targetProgram, "depthMotionCompensation"),
 			depthProjectionParams: gl.getUniformLocation(targetProgram, "depthProjectionParams"),
 			depthUvTransform: gl.getUniformLocation(targetProgram, "depthUvTransform"),
 			worldFromView: gl.getUniformLocation(targetProgram, "worldFromView")
+		};
+	};
+	const buildSpatialOverlayLocs = function(targetProgram) {
+		return {
+			sourceUv: gl.getAttribLocation(targetProgram, "sourceUv"),
+			darkAlpha: gl.getUniformLocation(targetProgram, "darkAlpha"),
+			visibleShare: gl.getUniformLocation(targetProgram, "visibleShare"),
+			additiveColor: gl.getUniformLocation(targetProgram, "additiveColor"),
+			additiveStrength: gl.getUniformLocation(targetProgram, "additiveStrength"),
+			lightLayerCount: gl.getUniformLocation(targetProgram, "lightLayerCount"),
+			lightLayerCenters: gl.getUniformLocation(targetProgram, "lightLayerCenters"),
+			lightLayerColors: gl.getUniformLocation(targetProgram, "lightLayerColors"),
+			lightLayerEllipseParams: gl.getUniformLocation(targetProgram, "lightLayerEllipseParams"),
+			lightLayerAlphaBlendStrengths: gl.getUniformLocation(targetProgram, "lightLayerAlphaBlendStrengths"),
+			lightLayerEffectParams: gl.getUniformLocation(targetProgram, "lightLayerEffectParams"),
+			lightLayerWorldCenters: gl.getUniformLocation(targetProgram, "lightLayerWorldCenters"),
+			lightLayerWorldBasisX: gl.getUniformLocation(targetProgram, "lightLayerWorldBasisX"),
+			lightLayerWorldBasisY: gl.getUniformLocation(targetProgram, "lightLayerWorldBasisY"),
+			lightLayerWorldEllipseParams: gl.getUniformLocation(targetProgram, "lightLayerWorldEllipseParams"),
+			lightLayerAdditiveScale: gl.getUniformLocation(targetProgram, "lightLayerAdditiveScale"),
+			lightLayerAlphaBlendScale: gl.getUniformLocation(targetProgram, "lightLayerAlphaBlendScale"),
+			depthTexture: gl.getUniformLocation(targetProgram, "depthTexture"),
+			depthMode: gl.getUniformLocation(targetProgram, "depthMode"),
+			depthThreshold: gl.getUniformLocation(targetProgram, "depthThreshold"),
+			depthFade: gl.getUniformLocation(targetProgram, "depthFade"),
+			depthEchoWavelength: gl.getUniformLocation(targetProgram, "depthEchoWavelength"),
+			depthEchoDutyCycle: gl.getUniformLocation(targetProgram, "depthEchoDutyCycle"),
+			depthEchoFade: gl.getUniformLocation(targetProgram, "depthEchoFade"),
+			depthPhaseOffset: gl.getUniformLocation(targetProgram, "depthPhaseOffset"),
+			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
+			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
+			depthMetricMode: gl.getUniformLocation(targetProgram, "depthMetricMode"),
+			sourceProjectionParams: gl.getUniformLocation(targetProgram, "sourceProjectionParams"),
+			sourceWorldFromView: gl.getUniformLocation(targetProgram, "sourceWorldFromView"),
+			targetView: gl.getUniformLocation(targetProgram, "targetView"),
+			targetProj: gl.getUniformLocation(targetProgram, "targetProj")
 		};
 	};
 
@@ -678,6 +843,7 @@ const createMrLightingRenderer = function() {
 				depthGpuArrayLocs = buildOverlayLocs(depthGpuArrayProgram);
 			}
 			buffer = createFullscreenTriangleBuffer(gl);
+			reprojectionGrid = createUvGridTriangleBuffer(gl, 140, 104);
 		},
 		draw: function(renderState, depthInfo, depthFrameKind, webgl2Bool, depthProfile) {
 			if (!renderState) {
@@ -725,7 +891,21 @@ const createMrLightingRenderer = function() {
 			};
 			let cpuTextureBoundBool = false;
 			const useDepthProgramBool = !!(depthInfo && (renderState.depth || lightLayers.surfaceDepthLayerCount > 0));
-			if (useDepthProgramBool) {
+			const reprojectionState = depthInfo ? depthInfo.depthReprojectionState : null;
+			const useSpatialDepthProgramBool = !!(
+				useDepthProgramBool &&
+				webgl2Bool &&
+				depthFrameKind === "gpu-texture" &&
+				depthInfo &&
+				depthInfo.texture &&
+				reprojectionGrid &&
+				reprojectionState &&
+				reprojectionState.enabledBool &&
+				reprojectionState.sourceWorldFromViewMatrix &&
+				renderState.depthViewMatrix &&
+				renderState.depthProjMatrix
+			);
+			if (useDepthProgramBool && !useSpatialDepthProgramBool) {
 				const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
 				if (depthFrameKind === "cpu") {
 					if (!depthInfo.data || !depthInfo.width || !depthInfo.height) {
@@ -791,7 +971,7 @@ const createMrLightingRenderer = function() {
 			gl.uniform4fv(activeLocs.lightLayerEffectParams, lightLayers.effectParams);
 			gl.uniform1f(activeLocs.lightLayerAdditiveScale, renderState.lightLayerAdditiveScale == null ? 1 : renderState.lightLayerAdditiveScale);
 			gl.uniform1f(activeLocs.lightLayerAlphaBlendScale, renderState.lightLayerAlphaBlendScale == null ? 1 : renderState.lightLayerAlphaBlendScale);
-			if (useDepthProgramBool && activeLocs.depthTexture) {
+			if (useDepthProgramBool && !useSpatialDepthProgramBool && activeLocs.depthTexture) {
 				gl.uniform1f(activeLocs.depthMode, renderState.depth && renderState.depth.depthMode != null ? renderState.depth.depthMode : 0);
 				gl.uniform1f(activeLocs.depthThreshold, renderState.depth ? renderState.depth.depthThreshold : 0);
 				gl.uniform1f(activeLocs.depthFade, renderState.depth ? renderState.depth.depthFade : 0);
@@ -803,11 +983,6 @@ const createMrLightingRenderer = function() {
 				gl.uniform1f(activeLocs.rawValueToMeters, depthProfile && depthInfo ? (depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001)) : (depthInfo && depthInfo.rawValueToMeters || 0.001));
 				gl.uniform1f(activeLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
 				gl.uniform1f(activeLocs.depthMetricMode, renderState.depth && renderState.depth.depthRadialBool ? 1 : 0);
-				gl.uniform2f(
-					activeLocs.depthMotionCompensation,
-					renderState.depth && renderState.depth.depthMotionCompensation ? renderState.depth.depthMotionCompensation.x : 0,
-					renderState.depth && renderState.depth.depthMotionCompensation ? renderState.depth.depthMotionCompensation.y : 0
-				);
 				gl.uniform4f(
 					activeLocs.depthProjectionParams,
 					renderState.depthProjectionParams ? renderState.depthProjectionParams.xScale : 1,
@@ -843,6 +1018,56 @@ const createMrLightingRenderer = function() {
 				gl.uniformMatrix4fv(activeLocs.depthUvTransform, false, depthUvTransform);
 			}
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
+			if (useSpatialDepthProgramBool) {
+				if (!spatialProgram) {
+					spatialProgram = createProgram(gl, spatialVertexSource, spatialFragmentSource, "Passthrough overlay spatial reprojection");
+					spatialLocs = buildSpatialOverlayLocs(spatialProgram);
+				}
+				gl.useProgram(spatialProgram);
+				gl.activeTexture(gl.TEXTURE0);
+				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+				gl.uniform1i(spatialLocs.depthTexture, 0);
+				gl.uniform1f(spatialLocs.darkAlpha, renderState.darkAlpha);
+				gl.uniform1f(spatialLocs.visibleShare, renderState.visibleShare);
+				gl.uniform3fv(spatialLocs.additiveColor, additiveColor);
+				gl.uniform1f(spatialLocs.additiveStrength, renderState.additiveStrength);
+				gl.uniform1f(spatialLocs.lightLayerCount, lightLayers.count);
+				gl.uniform2fv(spatialLocs.lightLayerCenters, lightLayers.centersUv);
+				gl.uniform4fv(spatialLocs.lightLayerColors, lightLayers.colors);
+				gl.uniform4fv(spatialLocs.lightLayerEllipseParams, lightLayers.ellipseParamsUv);
+				gl.uniform1fv(spatialLocs.lightLayerAlphaBlendStrengths, lightLayers.alphaBlendStrengths);
+				gl.uniform4fv(spatialLocs.lightLayerEffectParams, lightLayers.effectParams);
+				gl.uniform3fv(spatialLocs.lightLayerWorldCenters, lightLayers.worldCenters);
+				gl.uniform3fv(spatialLocs.lightLayerWorldBasisX, lightLayers.worldBasisX);
+				gl.uniform3fv(spatialLocs.lightLayerWorldBasisY, lightLayers.worldBasisY);
+				gl.uniform4fv(spatialLocs.lightLayerWorldEllipseParams, lightLayers.worldEllipseParams);
+				gl.uniform1f(spatialLocs.lightLayerAdditiveScale, renderState.lightLayerAdditiveScale == null ? 1 : renderState.lightLayerAdditiveScale);
+				gl.uniform1f(spatialLocs.lightLayerAlphaBlendScale, renderState.lightLayerAlphaBlendScale == null ? 1 : renderState.lightLayerAlphaBlendScale);
+				gl.uniform1f(spatialLocs.depthMode, renderState.depth && renderState.depth.depthMode != null ? renderState.depth.depthMode : 0);
+				gl.uniform1f(spatialLocs.depthThreshold, renderState.depth ? renderState.depth.depthThreshold : 0);
+				gl.uniform1f(spatialLocs.depthFade, renderState.depth ? renderState.depth.depthFade : 0);
+				gl.uniform1f(spatialLocs.depthEchoWavelength, renderState.depth && renderState.depth.depthEchoWavelength != null ? renderState.depth.depthEchoWavelength : 1);
+				gl.uniform1f(spatialLocs.depthEchoDutyCycle, renderState.depth && renderState.depth.depthEchoDutyCycle != null ? renderState.depth.depthEchoDutyCycle : 0.5);
+				gl.uniform1f(spatialLocs.depthEchoFade, renderState.depth && renderState.depth.depthEchoFade != null ? renderState.depth.depthEchoFade : 0);
+				gl.uniform1f(spatialLocs.depthPhaseOffset, renderState.depth && renderState.depth.depthPhaseOffset != null ? renderState.depth.depthPhaseOffset : 0);
+				gl.uniform1f(spatialLocs.depthMrRetain, renderState.depth ? (renderState.depth.depthMrRetain || 0) : 0);
+				gl.uniform1f(spatialLocs.rawValueToMeters, depthInfo.rawValueToMeters || 16);
+				gl.uniform1f(spatialLocs.depthMetricMode, renderState.depth && renderState.depth.depthRadialBool ? 1 : 0);
+				gl.uniform4f(
+					spatialLocs.sourceProjectionParams,
+					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
+					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
+					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
+					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
+				);
+				gl.uniformMatrix4fv(spatialLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
+				gl.uniformMatrix4fv(spatialLocs.targetView, false, renderState.depthViewMatrix);
+				gl.uniformMatrix4fv(spatialLocs.targetProj, false, renderState.depthProjMatrix);
+				gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
+				gl.enableVertexAttribArray(spatialLocs.sourceUv);
+				gl.vertexAttribPointer(spatialLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
+				gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
+			}
 			gl.enable(gl.CULL_FACE);
 			gl.enable(gl.DEPTH_TEST);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -1087,6 +1312,7 @@ const createSceneRenderer = function(options) {
 
 	const createWorldMaskCompositeRenderer = function() {
 		let buffer = null;
+		let reprojectionGrid = null;
 		let framebuffer = null;
 		let colorTexture = null;
 		let depthBuffer = null;
@@ -1094,6 +1320,8 @@ const createSceneRenderer = function(options) {
 		let texture2dLocs = null;
 		let gpuArrayProgram = null;
 		let gpuArrayLocs = null;
+		let spatialProgram = null;
+		let spatialLocs = null;
 		let cpuDepthTexture = null;
 		let cpuUploadBuffer = null;
 		let targetWidth = 0;
@@ -1115,9 +1343,28 @@ const createSceneRenderer = function(options) {
 				rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
 				depthNearZ: gl.getUniformLocation(program, "depthNearZ"),
 				depthMetricMode: gl.getUniformLocation(program, "depthMetricMode"),
-				depthMotionCompensation: gl.getUniformLocation(program, "depthMotionCompensation"),
 				depthProjectionParams: gl.getUniformLocation(program, "depthProjectionParams"),
 				depthUvTransform: gl.getUniformLocation(program, "depthUvTransform")
+			};
+		};
+		const buildSpatialLocs = function(program) {
+			return {
+				sourceUv: gl.getAttribLocation(program, "sourceUv"),
+				worldTexture: gl.getUniformLocation(program, "worldTexture"),
+				depthTexture: gl.getUniformLocation(program, "depthTexture"),
+				depthMode: gl.getUniformLocation(program, "depthMode"),
+				depthThreshold: gl.getUniformLocation(program, "depthThreshold"),
+				depthFade: gl.getUniformLocation(program, "depthFade"),
+				depthEchoWavelength: gl.getUniformLocation(program, "depthEchoWavelength"),
+				depthEchoDutyCycle: gl.getUniformLocation(program, "depthEchoDutyCycle"),
+				depthEchoFade: gl.getUniformLocation(program, "depthEchoFade"),
+				depthPhaseOffset: gl.getUniformLocation(program, "depthPhaseOffset"),
+				rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
+				depthMetricMode: gl.getUniformLocation(program, "depthMetricMode"),
+				sourceProjectionParams: gl.getUniformLocation(program, "sourceProjectionParams"),
+				sourceWorldFromView: gl.getUniformLocation(program, "sourceWorldFromView"),
+				targetView: gl.getUniformLocation(program, "targetView"),
+				targetProj: gl.getUniformLocation(program, "targetProj")
 			};
 		};
 		const ensureRenderTarget = function(width, height) {
@@ -1169,7 +1416,6 @@ const createSceneRenderer = function(options) {
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
 			"uniform float depthMetricMode;",
-			"uniform vec2 depthMotionCompensation;",
 			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"varying vec2 vScreenUv;",
@@ -1193,15 +1439,13 @@ const createSceneRenderer = function(options) {
 			"}",
 			"float resolveDepthMetric(float depthMeters){",
 			"if(depthMetricMode<0.5){return depthMeters;}",
-			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-			"vec2 ndc=compensatedScreenUv*2.0-1.0;",
+			"vec2 ndc=vScreenUv*2.0-1.0;",
 			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 			"}",
 			"void main(){",
 			"vec4 worldColor=texture2D(worldTexture,vScreenUv);",
-			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-			"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
+			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture2D(depthTexture,depthUv).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
@@ -1235,7 +1479,6 @@ const createSceneRenderer = function(options) {
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
 			"uniform float depthMetricMode;",
-			"uniform vec2 depthMotionCompensation;",
 			"uniform vec4 depthProjectionParams;",
 			"uniform mat4 depthUvTransform;",
 			"in vec2 vScreenUv;",
@@ -1260,15 +1503,13 @@ const createSceneRenderer = function(options) {
 			"}",
 			"float resolveDepthMetric(float depthMeters){",
 			"if(depthMetricMode<0.5){return depthMeters;}",
-			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-			"vec2 ndc=compensatedScreenUv*2.0-1.0;",
+			"vec2 ndc=vScreenUv*2.0-1.0;",
 			"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
 			"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 			"}",
 			"void main(){",
 			"vec4 worldColor=texture(worldTexture,vScreenUv);",
-			"vec2 compensatedScreenUv=clamp(vScreenUv+depthMotionCompensation,0.0,1.0);",
-			"vec2 depthUv=(depthUvTransform*vec4(compensatedScreenUv,0.0,1.0)).xy;",
+			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 			"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
 			"float valid=step(0.001,rawDepth);",
 			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
@@ -1276,9 +1517,99 @@ const createSceneRenderer = function(options) {
 			"fragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
 			"}"
 		].join("");
+		const worldCompositeSpatialVertSource = [
+			"#version 300 es\n",
+			"precision highp float;",
+			"uniform sampler2D depthTexture;",
+			"uniform float rawValueToMeters;",
+			"uniform vec4 sourceProjectionParams;",
+			"uniform mat4 sourceWorldFromView;",
+			"uniform mat4 targetView;",
+			"uniform mat4 targetProj;",
+			"in vec2 sourceUv;",
+			"out vec2 vSourceUv;",
+			"out vec2 vCurrentUv;",
+			"out float vPlanarDepthMeters;",
+			"out float vRadialDepthMeters;",
+			"out float vDepthValid;",
+			"vec3 getSourceViewPoint(vec2 uv,float depthMeters){",
+			"vec2 ndc=uv*2.0-1.0;",
+			"vec2 viewRay=vec2((ndc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(ndc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
+			"return vec3(viewRay*depthMeters,-depthMeters);",
+			"}",
+			"void main(){",
+			"vSourceUv=sourceUv;",
+			"float normalizedDepth=texture(depthTexture,sourceUv).r;",
+			"if(normalizedDepth<=0.0001){",
+			"vDepthValid=0.0;",
+			"vCurrentUv=vec2(-1.0);",
+			"vPlanarDepthMeters=0.0;",
+			"vRadialDepthMeters=0.0;",
+			"gl_Position=vec4(2.0,2.0,1.0,1.0);",
+			"return;",
+			"}",
+			"float depthMeters=normalizedDepth*rawValueToMeters;",
+			"vec4 worldPoint=sourceWorldFromView*vec4(getSourceViewPoint(sourceUv,depthMeters),1.0);",
+			"vec4 targetViewPoint=targetView*worldPoint;",
+			"vec4 clip=targetProj*targetViewPoint;",
+			"vDepthValid=step(0.0001,-targetViewPoint.z)*step(0.0001,clip.w);",
+			"vPlanarDepthMeters=max(0.0,-targetViewPoint.z);",
+			"vRadialDepthMeters=length(targetViewPoint.xyz);",
+			"vCurrentUv=clip.xy/max(clip.w,0.0001)*0.5+0.5;",
+			"gl_Position=clip;",
+			"}"
+		].join("");
+		const worldCompositeSpatialFragSource = [
+			"#version 300 es\n",
+			"precision highp float;",
+			"uniform sampler2D worldTexture;",
+			"uniform sampler2D depthTexture;",
+			"uniform float depthMode;",
+			"uniform float depthThreshold;",
+			"uniform float depthFade;",
+			"uniform float depthEchoWavelength;",
+			"uniform float depthEchoDutyCycle;",
+			"uniform float depthEchoFade;",
+			"uniform float depthPhaseOffset;",
+			"uniform float depthMetricMode;",
+			"in vec2 vSourceUv;",
+			"in vec2 vCurrentUv;",
+			"in float vPlanarDepthMeters;",
+			"in float vRadialDepthMeters;",
+			"in float vDepthValid;",
+			"out vec4 fragColor;",
+			"float computeDepthVisibility(float depthMeters){",
+			"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+			"float wavelength=max(depthEchoWavelength,0.0001);",
+			"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
+			"float visibleWidth=wavelength*dutyCycle;",
+			"if(visibleWidth<=0.0001){return 0.0;}",
+			"if(visibleWidth>=wavelength-0.0001){return 1.0;}",
+			"float halfPeriod=wavelength*0.5;",
+			"float centeredPhase=mod(depthMeters-depthPhaseOffset+halfPeriod,wavelength)-halfPeriod;",
+			"float distanceFromBandCenter=abs(centeredPhase);",
+			"float hiddenWidth=wavelength-visibleWidth;",
+			"float visibleHalfWidth=visibleWidth*0.5;",
+			"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
+			"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+			"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
+			"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
+			"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",
+			"}",
+			"void main(){",
+			"float normalizedDepth=texture(depthTexture,vSourceUv).r;",
+			"float valid=vDepthValid*step(0.0001,normalizedDepth);",
+			"if(valid<=0.0||vCurrentUv.x<0.0||vCurrentUv.x>1.0||vCurrentUv.y<0.0||vCurrentUv.y>1.0){discard;}",
+			"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
+			"float visibility=computeDepthVisibility(depthMeters);",
+			"vec4 worldColor=texture(worldTexture,vCurrentUv);",
+			"fragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
+			"}"
+		].join("");
 		return {
 			init: function() {
 				buffer = createFullscreenTriangleBuffer(gl);
+				reprojectionGrid = createUvGridTriangleBuffer(gl, 140, 104);
 			},
 			beginWorldPass: function(width, height) {
 				ensureRenderTarget(width, height);
@@ -1289,6 +1620,50 @@ const createSceneRenderer = function(options) {
 			},
 			compositeWorld: function(worldMaskState, depthInfo, depthFrameKind, depthProfile) {
 				if (!worldMaskState || !depthInfo || !colorTexture) {
+					return;
+				}
+				const reprojectionState = depthInfo.depthReprojectionState;
+				if (webgl2Bool && depthFrameKind === "gpu-texture" && depthInfo.texture && reprojectionState && reprojectionState.enabledBool && reprojectionState.sourceWorldFromViewMatrix && worldMaskState.depthViewMatrix && worldMaskState.depthProjMatrix) {
+					if (!spatialProgram) {
+						spatialProgram = createProgram(gl, worldCompositeSpatialVertSource, worldCompositeSpatialFragSource, "World composite spatial reprojection");
+						spatialLocs = buildSpatialLocs(spatialProgram);
+					}
+					gl.useProgram(spatialProgram);
+					gl.disable(gl.DEPTH_TEST);
+					gl.disable(gl.CULL_FACE);
+					gl.enable(gl.BLEND);
+					gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+					gl.activeTexture(gl.TEXTURE0);
+					gl.bindTexture(gl.TEXTURE_2D, colorTexture);
+					gl.uniform1i(spatialLocs.worldTexture, 0);
+					gl.activeTexture(gl.TEXTURE1);
+					gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+					gl.uniform1i(spatialLocs.depthTexture, 1);
+					gl.uniform1f(spatialLocs.depthMode, worldMaskState.depthMode == null ? 0 : worldMaskState.depthMode);
+					gl.uniform1f(spatialLocs.depthThreshold, worldMaskState.depthThreshold);
+					gl.uniform1f(spatialLocs.depthFade, worldMaskState.depthFade);
+					gl.uniform1f(spatialLocs.depthEchoWavelength, worldMaskState.depthEchoWavelength == null ? 1 : worldMaskState.depthEchoWavelength);
+					gl.uniform1f(spatialLocs.depthEchoDutyCycle, worldMaskState.depthEchoDutyCycle == null ? 0.5 : worldMaskState.depthEchoDutyCycle);
+					gl.uniform1f(spatialLocs.depthEchoFade, worldMaskState.depthEchoFade == null ? 0 : worldMaskState.depthEchoFade);
+					gl.uniform1f(spatialLocs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
+					gl.uniform1f(spatialLocs.rawValueToMeters, depthInfo.rawValueToMeters || 16);
+					gl.uniform1f(spatialLocs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
+					gl.uniform4f(
+						spatialLocs.sourceProjectionParams,
+						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
+						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
+						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
+						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
+					);
+					gl.uniformMatrix4fv(spatialLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
+					gl.uniformMatrix4fv(spatialLocs.targetView, false, worldMaskState.depthViewMatrix);
+					gl.uniformMatrix4fv(spatialLocs.targetProj, false, worldMaskState.depthProjMatrix);
+					gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
+					gl.enableVertexAttribArray(spatialLocs.sourceUv);
+					gl.vertexAttribPointer(spatialLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
+					gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
+					gl.enable(gl.CULL_FACE);
+					gl.enable(gl.DEPTH_TEST);
 					return;
 				}
 				let cpuTextureBoundBool = false;
@@ -1370,11 +1745,6 @@ const createSceneRenderer = function(options) {
 				gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
 				gl.uniform1f(locs.depthNearZ, profile.nearZ);
 				gl.uniform1f(locs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
-				gl.uniform2f(
-					locs.depthMotionCompensation,
-					worldMaskState.depthMotionCompensation ? worldMaskState.depthMotionCompensation.x : 0,
-					worldMaskState.depthMotionCompensation ? worldMaskState.depthMotionCompensation.y : 0
-				);
 				gl.uniform4f(
 					locs.depthProjectionParams,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xScale : 1,
@@ -1424,6 +1794,8 @@ const createSceneRenderer = function(options) {
 		const punchState = passthroughController && passthroughController.getPunchRenderState ? passthroughController.getPunchRenderState({
 			viewMatrix: currentView,
 			projMatrix: currentProj,
+			depthViewMatrix: args.passthroughViewMatrix || currentView,
+			depthProjMatrix: args.passthroughProjMatrix || currentProj,
 			controllerRays: controllerRays
 		}) : null;
 		return {
@@ -1547,6 +1919,7 @@ const createSceneRenderer = function(options) {
 		args.processedDepthInfo = null;
 		args.processedDepthFrameKind = "";
 		args.processedDepthProfile = null;
+		args.depthReprojectionState = null;
 		args.viewIndex = 0;
 		args.outputFramebuffer = null;
 		args.targetViewport = {x: 0, y: 0, width: canvas.width, height: canvas.height};
@@ -1575,6 +1948,7 @@ const createSceneRenderer = function(options) {
 		args.passthroughViewMatrix = currentPassthroughView;
 		args.passthroughProjMatrix = currentPassthroughProj;
 		args.rawPassthroughDepthInfo = args.passthroughDepthInfoByView && args.passthroughDepthInfoByView[viewIndex] ? args.passthroughDepthInfoByView[viewIndex] : null;
+		args.depthReprojectionState = args.depthReprojectionByView && args.depthReprojectionByView[viewIndex] ? args.depthReprojectionByView[viewIndex] : null;
 		args.viewIndex = viewIndex;
 		args.outputFramebuffer = args.baseLayer.framebuffer;
 		args.targetViewport = viewport;
@@ -1589,6 +1963,7 @@ const createSceneRenderer = function(options) {
 			depthInfo: args.rawPassthroughDepthInfo,
 			depthFrameKind: args.depthFrameKind || "",
 			depthProfile: args.depthProfile,
+			depthReprojectionState: args.depthReprojectionState || null,
 			processingConfig: depthProcessingConfig,
 			outputFramebuffer: args.baseLayer.framebuffer
 		}) : null;

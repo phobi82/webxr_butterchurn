@@ -391,19 +391,9 @@ const createPassthroughMenuSectionState = function(args) {
 					hoveredBool: hasHoveredActionKey(args, "passthroughDepthRadialToggle:toggle"),
 					action: {type: "passthroughDepthRadial.toggle"},
 					hoverKey: "passthroughDepthRadialToggle:toggle"
-				},
-				{
-					key: "passthroughDepthMotionCompensationToggle",
-					label: "Motion compensation",
-					valueText: uiState.depthMotionCompensationBool ? "On" : "Off",
-					checkedBool: !!uiState.depthMotionCompensationBool,
-					hoveredBool: hasHoveredActionKey(args, "passthroughDepthMotionCompensationToggle:toggle"),
-					action: {type: "passthroughDepthMotionCompensation.toggle"},
-					hoverKey: "passthroughDepthMotionCompensationToggle:toggle"
 				}
 			]
 		}));
-		appendDepthSliderControlByKey("depthMotionCompensationFactor");
 		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthReconstruction",
 			label: "Reconstruction",
@@ -1410,7 +1400,6 @@ const DEFAULT_MENU_PASSTHROUGH_UI_STATE = {
 	flashlightActiveBool: false,
 	depthActiveBool: false,
 	depthRadialBool: true,
-	depthMotionCompensationBool: true,
 	depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
 	selectedDepthReconstructionModeKey: "heightmap",
 	depthModes: passthroughDepthModeDefinitions,

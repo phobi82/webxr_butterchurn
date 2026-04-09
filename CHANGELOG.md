@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Removed the depth reprojection toggle, timing-offset slider, and pose-history ring buffer, so spatial reprojection now runs as the single built-in path for processed headset depth.
+- Removed the legacy screen-space depth `Motion compensation` path and its old UV-shift uniforms from passthrough punch, passthrough overlay, and world-mask compositing.
+- Changed depth punch, world-mask compositing, and depth-aware passthrough lighting to share the same source-pose reprojection model for processed GPU depth, while keeping a minimal fullscreen fallback only for unsupported depth inputs.
 - Added `switch-quest-adb-to-wifi.bat` in the repo root so Quest USB-to-Wi-Fi `adb` switching can be run as one local helper script, auto-detecting a single USB-connected Quest even when other `adb` targets exist, reporting when a Quest is already connected over Wi-Fi without USB, retrying after `adb tcpip`, and falling back to `getprop` IP lookup before `adb connect`.
 - Added repo-wide line-ending policy files (`.gitattributes`, `.editorconfig`) and normalized mixed XR source files to `LF` so routine edits on Windows stop producing stray line-ending diffs.
 - Rebuilt the main VR Control Deck menu into a more flexible multi-column layout: audio meters now span the full top row, `Background` sits in the left control stack under `World Opacity`, `Passthrough` and `Scene Lighting` remain in the second column, `Exit VR` is reserved for the footer, and slider dragging now uses per-section track geometry again.

@@ -47,7 +47,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
 - **Depth Reconstruction**: shared full-resolution prepass with **Raw**, **Edge-aware**, and **Heightmap** modes, preferring float render targets to avoid 8-bit banding
-- **Motion compensation**: enabled by default for depth masking, with a `Compensation Factor` slider to tune how strongly the mask follows recent head yaw, pitch, and translation
+- **Spatial Depth Masking**: depth masks are reprojected from the source depth pose into the current render view so headset reprojection can act on them spatially, without exposing a manual timing offset or legacy motion-compensation mode
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
 - **Depth-bound Light Projection**: passthrough lighting now reuses the processed fullscreen depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
 - **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
