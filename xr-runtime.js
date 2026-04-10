@@ -422,7 +422,6 @@ const resetRuntimeSessionState = function(state) {
 	state.depthSensingActiveBool = false;
 	state.glBinding = null;
 	state.usableDepthAvailableBool = false;
-	state.depthFrameKind = "";
 	state.depthProfile = null;
 	state.passthroughAvailableBool = false;
 	state.baseRefSpace = null;
@@ -467,7 +466,6 @@ const createRuntime = function(options) {
 		depthSensingActiveBool: false,
 		glBinding: null,
 		usableDepthAvailableBool: false,
-		depthFrameKind: "",
 		depthProfile: null,
 		passthroughAvailableBool: false,
 		xrSupportState: {immersiveArSupportedBool: false, immersiveVrSupportedBool: false, preferredSessionMode: ""},
@@ -692,6 +690,7 @@ const createRuntime = function(options) {
 		}
 	};
 	const updateDepthAvailability = function(passthroughDepthInfoByView) {
+		let depthFrameKind = "";
 		if (state.usableDepthAvailableBool || !passthroughDepthInfoByView.length) {
 			return;
 		}
@@ -701,17 +700,17 @@ const createRuntime = function(options) {
 				continue;
 			}
 			if (typeof depthInfo.getDepthInMeters === "function") {
-				state.depthFrameKind = "cpu";
+				depthFrameKind = "cpu";
 			} else if (depthInfo.texture && depthInfo.textureType === "texture-array") {
-				state.depthFrameKind = "gpu-array";
+				depthFrameKind = "gpu-array";
 			} else if (depthInfo.texture) {
-				state.depthFrameKind = "gpu-texture";
+				depthFrameKind = "gpu-texture";
 			}
-			if (!state.depthFrameKind) {
+			if (!depthFrameKind) {
 				continue;
 			}
 			state.usableDepthAvailableBool = true;
-			state.depthProfile = computeRuntimeDepthProfile(state.depthFrameKind, state.xrDepthDataFormat, depthInfo.rawValueToMeters);
+			state.depthProfile = computeRuntimeDepthProfile(depthFrameKind, state.xrDepthDataFormat, depthInfo.rawValueToMeters);
 			console.log("[DepthProfile] " + state.depthProfile.label + " linearScale=" + state.depthProfile.linearScale + " nearZ=" + state.depthProfile.nearZ);
 			return;
 		}
@@ -749,11 +748,6 @@ const createRuntime = function(options) {
 			case "passthroughDepthRadial.toggle":
 				if (passthroughController && passthroughController.toggleDepthRadial) {
 					passthroughController.toggleDepthRadial();
-				}
-				return;
-			case "passthroughDepthReconstruction.cycle":
-				if (passthroughController && passthroughController.cycleDepthReconstructionMode) {
-					passthroughController.cycleDepthReconstructionMode(action.direction);
 				}
 				return;
 			case "passthroughDepthMode.cycle":
@@ -872,7 +866,6 @@ const createRuntime = function(options) {
 		updateSceneLighting(time * 0.001);
 		sceneRenderer.renderXrViews({
 			baseLayer: state.xrSession.renderState.baseLayer,
-			depthFrameKind: state.depthFrameKind || "",
 			depthProfile: state.depthProfile,
 			pose: renderPose,
 			passthroughPose: passthroughPose || renderPose,

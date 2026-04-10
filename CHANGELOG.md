@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Rebuilt `xr-depth.js` as a canonical depth adapter that normalizes CPU, `gpu-texture`, and `gpu-array` sources into one shared 2D raw-depth surface before passthrough punch, world masking, and depth-aware lighting consume it.
+- Changed spatial depth-grid sizing from fixed constants to depth-resolution-derived dimensions, keeping reprojection density tied to the actual incoming sensor resolution.
 - Removed the depth reprojection toggle, timing-offset slider, and pose-history ring buffer, so spatial reprojection now runs as the single built-in path for processed headset depth.
 - Removed the legacy screen-space depth `Motion compensation` path and its old UV-shift uniforms from passthrough punch, passthrough overlay, and world-mask compositing.
 - Changed depth punch, world-mask compositing, and depth-aware passthrough lighting to share the same source-pose reprojection model for processed GPU depth, while keeping a minimal fullscreen fallback only for unsupported depth inputs.

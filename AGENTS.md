@@ -125,6 +125,11 @@ Recommended structure order:
 - Avoid building overengineered parsers or AST frameworks unless explicitly requested.
 - Avoid unnecessary wrapper functions or one-off abstractions; only introduce helpers when they clearly reduce repetition or complexity and keep the code compact.
 
+## Collaboration and Architecture
+
+- When the task is complex, cross-cutting, performance-sensitive, architecture-sensitive, or otherwise risky, spawn specialized agents or a small agent team as needed so design, implementation, review, and verification are covered with enough depth.
+- Use spawned agents to help keep the result clean, minimal, performant, maintainable, and readable, and to verify that repository design rules and style constraints are still being followed after the change.
+
 ## 7. Error Handling
 
 - Do not let a single faulty input crash the entire app.

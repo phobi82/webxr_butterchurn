@@ -46,10 +46,10 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Depth Reconstruction**: shared full-resolution prepass with **Raw**, **Edge-aware**, and **Heightmap** modes, preferring float render targets to avoid 8-bit banding
+- **Direct Depth + Reprojection**: shared raw-depth path with no smoothing or reconstruction, using one canonical 2D depth surface so passthrough punch, world masking, and depth-aware lighting all consume the same direct depth plus spatial reprojection
 - **Spatial Depth Masking**: depth masks are reprojected from the source depth pose into the current render view so headset reprojection can act on them spatially, without exposing a manual timing offset or legacy motion-compensation mode
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
-- **Depth-bound Light Projection**: passthrough lighting now reuses the processed fullscreen depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
+- **Depth-bound Light Projection**: passthrough lighting now reuses the shared canonical 2D depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
 - **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
 - Background mix crossfades between visualizer and darkened modified reality via **manual** or **sound-reactive** blend modes
 
@@ -114,7 +114,7 @@ The menu exposes these sections:
 - **Jump Mode**: Double, Multi
 - **Eye Distance** and **World Opacity** sliders
 - **Background**: manual or sound-reactive mix mode with blend control
-- **Passthrough**: Flashlight toggle, depth modes (Distance, Echo) with reconstruction selector
+- **Passthrough**: Flashlight toggle and depth modes (Distance, Echo)
 - **Scene Lighting**: lighting mode, light preset, anchor mode, darkness control
 - **Visualizer Mode** selector with horizontal mirror toggle
 - **Butterchurn Preset** selector
@@ -189,7 +189,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Full-resolution depth reconstruction, smoothing, and processed depth metadata |
+| `xr-depth.js` | Canonical depth adapter that normalizes runtime depth sources into one shared 2D raw-depth surface |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |

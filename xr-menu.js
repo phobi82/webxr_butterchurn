@@ -395,16 +395,6 @@ const createPassthroughMenuSectionState = function(args) {
 			]
 		}));
 		controls.push(createCyclerMenuControlState({
-			key: "passthroughDepthReconstruction",
-			label: "Reconstruction",
-			valueText: getMenuModeLabelByKey(uiState.depthReconstructionModes, uiState.selectedDepthReconstructionModeKey, "Heightmap"),
-			hoveredAction: getHoveredCyclerAction(args, "passthroughDepthReconstruction:prev", "passthroughDepthReconstruction:next"),
-			prevAction: {type: "passthroughDepthReconstruction.cycle", direction: -1},
-			nextAction: {type: "passthroughDepthReconstruction.cycle", direction: 1},
-			prevHoverKey: "passthroughDepthReconstruction:prev",
-			nextHoverKey: "passthroughDepthReconstruction:next"
-		}));
-		controls.push(createCyclerMenuControlState({
 			key: "passthroughDepthMode",
 			label: "Depth Mode",
 			valueText: getMenuModeLabelByKey(uiState.depthModes, uiState.selectedDepthModeKey, "Distance"),
@@ -1400,8 +1390,6 @@ const DEFAULT_MENU_PASSTHROUGH_UI_STATE = {
 	flashlightActiveBool: false,
 	depthActiveBool: false,
 	depthRadialBool: true,
-	depthReconstructionModes: passthroughDepthReconstructionModeDefinitions,
-	selectedDepthReconstructionModeKey: "heightmap",
 	depthModes: passthroughDepthModeDefinitions,
 	selectedDepthModeKey: "distance",
 	usableDepthAvailableBool: false,

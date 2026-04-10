@@ -302,10 +302,10 @@ const createSceneGeometry = function(gl) {
 // MR lighting renderer
 const createMrLightingRenderer = function() {
 	let gl = null;
+	let webgl2Bool = false;
 	let program = null;
 	let depthTexture2dProgram = null;
-	let depthGpuArrayProgram = null;
-	let spatialProgram = null;
+	let spatialTexture2dProgram = null;
 	let positionLoc = null;
 	let darkAlphaLoc = null;
 	let visibleShareLoc = null;
@@ -329,10 +329,7 @@ const createMrLightingRenderer = function() {
 	let buffer = null;
 	let reprojectionGrid = null;
 	let depthTexture2dLocs = null;
-	let depthGpuArrayLocs = null;
-	let spatialLocs = null;
-	let cpuDepthTexture = null;
-	let cpuUploadBuffer = null;
+	let spatialTexture2dLocs = null;
 	const depthUvTransform = new Float32Array(16);
 	const maskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
 	const maskParams = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
@@ -492,90 +489,6 @@ const createMrLightingRenderer = function() {
 		"gl_FragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
 		"}"
 	].join("");
-	const depthGpuArrayVertexSource = [
-		"#version 300 es\n",
-		"in vec2 position;",
-		"out vec2 vScreenUv;",
-		"void main(){",
-		"vScreenUv=position*0.5+0.5;",
-		"gl_Position=vec4(position,0.0,1.0);",
-		"}"
-	].join("");
-	const depthGpuArrayFragmentSource = [
-		"#version 300 es\n",
-		"precision highp float;",
-		"precision mediump sampler2DArray;",
-		"uniform float darkAlpha;",
-		"uniform float visibleShare;",
-		"uniform float maskCount;",
-		"uniform vec2 maskCenters[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
-		"uniform vec2 maskParams[" + PASSTHROUGH_MAX_FLASHLIGHTS + "];",
-		"uniform vec3 additiveColor;",
-		"uniform float additiveStrength;",
-		"uniform float lightLayerCount;",
-		"uniform vec4 lightLayerColors[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec2 lightLayerCenters[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec4 lightLayerEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform float lightLayerAlphaBlendStrengths[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec4 lightLayerEffectParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldCenters[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldBasisX[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldBasisY[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec4 lightLayerWorldEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform float lightLayerAdditiveScale;",
-		"uniform float lightLayerAlphaBlendScale;",
-		"uniform sampler2DArray depthTexture;",
-		"uniform int depthTextureLayer;",
-		"uniform float depthMode;",
-		"uniform float depthThreshold;",
-		"uniform float depthFade;",
-		"uniform float depthEchoWavelength;",
-		"uniform float depthEchoDutyCycle;",
-		"uniform float depthEchoFade;",
-		"uniform float depthPhaseOffset;",
-		"uniform float depthMrRetain;",
-		"uniform float rawValueToMeters;",
-		"uniform float depthNearZ;",
-		"uniform float depthMetricMode;",
-		"uniform vec4 depthProjectionParams;",
-		"uniform mat4 depthUvTransform;",
-		"uniform mat4 worldFromView;",
-		"in vec2 vScreenUv;",
-		"out vec4 fragColor;",
-		"float circleMask(vec2 uv, vec2 center, vec2 params){float radius=max(params.x,0.0001);float softness=max(params.y,0.0001);float inner=max(0.0,radius-softness);return 1.0-smoothstep(inner,radius,distance(uv,center));}",
-		depthEllipseMaskShaderChunk,
-		fixtureEffectFragmentSource,
-		"float sampleDepth(vec2 depthUv){return texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;}",
-		depthOverlayShaderChunk,
-		"vec3 getWorldDirection(vec2 screenUv){vec2 ndc=screenUv*2.0-1.0;vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);vec3 viewDir=normalize(vec3(viewRay,-1.0));return normalize((worldFromView*vec4(viewDir,0.0)).xyz);}",
-		"vec3 getWorldPointFromDepth(vec2 screenUv,float depthMeters){vec3 cameraWorld=(worldFromView*vec4(0.0,0.0,0.0,1.0)).xyz;return cameraWorld+getWorldDirection(screenUv)*depthMeters;}",
-		depthWorldEllipseMaskShaderChunk,
-		"void main(){",
-		"float alphaBlendOpen=computeDepthRetainShare(visibleShare);",
-		"vec2 lightLayerDepthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
-		"float lightLayerRawDepth=sampleDepth(lightLayerDepthUv);",
-		"float lightLayerDepthValid=step(0.001,lightLayerRawDepth);",
-		"float lightLayerDepthMeters=depthNearZ>0.0?depthNearZ/max(1.0-lightLayerRawDepth,0.0001):lightLayerRawDepth*rawValueToMeters;",
-		"vec3 lightLayerWorldPoint=getWorldPointFromDepth(vScreenUv,lightLayerDepthMeters);",
-		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
-		"if(float(i)>=maskCount){break;}",
-		"float localMask=circleMask(vScreenUv,maskCenters[i],maskParams[i]);",
-		"alphaBlendOpen=1.0-(1.0-alphaBlendOpen)*(1.0-localMask);",
-		"}",
-		"vec3 color=additiveColor*additiveStrength*alphaBlendOpen;",
-		"float localAlphaBlendOpen=0.0;",
-		"for(int i=0;i<" + PASSTHROUGH_MAX_LIGHT_LAYERS + ";i+=1){",
-		"if(float(i)>=lightLayerCount){break;}",
-		"float lightLayerMask=ellipseMask(vScreenUv,lightLayerCenters[i],lightLayerEllipseParams[i]);",
-		"if(lightLayerWorldEllipseParams[i].x>0.0001&&lightLayerDepthValid>0.5){lightLayerMask=worldEllipseMask(lightLayerWorldPoint,lightLayerWorldCenters[i],lightLayerWorldBasisX[i],lightLayerWorldBasisY[i],lightLayerWorldEllipseParams[i]);}",
-		"vec2 effectMask=lightLayerEffect(vScreenUv,lightLayerCenters[i],lightLayerEllipseParams[i],lightLayerEffectParams[i]);",
-		"float lightLayerStrength=lightLayerColors[i].a*lightLayerMask*effectMask.x*alphaBlendOpen*lightLayerAdditiveScale;",
-		"color+=lightLayerColors[i].rgb*lightLayerStrength;",
-		"localAlphaBlendOpen=max(localAlphaBlendOpen,clamp(lightLayerColors[i].a*lightLayerMask*effectMask.y*lightLayerAlphaBlendStrengths[i]*1.65*alphaBlendOpen*lightLayerAlphaBlendScale,0.0,1.0));",
-		"}",
-		"fragColor=vec4(color,darkAlpha*alphaBlendOpen*(1.0-localAlphaBlendOpen));",
-		"}"
-	].join("");
 	const spatialVertexSource = createSpatialDepthVertexShaderSource({
 		passCurrentUvBool: true,
 		passWorldPointBool: true,
@@ -676,7 +589,6 @@ const createMrLightingRenderer = function() {
 			lightLayerAdditiveScale: gl.getUniformLocation(targetProgram, "lightLayerAdditiveScale"),
 			lightLayerAlphaBlendScale: gl.getUniformLocation(targetProgram, "lightLayerAlphaBlendScale"),
 			depthTexture: gl.getUniformLocation(targetProgram, "depthTexture"),
-			depthTextureLayer: gl.getUniformLocation(targetProgram, "depthTextureLayer"),
 			depthMode: gl.getUniformLocation(targetProgram, "depthMode"),
 			depthThreshold: gl.getUniformLocation(targetProgram, "depthThreshold"),
 			depthFade: gl.getUniformLocation(targetProgram, "depthFade"),
@@ -722,6 +634,7 @@ const createMrLightingRenderer = function() {
 			depthPhaseOffset: gl.getUniformLocation(targetProgram, "depthPhaseOffset"),
 			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(targetProgram, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(targetProgram, "depthNearZ"),
 			depthMetricMode: gl.getUniformLocation(targetProgram, "depthMetricMode"),
 			sourceProjectionParams: gl.getUniformLocation(targetProgram, "sourceProjectionParams"),
 			sourceWorldFromView: gl.getUniformLocation(targetProgram, "sourceWorldFromView"),
@@ -729,10 +642,10 @@ const createMrLightingRenderer = function() {
 			targetProj: gl.getUniformLocation(targetProgram, "targetProj")
 		};
 	};
-
 	return {
 		init: function(glContext) {
 			gl = glContext;
+			webgl2Bool = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
 			program = createProgram(gl, fullscreenVertexSource, fragmentSource, "Passthrough overlay");
 			positionLoc = gl.getAttribLocation(program, "position");
 			darkAlphaLoc = gl.getUniformLocation(program, "darkAlpha");
@@ -752,14 +665,9 @@ const createMrLightingRenderer = function() {
 			lightLayerAlphaBlendScaleLoc = gl.getUniformLocation(program, "lightLayerAlphaBlendScale");
 			depthTexture2dProgram = createProgram(gl, overlayVertexSource, depthTexture2dFragmentSource, "Passthrough overlay depth texture2d");
 			depthTexture2dLocs = buildOverlayLocs(depthTexture2dProgram);
-			if (typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext) {
-				depthGpuArrayProgram = createProgram(gl, depthGpuArrayVertexSource, depthGpuArrayFragmentSource, "Passthrough overlay depth gpu-array");
-				depthGpuArrayLocs = buildOverlayLocs(depthGpuArrayProgram);
-			}
 			buffer = createFullscreenTriangleBuffer(gl);
-					reprojectionGrid = createUvGridTriangleBuffer(gl, SPATIAL_DEPTH_GRID_COLUMNS, SPATIAL_DEPTH_GRID_ROWS);
 		},
-		draw: function(renderState, depthInfo, depthFrameKind, webgl2Bool, depthProfile) {
+		draw: function(renderState, depthInfo, depthProfile) {
 			if (!renderState) {
 				return;
 			}
@@ -803,16 +711,13 @@ const createMrLightingRenderer = function() {
 				lightLayerAdditiveScale: lightLayerAdditiveScaleLoc,
 				lightLayerAlphaBlendScale: lightLayerAlphaBlendScaleLoc
 			};
-			let cpuTextureBoundBool = false;
 			const useDepthProgramBool = !!(depthInfo && (renderState.depth || lightLayers.surfaceDepthLayerCount > 0));
 			const reprojectionState = depthInfo ? depthInfo.depthReprojectionState : null;
 			const useSpatialDepthProgramBool = !!(
 				useDepthProgramBool &&
 				webgl2Bool &&
-				depthFrameKind === "gpu-texture" &&
 				depthInfo &&
 				depthInfo.texture &&
-				reprojectionGrid &&
 				reprojectionState &&
 				reprojectionState.enabledBool &&
 				reprojectionState.sourceWorldFromViewMatrix &&
@@ -820,45 +725,8 @@ const createMrLightingRenderer = function() {
 				renderState.depthProjMatrix
 			);
 			if (useDepthProgramBool && !useSpatialDepthProgramBool) {
-				const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
-				if (depthFrameKind === "cpu") {
-					if (!depthInfo.data || !depthInfo.width || !depthInfo.height) {
-						return;
-					}
-					if (!cpuDepthTexture) {
-						cpuDepthTexture = gl.createTexture();
-					}
-					const pixelCount = depthInfo.width * depthInfo.height;
-					if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
-						cpuUploadBuffer = new Float32Array(pixelCount);
-					}
-					const src = new Uint16Array(depthInfo.data);
-					for (let i = 0; i < pixelCount; i += 1) {
-						cpuUploadBuffer[i] = src[i];
-					}
-					gl.activeTexture(gl.TEXTURE1);
-					gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
-					if (webgl2Bool) {
-						gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-					} else {
-						gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-					}
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-					cpuTextureBoundBool = true;
-					activeProgram = depthTexture2dProgram;
-					activeLocs = depthTexture2dLocs;
-				} else if (depthFrameKind === "gpu-array" && webgl2Bool && depthGpuArrayProgram && depthInfo.texture) {
-					activeProgram = depthGpuArrayProgram;
-					activeLocs = depthGpuArrayLocs;
-				} else if (depthInfo.texture) {
-					activeProgram = depthTexture2dProgram;
-					activeLocs = depthTexture2dLocs;
-				} else {
-					activeProgram = program;
-				}
+				activeProgram = depthInfo && depthInfo.texture ? depthTexture2dProgram : program;
+				activeLocs = depthInfo && depthInfo.texture ? depthTexture2dLocs : activeLocs;
 			}
 			gl.enable(gl.BLEND);
 			// Accumulate MR alpha additively so the global visualizer->MR crossfade does not
@@ -910,12 +778,7 @@ const createMrLightingRenderer = function() {
 				gl.uniform4fv(activeLocs.lightLayerWorldEllipseParams, lightLayers.worldEllipseParams);
 				gl.uniformMatrix4fv(activeLocs.worldFromView, false, renderState.viewWorldMatrix || identityMatrix());
 				gl.activeTexture(gl.TEXTURE1);
-				if (cpuTextureBoundBool) {
-					// already bound above
-				} else if (depthFrameKind === "gpu-array" && webgl2Bool && depthGpuArrayProgram && depthInfo.texture && activeLocs.depthTextureLayer) {
-					gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
-					gl.uniform1i(activeLocs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
-				} else if (depthInfo && depthInfo.texture) {
+				if (depthInfo && depthInfo.texture) {
 					gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
 				}
 				gl.uniform1i(activeLocs.depthTexture, 1);
@@ -924,53 +787,55 @@ const createMrLightingRenderer = function() {
 			}
 			gl.drawArrays(gl.TRIANGLES, 0, 3);
 			if (useSpatialDepthProgramBool) {
-				if (!spatialProgram) {
-					spatialProgram = createProgram(gl, spatialVertexSource, spatialFragmentSource, "Passthrough overlay spatial reprojection");
-					spatialLocs = buildSpatialOverlayLocs(spatialProgram);
+				if (!spatialTexture2dProgram) {
+					spatialTexture2dProgram = createProgram(gl, spatialVertexSource, spatialFragmentSource, "Passthrough overlay spatial reprojection");
+					spatialTexture2dLocs = buildSpatialOverlayLocs(spatialTexture2dProgram);
 				}
-				gl.useProgram(spatialProgram);
+				gl.useProgram(spatialTexture2dProgram);
 				gl.activeTexture(gl.TEXTURE0);
 				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-				gl.uniform1i(spatialLocs.depthTexture, 0);
-				gl.uniform1f(spatialLocs.darkAlpha, renderState.darkAlpha);
-				gl.uniform1f(spatialLocs.visibleShare, renderState.visibleShare);
-				gl.uniform3fv(spatialLocs.additiveColor, additiveColor);
-				gl.uniform1f(spatialLocs.additiveStrength, renderState.additiveStrength);
-				gl.uniform1f(spatialLocs.lightLayerCount, lightLayers.count);
-				gl.uniform2fv(spatialLocs.lightLayerCenters, lightLayers.centersUv);
-				gl.uniform4fv(spatialLocs.lightLayerColors, lightLayers.colors);
-				gl.uniform4fv(spatialLocs.lightLayerEllipseParams, lightLayers.ellipseParamsUv);
-				gl.uniform1fv(spatialLocs.lightLayerAlphaBlendStrengths, lightLayers.alphaBlendStrengths);
-				gl.uniform4fv(spatialLocs.lightLayerEffectParams, lightLayers.effectParams);
-				gl.uniform3fv(spatialLocs.lightLayerWorldCenters, lightLayers.worldCenters);
-				gl.uniform3fv(spatialLocs.lightLayerWorldBasisX, lightLayers.worldBasisX);
-				gl.uniform3fv(spatialLocs.lightLayerWorldBasisY, lightLayers.worldBasisY);
-				gl.uniform4fv(spatialLocs.lightLayerWorldEllipseParams, lightLayers.worldEllipseParams);
-				gl.uniform1f(spatialLocs.lightLayerAdditiveScale, renderState.lightLayerAdditiveScale == null ? 1 : renderState.lightLayerAdditiveScale);
-				gl.uniform1f(spatialLocs.lightLayerAlphaBlendScale, renderState.lightLayerAlphaBlendScale == null ? 1 : renderState.lightLayerAlphaBlendScale);
-				gl.uniform1f(spatialLocs.depthMode, renderState.depth && renderState.depth.depthMode != null ? renderState.depth.depthMode : 0);
-				gl.uniform1f(spatialLocs.depthThreshold, renderState.depth ? renderState.depth.depthThreshold : 0);
-				gl.uniform1f(spatialLocs.depthFade, renderState.depth ? renderState.depth.depthFade : 0);
-				gl.uniform1f(spatialLocs.depthEchoWavelength, renderState.depth && renderState.depth.depthEchoWavelength != null ? renderState.depth.depthEchoWavelength : 1);
-				gl.uniform1f(spatialLocs.depthEchoDutyCycle, renderState.depth && renderState.depth.depthEchoDutyCycle != null ? renderState.depth.depthEchoDutyCycle : 0.5);
-				gl.uniform1f(spatialLocs.depthEchoFade, renderState.depth && renderState.depth.depthEchoFade != null ? renderState.depth.depthEchoFade : 0);
-				gl.uniform1f(spatialLocs.depthPhaseOffset, renderState.depth && renderState.depth.depthPhaseOffset != null ? renderState.depth.depthPhaseOffset : 0);
-				gl.uniform1f(spatialLocs.depthMrRetain, renderState.depth ? (renderState.depth.depthMrRetain || 0) : 0);
-				gl.uniform1f(spatialLocs.rawValueToMeters, depthInfo.rawValueToMeters || 16);
-				gl.uniform1f(spatialLocs.depthMetricMode, renderState.depth && renderState.depth.depthRadialBool ? 1 : 0);
+				gl.uniform1i(spatialTexture2dLocs.depthTexture, 0);
+				gl.uniform1f(spatialTexture2dLocs.darkAlpha, renderState.darkAlpha);
+				gl.uniform1f(spatialTexture2dLocs.visibleShare, renderState.visibleShare);
+				gl.uniform3fv(spatialTexture2dLocs.additiveColor, additiveColor);
+				gl.uniform1f(spatialTexture2dLocs.additiveStrength, renderState.additiveStrength);
+				gl.uniform1f(spatialTexture2dLocs.lightLayerCount, lightLayers.count);
+				gl.uniform2fv(spatialTexture2dLocs.lightLayerCenters, lightLayers.centersUv);
+				gl.uniform4fv(spatialTexture2dLocs.lightLayerColors, lightLayers.colors);
+				gl.uniform4fv(spatialTexture2dLocs.lightLayerEllipseParams, lightLayers.ellipseParamsUv);
+				gl.uniform1fv(spatialTexture2dLocs.lightLayerAlphaBlendStrengths, lightLayers.alphaBlendStrengths);
+				gl.uniform4fv(spatialTexture2dLocs.lightLayerEffectParams, lightLayers.effectParams);
+				gl.uniform3fv(spatialTexture2dLocs.lightLayerWorldCenters, lightLayers.worldCenters);
+				gl.uniform3fv(spatialTexture2dLocs.lightLayerWorldBasisX, lightLayers.worldBasisX);
+				gl.uniform3fv(spatialTexture2dLocs.lightLayerWorldBasisY, lightLayers.worldBasisY);
+				gl.uniform4fv(spatialTexture2dLocs.lightLayerWorldEllipseParams, lightLayers.worldEllipseParams);
+				gl.uniform1f(spatialTexture2dLocs.lightLayerAdditiveScale, renderState.lightLayerAdditiveScale == null ? 1 : renderState.lightLayerAdditiveScale);
+				gl.uniform1f(spatialTexture2dLocs.lightLayerAlphaBlendScale, renderState.lightLayerAlphaBlendScale == null ? 1 : renderState.lightLayerAlphaBlendScale);
+				gl.uniform1f(spatialTexture2dLocs.depthMode, renderState.depth && renderState.depth.depthMode != null ? renderState.depth.depthMode : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthThreshold, renderState.depth ? renderState.depth.depthThreshold : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthFade, renderState.depth ? renderState.depth.depthFade : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthEchoWavelength, renderState.depth && renderState.depth.depthEchoWavelength != null ? renderState.depth.depthEchoWavelength : 1);
+				gl.uniform1f(spatialTexture2dLocs.depthEchoDutyCycle, renderState.depth && renderState.depth.depthEchoDutyCycle != null ? renderState.depth.depthEchoDutyCycle : 0.5);
+				gl.uniform1f(spatialTexture2dLocs.depthEchoFade, renderState.depth && renderState.depth.depthEchoFade != null ? renderState.depth.depthEchoFade : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthPhaseOffset, renderState.depth && renderState.depth.depthPhaseOffset != null ? renderState.depth.depthPhaseOffset : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthMrRetain, renderState.depth ? (renderState.depth.depthMrRetain || 0) : 0);
+				gl.uniform1f(spatialTexture2dLocs.rawValueToMeters, depthProfile && depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001));
+				gl.uniform1f(spatialTexture2dLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
+				gl.uniform1f(spatialTexture2dLocs.depthMetricMode, renderState.depth && renderState.depth.depthRadialBool ? 1 : 0);
 				gl.uniform4f(
-					spatialLocs.sourceProjectionParams,
+					spatialTexture2dLocs.sourceProjectionParams,
 					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
 					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
 					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
 					reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
 				);
-				gl.uniformMatrix4fv(spatialLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
-				gl.uniformMatrix4fv(spatialLocs.targetView, false, renderState.depthViewMatrix);
-				gl.uniformMatrix4fv(spatialLocs.targetProj, false, renderState.depthProjMatrix);
+				gl.uniformMatrix4fv(spatialTexture2dLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
+				gl.uniformMatrix4fv(spatialTexture2dLocs.targetView, false, renderState.depthViewMatrix);
+				gl.uniformMatrix4fv(spatialTexture2dLocs.targetProj, false, renderState.depthProjMatrix);
+				reprojectionGrid = ensureSpatialDepthGrid(gl, reprojectionGrid, depthInfo, "balanced");
 				gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
-				gl.enableVertexAttribArray(spatialLocs.sourceUv);
-				gl.vertexAttribPointer(spatialLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
+				gl.enableVertexAttribArray(spatialTexture2dLocs.sourceUv);
+				gl.vertexAttribPointer(spatialTexture2dLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
 				gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
 			}
 			gl.enable(gl.CULL_FACE);
@@ -1212,7 +1077,7 @@ const createSceneRenderer = function(options) {
 		drawCallback();
 		gl.bindFramebuffer(gl.FRAMEBUFFER, args.outputFramebuffer || null);
 		gl.viewport(args.targetViewport.x, args.targetViewport.y, args.targetViewport.width, args.targetViewport.height);
-		worldMaskCompositeRenderer.compositeWorld(worldMaskState, args.processedDepthInfo, args.processedDepthFrameKind || "", args.processedDepthProfile);
+		worldMaskCompositeRenderer.compositeWorld(worldMaskState, args.processedDepthInfo, args.processedDepthProfile);
 	};
 
 	const createWorldMaskCompositeRenderer = function() {
@@ -1226,14 +1091,10 @@ const createSceneRenderer = function(options) {
 		let maskDepthBuffer = null;
 		let texture2dProgram = null;
 		let texture2dLocs = null;
-		let gpuArrayProgram = null;
-		let gpuArrayLocs = null;
-		let spatialProgram = null;
-		let spatialLocs = null;
+		let spatialTexture2dProgram = null;
+		let spatialTexture2dLocs = null;
 		let spatialCompositeProgram = null;
 		let spatialCompositeLocs = null;
-		let cpuDepthTexture = null;
-		let cpuUploadBuffer = null;
 		let targetWidth = 0;
 		let targetHeight = 0;
 		const depthUvTransform = new Float32Array(16);
@@ -1242,7 +1103,6 @@ const createSceneRenderer = function(options) {
 				position: gl.getAttribLocation(program, "position"),
 				worldTexture: gl.getUniformLocation(program, "worldTexture"),
 				depthTexture: gl.getUniformLocation(program, "depthTexture"),
-				depthTextureLayer: gl.getUniformLocation(program, "depthTextureLayer"),
 				depthMode: gl.getUniformLocation(program, "depthMode"),
 				depthThreshold: gl.getUniformLocation(program, "depthThreshold"),
 				depthFade: gl.getUniformLocation(program, "depthFade"),
@@ -1269,6 +1129,7 @@ const createSceneRenderer = function(options) {
 				depthEchoFade: gl.getUniformLocation(program, "depthEchoFade"),
 				depthPhaseOffset: gl.getUniformLocation(program, "depthPhaseOffset"),
 				rawValueToMeters: gl.getUniformLocation(program, "rawValueToMeters"),
+				depthNearZ: gl.getUniformLocation(program, "depthNearZ"),
 				depthMetricMode: gl.getUniformLocation(program, "depthMetricMode"),
 				sourceProjectionParams: gl.getUniformLocation(program, "sourceProjectionParams"),
 				sourceWorldFromView: gl.getUniformLocation(program, "sourceWorldFromView"),
@@ -1367,50 +1228,7 @@ const createSceneRenderer = function(options) {
 			"gl_FragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
 			"}"
 		].join("");
-		const worldCompositeGpuArrayVertSource = [
-			"#version 300 es\n",
-			"in vec2 position;",
-			"out vec2 vScreenUv;",
-			"void main(){",
-			"vScreenUv=position*0.5+0.5;",
-			"gl_Position=vec4(position,0.0,1.0);",
-			"}"
-		].join("");
-		const worldCompositeGpuArrayFragSource = [
-			"#version 300 es\n",
-			"precision highp float;",
-			"precision mediump sampler2DArray;",
-			"uniform sampler2D worldTexture;",
-			"uniform sampler2DArray depthTexture;",
-			"uniform int depthTextureLayer;",
-			"uniform float depthMode;",
-			"uniform float depthThreshold;",
-			"uniform float depthFade;",
-			"uniform float depthEchoWavelength;",
-			"uniform float depthEchoDutyCycle;",
-			"uniform float depthEchoFade;",
-			"uniform float depthPhaseOffset;",
-			"uniform float rawValueToMeters;",
-			"uniform float depthNearZ;",
-			"uniform float depthMetricMode;",
-			"uniform vec4 depthProjectionParams;",
-			"uniform mat4 depthUvTransform;",
-			"in vec2 vScreenUv;",
-			"out vec4 fragColor;",
-			createDepthBandMaskShaderChunk("computeDepthVisibility"),
-			createDepthProjectionMetricShaderChunk("resolveDepthMetric", "vScreenUv"),
-			"void main(){",
-			"vec4 worldColor=texture(worldTexture,vScreenUv);",
-			"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
-			"float rawDepth=texture(depthTexture,vec3(depthUv,float(depthTextureLayer))).r;",
-			"float valid=step(0.001,rawDepth);",
-			"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
-			"float visibility=valid>0.0?computeDepthVisibility(resolveDepthMetric(depthMeters)):1.0;",
-			"fragColor=vec4(worldColor.rgb,worldColor.a*visibility);",
-			"}"
-		].join("");
 		const worldCompositeSpatialVertSource = createSpatialDepthVertexShaderSource({
-			passSourceUvBool: true,
 			passCurrentUvBool: true,
 			passPlanarDepthBool: true,
 			passRadialDepthBool: true
@@ -1418,7 +1236,6 @@ const createSceneRenderer = function(options) {
 		const worldCompositeSpatialFragSource = [
 			"#version 300 es\n",
 			"precision highp float;",
-			"uniform sampler2D depthTexture;",
 			"uniform float depthMode;",
 			"uniform float depthThreshold;",
 			"uniform float depthFade;",
@@ -1427,7 +1244,6 @@ const createSceneRenderer = function(options) {
 			"uniform float depthEchoFade;",
 			"uniform float depthPhaseOffset;",
 			"uniform float depthMetricMode;",
-			"in vec2 vSourceUv;",
 			"in vec2 vCurrentUv;",
 			"in float vPlanarDepthMeters;",
 			"in float vRadialDepthMeters;",
@@ -1435,8 +1251,7 @@ const createSceneRenderer = function(options) {
 			"out vec4 fragColor;",
 			createDepthBandMaskShaderChunk("computeDepthVisibility"),
 			"void main(){",
-			"float normalizedDepth=texture(depthTexture,vSourceUv).r;",
-			"float valid=step(0.999,vDepthValid)*step(0.0001,normalizedDepth);",
+			"float valid=step(0.999,vDepthValid);",
 			"if(valid<=0.0||vCurrentUv.x<0.0||vCurrentUv.x>1.0||vCurrentUv.y<0.0||vCurrentUv.y>1.0){discard;}",
 			"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
 			"float visibility=computeDepthVisibility(depthMeters);",
@@ -1457,7 +1272,6 @@ const createSceneRenderer = function(options) {
 		return {
 			init: function() {
 				buffer = createFullscreenTriangleBuffer(gl);
-				reprojectionGrid = createUvGridTriangleBuffer(gl, SPATIAL_DEPTH_GRID_COLUMNS, SPATIAL_DEPTH_GRID_ROWS);
 			},
 			beginWorldPass: function(width, height) {
 				ensureRenderTarget(width, height);
@@ -1466,15 +1280,15 @@ const createSceneRenderer = function(options) {
 				gl.clearColor(0, 0, 0, 0);
 				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			},
-			compositeWorld: function(worldMaskState, depthInfo, depthFrameKind, depthProfile) {
+			compositeWorld: function(worldMaskState, depthInfo, depthProfile) {
 				if (!worldMaskState || !depthInfo || !colorTexture) {
 					return;
 				}
 				const reprojectionState = depthInfo.depthReprojectionState;
-				if (webgl2Bool && depthFrameKind === "gpu-texture" && depthInfo.texture && reprojectionState && reprojectionState.enabledBool && reprojectionState.sourceWorldFromViewMatrix && worldMaskState.depthViewMatrix && worldMaskState.depthProjMatrix) {
-					if (!spatialProgram) {
-						spatialProgram = createProgram(gl, worldCompositeSpatialVertSource, worldCompositeSpatialFragSource, "World composite spatial reprojection");
-						spatialLocs = buildSpatialLocs(spatialProgram);
+				if (webgl2Bool && depthInfo.texture && reprojectionState && reprojectionState.enabledBool && reprojectionState.sourceWorldFromViewMatrix && worldMaskState.depthViewMatrix && worldMaskState.depthProjMatrix) {
+					if (!spatialTexture2dProgram) {
+						spatialTexture2dProgram = createProgram(gl, worldCompositeSpatialVertSource, worldCompositeSpatialFragSource, "World composite spatial reprojection");
+						spatialTexture2dLocs = buildSpatialLocs(spatialTexture2dProgram);
 					}
 					if (!spatialCompositeProgram) {
 						spatialCompositeProgram = createProgram(gl, worldCompositeVertSource, worldCompositeSpatialFinalizeFragSource, "World composite spatial finalize");
@@ -1487,7 +1301,7 @@ const createSceneRenderer = function(options) {
 					gl.clearColor(1, 1, 1, 1);
 					gl.clearDepth(1);
 					gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-					gl.useProgram(spatialProgram);
+					gl.useProgram(spatialTexture2dProgram);
 					gl.enable(gl.DEPTH_TEST);
 					gl.depthMask(true);
 					gl.depthFunc(gl.LEQUAL);
@@ -1495,29 +1309,31 @@ const createSceneRenderer = function(options) {
 					gl.disable(gl.BLEND);
 					gl.activeTexture(gl.TEXTURE0);
 					gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-					gl.uniform1i(spatialLocs.depthTexture, 0);
-					gl.uniform1f(spatialLocs.depthMode, worldMaskState.depthMode == null ? 0 : worldMaskState.depthMode);
-					gl.uniform1f(spatialLocs.depthThreshold, worldMaskState.depthThreshold);
-					gl.uniform1f(spatialLocs.depthFade, worldMaskState.depthFade);
-					gl.uniform1f(spatialLocs.depthEchoWavelength, worldMaskState.depthEchoWavelength == null ? 1 : worldMaskState.depthEchoWavelength);
-					gl.uniform1f(spatialLocs.depthEchoDutyCycle, worldMaskState.depthEchoDutyCycle == null ? 0.5 : worldMaskState.depthEchoDutyCycle);
-					gl.uniform1f(spatialLocs.depthEchoFade, worldMaskState.depthEchoFade == null ? 0 : worldMaskState.depthEchoFade);
-					gl.uniform1f(spatialLocs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
-					gl.uniform1f(spatialLocs.rawValueToMeters, depthInfo.rawValueToMeters || 16);
-					gl.uniform1f(spatialLocs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
+					gl.uniform1i(spatialTexture2dLocs.depthTexture, 0);
+					gl.uniform1f(spatialTexture2dLocs.depthMode, worldMaskState.depthMode == null ? 0 : worldMaskState.depthMode);
+					gl.uniform1f(spatialTexture2dLocs.depthThreshold, worldMaskState.depthThreshold);
+					gl.uniform1f(spatialTexture2dLocs.depthFade, worldMaskState.depthFade);
+					gl.uniform1f(spatialTexture2dLocs.depthEchoWavelength, worldMaskState.depthEchoWavelength == null ? 1 : worldMaskState.depthEchoWavelength);
+					gl.uniform1f(spatialTexture2dLocs.depthEchoDutyCycle, worldMaskState.depthEchoDutyCycle == null ? 0.5 : worldMaskState.depthEchoDutyCycle);
+					gl.uniform1f(spatialTexture2dLocs.depthEchoFade, worldMaskState.depthEchoFade == null ? 0 : worldMaskState.depthEchoFade);
+					gl.uniform1f(spatialTexture2dLocs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
+					gl.uniform1f(spatialTexture2dLocs.rawValueToMeters, depthProfile && depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001));
+					gl.uniform1f(spatialTexture2dLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
+					gl.uniform1f(spatialTexture2dLocs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
 					gl.uniform4f(
-						spatialLocs.sourceProjectionParams,
+						spatialTexture2dLocs.sourceProjectionParams,
 						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
 						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
 						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
 						reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
 					);
-					gl.uniformMatrix4fv(spatialLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
-					gl.uniformMatrix4fv(spatialLocs.targetView, false, worldMaskState.depthViewMatrix);
-					gl.uniformMatrix4fv(spatialLocs.targetProj, false, worldMaskState.depthProjMatrix);
+					gl.uniformMatrix4fv(spatialTexture2dLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
+					gl.uniformMatrix4fv(spatialTexture2dLocs.targetView, false, worldMaskState.depthViewMatrix);
+					gl.uniformMatrix4fv(spatialTexture2dLocs.targetProj, false, worldMaskState.depthProjMatrix);
+					reprojectionGrid = ensureSpatialDepthGrid(gl, reprojectionGrid, depthInfo, "balanced");
 					gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
-					gl.enableVertexAttribArray(spatialLocs.sourceUv);
-					gl.vertexAttribPointer(spatialLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
+					gl.enableVertexAttribArray(spatialTexture2dLocs.sourceUv);
+					gl.vertexAttribPointer(spatialTexture2dLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
 					gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
 					gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
 					gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
@@ -1542,97 +1358,47 @@ const createSceneRenderer = function(options) {
 					gl.enable(gl.DEPTH_TEST);
 					return;
 				}
-				let cpuTextureBoundBool = false;
 				const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
-				if (depthFrameKind === "cpu") {
-					if (!depthInfo.data || !depthInfo.width || !depthInfo.height) {
-						return;
-					}
-					if (!cpuDepthTexture) {
-						cpuDepthTexture = gl.createTexture();
-					}
-					const pixelCount = depthInfo.width * depthInfo.height;
-					if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
-						cpuUploadBuffer = new Float32Array(pixelCount);
-					}
-					const src = new Uint16Array(depthInfo.data);
-					for (let i = 0; i < pixelCount; i += 1) {
-						cpuUploadBuffer[i] = src[i];
-					}
-					gl.activeTexture(gl.TEXTURE1);
-					gl.bindTexture(gl.TEXTURE_2D, cpuDepthTexture);
-					if (webgl2Bool) {
-						gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-					} else {
-						gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-					}
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-					gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-					cpuTextureBoundBool = true;
-				} else if (!depthInfo.texture) {
+				if (!depthInfo.texture) {
 					return;
 				}
-				let program = null;
-				let locs = null;
-				if (depthFrameKind === "gpu-array" && webgl2Bool) {
-					if (!gpuArrayProgram) {
-						gpuArrayProgram = createProgram(gl, worldCompositeGpuArrayVertSource, worldCompositeGpuArrayFragSource, "World composite gpu-array");
-						gpuArrayLocs = buildLocs(gpuArrayProgram);
-					}
-					program = gpuArrayProgram;
-					locs = gpuArrayLocs;
-				} else {
-					if (!texture2dProgram) {
-						texture2dProgram = createProgram(gl, worldCompositeVertSource, worldCompositeTexture2dFragSource, "World composite texture2d");
-						texture2dLocs = buildLocs(texture2dProgram);
-					}
-					program = texture2dProgram;
-					locs = texture2dLocs;
+				if (!texture2dProgram) {
+					texture2dProgram = createProgram(gl, worldCompositeVertSource, worldCompositeTexture2dFragSource, "World composite texture2d");
+					texture2dLocs = buildLocs(texture2dProgram);
 				}
-				gl.useProgram(program);
+				gl.useProgram(texture2dProgram);
 				gl.disable(gl.DEPTH_TEST);
 				gl.disable(gl.CULL_FACE);
 				gl.enable(gl.BLEND);
 				gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 				gl.activeTexture(gl.TEXTURE0);
 				gl.bindTexture(gl.TEXTURE_2D, colorTexture);
-				gl.uniform1i(locs.worldTexture, 0);
+				gl.uniform1i(texture2dLocs.worldTexture, 0);
 				gl.activeTexture(gl.TEXTURE1);
-				if (cpuTextureBoundBool) {
-					// already bound above
-				} else if (depthFrameKind === "gpu-array" && webgl2Bool) {
-					gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
-					if (locs.depthTextureLayer) {
-						gl.uniform1i(locs.depthTextureLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
-					}
-				} else {
-					gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-				}
-				gl.uniform1i(locs.depthTexture, 1);
-				gl.uniform1f(locs.depthMode, worldMaskState.depthMode == null ? 0 : worldMaskState.depthMode);
-				gl.uniform1f(locs.depthThreshold, worldMaskState.depthThreshold);
-				gl.uniform1f(locs.depthFade, worldMaskState.depthFade);
-				gl.uniform1f(locs.depthEchoWavelength, worldMaskState.depthEchoWavelength == null ? 1 : worldMaskState.depthEchoWavelength);
-				gl.uniform1f(locs.depthEchoDutyCycle, worldMaskState.depthEchoDutyCycle == null ? 0.5 : worldMaskState.depthEchoDutyCycle);
-				gl.uniform1f(locs.depthEchoFade, worldMaskState.depthEchoFade == null ? 0 : worldMaskState.depthEchoFade);
-				gl.uniform1f(locs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
-				gl.uniform1f(locs.rawValueToMeters, profile.linearScale);
-				gl.uniform1f(locs.depthNearZ, profile.nearZ);
-				gl.uniform1f(locs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
+				gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+				gl.uniform1i(texture2dLocs.depthTexture, 1);
+				gl.uniform1f(texture2dLocs.depthMode, worldMaskState.depthMode == null ? 0 : worldMaskState.depthMode);
+				gl.uniform1f(texture2dLocs.depthThreshold, worldMaskState.depthThreshold);
+				gl.uniform1f(texture2dLocs.depthFade, worldMaskState.depthFade);
+				gl.uniform1f(texture2dLocs.depthEchoWavelength, worldMaskState.depthEchoWavelength == null ? 1 : worldMaskState.depthEchoWavelength);
+				gl.uniform1f(texture2dLocs.depthEchoDutyCycle, worldMaskState.depthEchoDutyCycle == null ? 0.5 : worldMaskState.depthEchoDutyCycle);
+				gl.uniform1f(texture2dLocs.depthEchoFade, worldMaskState.depthEchoFade == null ? 0 : worldMaskState.depthEchoFade);
+				gl.uniform1f(texture2dLocs.depthPhaseOffset, worldMaskState.depthPhaseOffset == null ? 0 : worldMaskState.depthPhaseOffset);
+				gl.uniform1f(texture2dLocs.rawValueToMeters, profile.linearScale);
+				gl.uniform1f(texture2dLocs.depthNearZ, profile.nearZ);
+				gl.uniform1f(texture2dLocs.depthMetricMode, worldMaskState.depthRadialBool ? 1 : 0);
 				gl.uniform4f(
-					locs.depthProjectionParams,
+					texture2dLocs.depthProjectionParams,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xScale : 1,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.yScale : 1,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.xOffset : 0,
 					worldMaskState.depthProjectionParams ? worldMaskState.depthProjectionParams.yOffset : 0
 				);
 				copyMatrix4OrIdentity(depthUvTransform, depthInfo.normDepthBufferFromNormView);
-				gl.uniformMatrix4fv(locs.depthUvTransform, false, depthUvTransform);
+				gl.uniformMatrix4fv(texture2dLocs.depthUvTransform, false, depthUvTransform);
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-				gl.enableVertexAttribArray(locs.position);
-				gl.vertexAttribPointer(locs.position, 2, gl.FLOAT, false, 0, 0);
+				gl.enableVertexAttribArray(texture2dLocs.position);
+				gl.vertexAttribPointer(texture2dLocs.position, 2, gl.FLOAT, false, 0, 0);
 				gl.drawArrays(gl.TRIANGLES, 0, 3);
 				gl.enable(gl.CULL_FACE);
 				gl.enable(gl.DEPTH_TEST);
@@ -1707,7 +1473,7 @@ const createSceneRenderer = function(options) {
 			controllerRays: frameState.controllerRays,
 			sceneLightingState: frameState.sceneLightingState,
 			depthInfo: args.processedDepthInfo || null
-		}) : null, args.processedDepthInfo, args.processedDepthFrameKind || "", webgl2Bool, args.processedDepthProfile);
+		}) : null, args.processedDepthInfo, args.processedDepthProfile);
 	};
 
 	const renderVrWorldLayer = function(args, frameState) {
@@ -1724,7 +1490,7 @@ const createSceneRenderer = function(options) {
 		if (!punchRenderer || !(args.transparentBackgroundBool || args.passthroughFallbackBool) || !frameState.punchState) {
 			return;
 		}
-		punchRenderer.draw(frameState.punchState, args.processedDepthInfo, args.processedDepthFrameKind || "", webgl2Bool, args.processedDepthProfile);
+		punchRenderer.draw(frameState.punchState, args.processedDepthInfo, args.processedDepthProfile);
 	};
 
 	const renderSceneOverlayLayer = function(args, frameState) {
@@ -1784,7 +1550,6 @@ const createSceneRenderer = function(options) {
 		args.passthroughProjMatrix = currentPassthroughProj;
 		args.rawPassthroughDepthInfo = null;
 		args.processedDepthInfo = null;
-		args.processedDepthFrameKind = "";
 		args.processedDepthProfile = null;
 		args.depthReprojectionState = null;
 		args.viewIndex = 0;
@@ -1828,14 +1593,12 @@ const createSceneRenderer = function(options) {
 			viewIndex: args.viewIndex,
 			viewport: viewport,
 			depthInfo: args.rawPassthroughDepthInfo,
-			depthFrameKind: args.depthFrameKind || "",
 			depthProfile: args.depthProfile,
 			depthReprojectionState: args.depthReprojectionState || null,
 			processingConfig: depthProcessingConfig,
 			outputFramebuffer: args.baseLayer.framebuffer
 		}) : null;
-		args.processedDepthFrameKind = args.processedDepthInfo ? "gpu-texture" : "";
-		args.processedDepthProfile = args.processedDepthInfo ? {linearScale: args.processedDepthInfo.rawValueToMeters || 16, nearZ: 0} : null;
+		args.processedDepthProfile = args.processedDepthInfo ? (args.depthProfile || null) : null;
 		gl.bindFramebuffer(gl.FRAMEBUFFER, args.baseLayer.framebuffer);
 		gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 		if (args.visualizerEngine) {
