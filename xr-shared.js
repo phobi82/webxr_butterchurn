@@ -372,36 +372,8 @@ const createFullscreenTriangleBuffer = function(gl) {
 	return buffer;
 };
 
-const SPATIAL_DEPTH_GRID_MIN_COLUMNS = 48;
-const SPATIAL_DEPTH_GRID_MIN_ROWS = 36;
-const SPATIAL_DEPTH_GRID_MAX_COLUMNS = 192;
-const SPATIAL_DEPTH_GRID_MAX_ROWS = 144;
 const SPATIAL_DEPTH_NEAR_GUARD_METERS = 0.06;
 const SPATIAL_DEPTH_CLIP_MARGIN = 1.02;
-
-const getSpatialDepthGridDimensions = function(depthWidth, depthHeight, qualityKey) {
-	const qualityScale = qualityKey === "performance" ? 0.5 : (qualityKey === "quality" ? 1 : 0.75);
-	const safeDepthWidth = Math.max(1, depthWidth | 0);
-	const safeDepthHeight = Math.max(1, depthHeight | 0);
-	return {
-		columns: clampNumber(Math.round(safeDepthWidth * qualityScale), SPATIAL_DEPTH_GRID_MIN_COLUMNS, SPATIAL_DEPTH_GRID_MAX_COLUMNS),
-		rows: clampNumber(Math.round(safeDepthHeight * qualityScale), SPATIAL_DEPTH_GRID_MIN_ROWS, SPATIAL_DEPTH_GRID_MAX_ROWS)
-	};
-};
-
-const ensureSpatialDepthGrid = function(gl, grid, depthInfo, qualityKey) {
-	const dimensions = getSpatialDepthGridDimensions(depthInfo && depthInfo.width ? depthInfo.width : 0, depthInfo && depthInfo.height ? depthInfo.height : 0, qualityKey || "balanced");
-	if (grid && grid.buffer && grid.columns === dimensions.columns && grid.rows === dimensions.rows) {
-		return grid;
-	}
-	if (grid && grid.buffer) {
-		gl.deleteBuffer(grid.buffer);
-	}
-	grid = createUvGridTriangleBuffer(gl, dimensions.columns, dimensions.rows);
-	grid.columns = dimensions.columns;
-	grid.rows = dimensions.rows;
-	return grid;
-};
 
 const depthEllipseMaskShaderChunk = "float ellipseMask(vec2 uv, vec2 center, vec4 params){float radiusX=max(params.x,0.0001);float radiusY=max(params.y,0.0001);float softness=max(params.z,0.0001);float rotation=params.w;vec2 delta=uv-center;float cosAngle=cos(rotation);float sinAngle=sin(rotation);vec2 local=vec2(delta.x*cosAngle+delta.y*sinAngle,-delta.x*sinAngle+delta.y*cosAngle);float normalizedDistance=length(vec2(local.x/radiusX,local.y/radiusY));float edge=max(softness/max(radiusX,radiusY),0.0001);return 1.0-smoothstep(max(0.0,1.0-edge),1.0,normalizedDistance);}";
 
@@ -442,117 +414,6 @@ const createDepthProjectionMetricShaderChunk = function(functionName, screenUvEx
 		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
 		"}"
 	].join("");
-};
-
-const createSpatialDepthVertexShaderSource = function(options) {
-	options = options || {};
-	const passCurrentUvBool = !!options.passCurrentUvBool;
-	const passWorldPointBool = !!options.passWorldPointBool;
-	const passPlanarDepthBool = options.passPlanarDepthBool !== false;
-	const passRadialDepthBool = options.passRadialDepthBool !== false;
-	const lines = [
-		"#version 300 es\n",
-		"precision highp float;",
-		"uniform sampler2D depthTexture;",
-		"uniform float rawValueToMeters;",
-		"uniform float depthNearZ;",
-		"uniform vec4 sourceProjectionParams;",
-		"uniform mat4 sourceWorldFromView;",
-		"uniform mat4 targetView;",
-		"uniform mat4 targetProj;",
-		"in vec2 sourceUv;"
-	];
-	if (passCurrentUvBool) {
-		lines.push("out vec2 vCurrentUv;");
-	}
-	if (passWorldPointBool) {
-		lines.push("out vec3 vWorldPoint;");
-	}
-	if (passPlanarDepthBool) {
-		lines.push("out float vPlanarDepthMeters;");
-	}
-	if (passRadialDepthBool) {
-		lines.push("out float vRadialDepthMeters;");
-	}
-	lines.push(
-		"out float vDepthValid;",
-		"bool isTargetPointUsable(vec4 targetViewPoint, vec4 clip){",
-		"if(-targetViewPoint.z<" + SPATIAL_DEPTH_NEAR_GUARD_METERS.toFixed(3) + "){return false;}",
-		"if(clip.w<=0.0001){return false;}",
-		"if(abs(clip.x)>clip.w*" + SPATIAL_DEPTH_CLIP_MARGIN.toFixed(3) + "){return false;}",
-		"if(abs(clip.y)>clip.w*" + SPATIAL_DEPTH_CLIP_MARGIN.toFixed(3) + "){return false;}",
-		"return true;",
-		"}",
-		"vec3 getSourceViewPoint(vec2 uv,float depthMeters){",
-		"vec2 ndc=uv*2.0-1.0;",
-		"vec2 viewRay=vec2((ndc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(ndc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
-		"return vec3(viewRay*depthMeters,-depthMeters);",
-		"}",
-		"void main(){"
-	);
-	lines.push(
-		"float normalizedDepth=texture(depthTexture,sourceUv).r;",
-		"if(normalizedDepth<=0.0001){",
-		"vDepthValid=0.0;"
-	);
-	if (passCurrentUvBool) {
-		lines.push("vCurrentUv=vec2(-1.0);");
-	}
-	if (passWorldPointBool) {
-		lines.push("vWorldPoint=vec3(0.0);");
-	}
-	if (passPlanarDepthBool) {
-		lines.push("vPlanarDepthMeters=0.0;");
-	}
-	if (passRadialDepthBool) {
-		lines.push("vRadialDepthMeters=0.0;");
-	}
-	lines.push(
-		"gl_Position=vec4(2.0,2.0,1.0,1.0);",
-		"return;",
-		"}",
-		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-normalizedDepth,0.0001):normalizedDepth*rawValueToMeters;",
-		"vec4 worldPoint=sourceWorldFromView*vec4(getSourceViewPoint(sourceUv,depthMeters),1.0);",
-		"vec4 targetViewPoint=targetView*worldPoint;",
-		"vec4 clip=targetProj*targetViewPoint;",
-		"if(!isTargetPointUsable(targetViewPoint,clip)){",
-		"vDepthValid=0.0;"
-	);
-	if (passCurrentUvBool) {
-		lines.push("vCurrentUv=vec2(-1.0);");
-	}
-	if (passWorldPointBool) {
-		lines.push("vWorldPoint=vec3(0.0);");
-	}
-	if (passPlanarDepthBool) {
-		lines.push("vPlanarDepthMeters=0.0;");
-	}
-	if (passRadialDepthBool) {
-		lines.push("vRadialDepthMeters=0.0;");
-	}
-	lines.push(
-		"gl_Position=vec4(2.0,2.0,1.0,1.0);",
-		"return;",
-		"}",
-		"vDepthValid=1.0;"
-	);
-	if (passCurrentUvBool) {
-		lines.push("vCurrentUv=clip.xy/max(clip.w,0.0001)*0.5+0.5;");
-	}
-	if (passWorldPointBool) {
-		lines.push("vWorldPoint=worldPoint.xyz;");
-	}
-	if (passPlanarDepthBool) {
-		lines.push("vPlanarDepthMeters=max(0.0,-targetViewPoint.z);");
-	}
-	if (passRadialDepthBool) {
-		lines.push("vRadialDepthMeters=length(targetViewPoint.xyz);");
-	}
-	lines.push(
-		"gl_Position=clip;",
-		"}"
-	);
-	return lines.join("");
 };
 
 // Dense UV grid used when depth has to be projected through world space instead of sampled as a screen quad.

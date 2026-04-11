@@ -755,6 +755,11 @@ const createRuntime = function(options) {
 					passthroughController.cycleDepthMode(action.direction);
 				}
 				return;
+			case "passthroughDepthGridFactor.cycle":
+				if (passthroughController && passthroughController.cycleDepthGridFactor) {
+					passthroughController.cycleDepthGridFactor(action.direction);
+				}
+				return;
 			case "depthEchoReactive.toggle":
 				if (passthroughController && passthroughController.toggleDepthEchoReactive) {
 					passthroughController.toggleDepthEchoReactive(action.key);

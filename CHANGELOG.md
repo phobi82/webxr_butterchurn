@@ -8,11 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Rebuilt `xr-depth.js` as a canonical depth adapter that normalizes CPU, `gpu-texture`, and `gpu-array` sources into one shared 2D raw-depth surface before passthrough punch, world masking, and depth-aware lighting consume it.
-- Changed spatial depth-grid sizing from fixed constants to depth-resolution-derived dimensions, keeping reprojection density tied to the actual incoming sensor resolution.
+- Rebuilt `xr-depth.js` as the single depth adapter and reprojection stage: CPU, `gpu-texture`, and `gpu-array` sources are normalized once and then reprojected once per eye into one shared target-space 2D depth texture that passthrough punch, world masking, and depth-aware lighting all reuse.
+- Moved reprojection-grid sizing into `xr-depth.js`, removing the old pseudo-policy layer from `xr-shared.js` so depth-grid dimensions now come directly from the active sensor resolution and selected depth grid factor.
+- Added a `Grid Factor` cycler under `Depth` with `0.25`, `0.5`, `0.75`, and `1`, so the single shared reprojection mesh can be scaled explicitly against the incoming sensor depth instead of being forced through hardcoded quality presets.
 - Removed the depth reprojection toggle, timing-offset slider, and pose-history ring buffer, so spatial reprojection now runs as the single built-in path for processed headset depth.
 - Removed the legacy screen-space depth `Motion compensation` path and its old UV-shift uniforms from passthrough punch, passthrough overlay, and world-mask compositing.
-- Changed depth punch, world-mask compositing, and depth-aware passthrough lighting to share the same source-pose reprojection model for processed GPU depth, while keeping a minimal fullscreen fallback only for unsupported depth inputs.
+- Changed depth punch, world-mask compositing, and depth-aware passthrough lighting to consume the one shared target-space depth output from `xr-depth`, while keeping a minimal fullscreen fallback only when target-space reprojection cannot be built.
 - Added `switch-quest-adb-to-wifi.bat` in the repo root so Quest USB-to-Wi-Fi `adb` switching can be run as one local helper script, auto-detecting a single USB-connected Quest even when other `adb` targets exist, reporting when a Quest is already connected over Wi-Fi without USB, retrying after `adb tcpip`, and falling back to `getprop` IP lookup before `adb connect`.
 - Added repo-wide line-ending policy files (`.gitattributes`, `.editorconfig`) and normalized mixed XR source files to `LF` so routine edits on Windows stop producing stray line-ending diffs.
 - Rebuilt the main VR Control Deck menu into a more flexible multi-column layout: audio meters now span the full top row, `Background` sits in the left control stack under `World Opacity`, `Passthrough` and `Scene Lighting` remain in the second column, `Exit VR` is reserved for the footer, and slider dragging now uses per-section track geometry again.

@@ -46,8 +46,9 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Direct Depth + Reprojection**: shared raw-depth path with no smoothing or reconstruction, using one canonical 2D depth surface so passthrough punch, world masking, and depth-aware lighting all consume the same direct depth plus spatial reprojection
+- **Direct Depth + Reprojection**: shared raw-depth path with no smoothing or reconstruction, where `xr-depth` canonicalizes runtime depth once per eye and builds one target-space 2D depth texture that passthrough punch, world masking, and depth-aware lighting all reuse
 - **Spatial Depth Masking**: depth masks are reprojected from the source depth pose into the current render view so headset reprojection can act on them spatially, without exposing a manual timing offset or legacy motion-compensation mode
+- **Grid Factor**: when `Depth` is active, the menu exposes a reprojection-grid factor cycler (`0.25`, `0.5`, `0.75`, `1`) that scales the single shared reprojection mesh directly against the incoming sensor resolution
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
 - **Depth-bound Light Projection**: passthrough lighting now reuses the shared canonical 2D depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
 - **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
@@ -162,6 +163,7 @@ For longer debugging sessions, switch `adb` from USB to Wi-Fi:
 
 Run `switch-quest-adb-to-wifi.bat` from the repo root to execute the full sequence automatically. The script auto-detects one USB-connected Quest even when other `adb` targets are present, reports if a Quest is already connected over Wi-Fi without USB, and stops if multiple Quest headsets are connected over USB at the same time.
 
+or do it manual:
 1. Connect the Quest once over USB and confirm USB debugging on the headset.
 2. Run `adb tcpip 5555`.
 3. Read the Quest Wi-Fi address: `adb shell ip addr show wlan0`.
@@ -189,7 +191,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Canonical depth adapter that normalizes runtime depth sources into one shared 2D raw-depth surface |
+| `xr-depth.js` | Canonical depth adapter that normalizes runtime depth sources and builds one shared target-space 2D depth texture per eye |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |

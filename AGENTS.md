@@ -112,13 +112,11 @@ Recommended structure order:
 ## Behavior and Logic
 
 - Follow the user's description **literally and precisely**.
-- If there is any relevant ambiguity or uncertainty, ask a focused clarifying question before implementing instead of guessing.
-- Before starting implementation, **ask targeted clarifying questions to confirm exactly what the user wants**.
-- **Follow-up questions must take previous answers into account so the clarification adapts to the current result** instead of repeating a fixed checklist.
-- Use clarification not only to confirm the request, but also to reveal better, simpler, or safer implementation options when relevant.
-- Prefer at 1 to 3 focused clarification questions per round.
-- After each answer, reassess what is still unknown before asking the next question.
-- Stop asking once the remaining uncertainty no longer affects implementation or verification.
+- Ask focused clarifying questions only when the answer would materially change implementation, architecture, or verification; otherwise proceed.
+- Prefer 1 to 3 focused clarification questions per round when clarification is needed.
+- Follow-up questions must reflect the current state instead of repeating a fixed checklist.
+- If architecture, ownership, or performance is likely to matter, state the intended approach briefly before editing.
+- Do not mix a bug fix, a refactor, and a new feature in one step unless the user explicitly asks for that combined change.
 - When working on WebXR movement, prefer small, testable iterations over large rewrites so walking/jumping behavior stays easy to verify against the current baseline.
 - If the user wants expressions evaluated (e.g. `setVolt(3+3)` or `setVolt((2+1)*8)`), implement this behavior:
   - Use the simplest robust approach that matches the request (for example, JavaScript expression evaluation when acceptable).
@@ -129,8 +127,14 @@ Recommended structure order:
 
 - When the task is complex, cross-cutting, performance-sensitive, architecture-sensitive, or otherwise risky, spawn specialized agents or a small agent team as needed so design, implementation, review, and verification are covered with enough depth.
 - Use spawned agents to help keep the result clean, minimal, performant, maintainable, and readable, and to verify that repository design rules and style constraints are still being followed after the change.
+- Before a non-trivial refactor or architectural change, write down the target ownership of the affected files or modules in 3 to 6 concrete points and keep the implementation aligned to that split.
+- Give each concern one clear owner. If the same logic starts appearing in multiple consumers, stop and recentralize it instead of copying variants.
+- A centralization step must not make downstream consumers larger or more complex without a specific technical reason; if it does, treat that as a design failure and restructure.
+- Introduce a new helper only when it is reused or when it encapsulates a real contract or algorithm boundary; remove dead helpers, dead fields, and dead branches before considering the task complete.
+- When changing shared data passed between modules, make the data contract explicit first and update all consumers to that contract instead of relying on legacy assumptions.
+- Keep architecture changes and validation steps small enough that each step can be verified before the next one starts.
 
-## 7. Error Handling
+## Error Handling
 
 - Do not let a single faulty input crash the entire app.
 - Use `try { ... } catch (err) { ... }` when evaluating user expressions or running user scripts.
@@ -145,6 +149,7 @@ Recommended structure order:
 - Remote Quest Browser reload is acceptable for debugging, but do not assume a remote-triggered `Enter VR` click will satisfy WebXR user-gesture requirements.
 - To inspect the in-VR menu without changing repository code, prefer a temporary Chrome DevTools script injection that opens the existing `menuCanvas` as a large DOM overlay or refreshes an `img` from `menuCanvas.toDataURL(...)`; use this only for manual verification and reload afterward instead of committing preview-only helpers.
 - When the user wants to judge one specific feature in isolation, prefer a temporary Chrome DevTools script injection that isolates the relevant runtime path in the running page and also sets the relevant runtime conditions as completely as possible; make the active test conditions explicit in the temporary UI or status text so the user can tell what is currently being evaluated, and keep this test harness temporary and restorable by reload instead of committing it.
+- Prefer temporary script injection or remote console evaluation for XR/runtime diagnostics instead of committing dedicated debug code, query-parameter debug paths, or debug UI, unless the user explicitly asks for persistent diagnostics in the repository.
 - For logic changes, add temporary console diagnostics during development and remove before commit; document manual test steps in the PR.
 
 ## Changelog
@@ -168,12 +173,14 @@ Recommended structure order:
 - For large file moves or refactors, never use one large `apply_patch` spanning multiple files.
 - Split the work into small patches with one clear purpose each.
 - In PowerShell `shell_command` calls, never use `&&`; run commands separately unless a PowerShell-safe separator is explicitly required.
-- Before implementing UI or module changes, decide the target architecture and grouping first, record the work as a detailed task list, and then implement in small verified steps instead of patching isolated examples.
+- Before implementing UI or module changes, decide the target architecture and grouping first, record the work as a small task list, and then implement in verified steps instead of patching isolated examples.
+- Before finishing a refactor, verify by search that no dead helper, dead field, duplicate path, or obsolete branch from the old design remains.
+- If logic is supposed to be centralized, verify that it now runs in one place and that consumers only consume the result instead of recomputing variants.
 - Before claiming menu or layout work is done, inspect the actual local menu preview in the browser and verify the affected states visually.
 - Before any Chrome DevTools MCP reload, console check, snapshot, or interaction, verify that the selected page is the real app page and not `about:blank`; if `about:blank` exists, close it or explicitly select the app page first.
 - For local HTTPS debugging, if browser automation is blocked by an untrusted certificate, state that explicitly before drawing conclusions from local page-load attempts.
-- For Quest Browser tab cleanup, never infer the visible tab strip from DevTools target lists, Android task state, or `am force-stop`; verify the visible tabs with a fresh `uiautomator dump` first.
-- Before closing any Quest Browser tab, identify the exact tab label and matching `Tab schließen` bounds from the current UI dump; never close a tab-strip button by guesswork.
+- Before Quest Browser remote debugging, verify that the remote target URL and active query parameters still match the current repository state and intended test page; if temporary debug parameters or old paths were removed from code, reload or replace the Quest page until both the DevTools target list and `location.href` show the clean intended URL before asking the user to validate behavior.
+- Before closing a Quest Browser tab, verify the visible tab state with a fresh `uiautomator dump` and match the exact tab label and close button bounds from that dump; never close a tab by guesswork.
 
 ## Security & Configuration Tips
 - Do not commit secrets or service keys; analytics ID already lives in `index2.html`.

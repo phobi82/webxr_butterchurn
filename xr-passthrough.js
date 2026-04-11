@@ -25,6 +25,13 @@ const passthroughDepthModeDefinitions = [
 	{key: "echo", label: "Echo"}
 ];
 
+const passthroughDepthGridFactorDefinitions = [
+	{key: "0.25", label: "0.25", value: 0.25},
+	{key: "0.5", label: "0.5", value: 0.5},
+	{key: "0.75", label: "0.75", value: 0.75},
+	{key: "1", label: "1", value: 1}
+];
+
 const findModeIndexByKey = function(definitions, key) {
 	for (let i = 0; i < definitions.length; i += 1) {
 		if (definitions[i].key === key) {
@@ -324,6 +331,7 @@ const createPassthroughController = function(options) {
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.15 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
 		depthModeKey: options.initialDepthModeKey || "distance",
+		depthGridFactorKey: options.initialDepthGridFactorKey || "0.75",
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
@@ -352,6 +360,11 @@ const createPassthroughController = function(options) {
 
 	const getDepthModeFloat = function(depthModeKey) {
 		return depthModeKey === "echo" ? 1 : 0;
+	};
+
+	const getDepthGridFactor = function() {
+		const index = findModeIndexByKey(passthroughDepthGridFactorDefinitions, state.depthGridFactorKey);
+		return index >= 0 ? passthroughDepthGridFactorDefinitions[index].value : DEFAULT_DEPTH_REPROJECTION_GRID_FACTOR;
 	};
 
 	const getDepthMrRetainForMode = function(depthModeKey) {
@@ -495,6 +508,8 @@ const createPassthroughController = function(options) {
 			flashlightActiveBool: state.flashlightActiveBool,
 			depthActiveBool: state.depthActiveBool,
 			depthRadialBool: state.depthRadialBool,
+			depthGridFactors: passthroughDepthGridFactorDefinitions,
+			selectedDepthGridFactorKey: state.depthGridFactorKey,
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: state.depthModeKey,
 			usableDepthAvailableBool: state.usableDepthAvailableBool,
@@ -704,6 +719,9 @@ const createPassthroughController = function(options) {
 			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 		},
+		cycleDepthGridFactor: function(direction) {
+			cycleStateMode("depthGridFactorKey", passthroughDepthGridFactorDefinitions, direction);
+		},
 		cycleLightingMode: function(direction) {
 			cycleStateMode("lightingModeKey", passthroughLightingModeDefinitions, direction);
 		},
@@ -724,7 +742,7 @@ const createPassthroughController = function(options) {
 				return null;
 			}
 			return {
-				label: "direct"
+				reprojectionGridFactor: getDepthGridFactor()
 			};
 		},
 		setControlValue: function(key, value) {
@@ -763,13 +781,9 @@ const applyVisualizerBackgroundComposite = function(visualizerEngine, compositeS
 
 const createPunchRenderer = function() {
 	let gl = null;
-	let webgl2Bool = false;
 	let buffer = null;
-	let reprojectionGrid = null;
 	let texture2dProgram = null;
 	let texture2dLocs = null;
-	let spatialTexture2dProgram = null;
-	let spatialTexture2dLocs = null;
 	const depthUvTransform = new Float32Array(16);
 	let flashlightProgram = null;
 	let flashlightLocs = null;
@@ -790,53 +804,22 @@ const createPunchRenderer = function() {
 		"uniform float depthMrRetain;",
 		"uniform float rawValueToMeters;",
 		"uniform float depthNearZ;",
+		"uniform float depthEncodingMode;",
 		"uniform float depthMetricMode;",
 		"uniform vec4 depthProjectionParams;",
 		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
 		createDepthBandMaskShaderChunk("computeDepthMask"),
+		createDepthDecodeShaderChunk("decodeDepthMeters"),
 		createDepthProjectionMetricShaderChunk("resolveDepthMetric", "vScreenUv"),
 		"void main(){",
 		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
 		"float rawDepth=texture2D(depthTexture,depthUv).r;",
-		"float depthMeters=depthNearZ>0.0?depthNearZ/max(1.0-rawDepth,0.0001):rawDepth*rawValueToMeters;",
+		"float depthMeters=decodeDepthMeters(rawDepth);",
 		"float valid=step(0.001,rawDepth);",
 		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
 		"float punchMask=mix(1.0,mask,valid);",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
-		"}"
-	].join("");
-
-	// WebGL2 spatial reprojection shader.
-	const spatialVertSource = createSpatialDepthVertexShaderSource({
-		passPlanarDepthBool: true,
-		passRadialDepthBool: true
-	});
-
-	const spatialFragSource = [
-		"#version 300 es\n",
-		"precision highp float;",
-		"uniform float depthMode;",
-		"uniform float depthThreshold;",
-		"uniform float depthFade;",
-		"uniform float depthEchoWavelength;",
-		"uniform float depthEchoDutyCycle;",
-		"uniform float depthEchoFade;",
-		"uniform float depthPhaseOffset;",
-		"uniform float depthMrRetain;",
-		"uniform float depthMetricMode;",
-		"in float vPlanarDepthMeters;",
-		"in float vRadialDepthMeters;",
-		"in float vDepthValid;",
-		"out vec4 fragColor;",
-		createDepthBandMaskShaderChunk("computeDepthMask"),
-		"void main(){",
-		"float valid=step(0.999,vDepthValid);",
-		"if(valid<=0.0){discard;}",
-		"float depthMeters=depthMetricMode>0.5?vRadialDepthMeters:vPlanarDepthMeters;",
-		"float mask=computeDepthMask(depthMeters);",
-		"float punchMask=mix(1.0,mask,valid);",
-		"fragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
 	].join("");
 
@@ -873,33 +856,13 @@ const createPunchRenderer = function() {
 			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
 			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
+			depthEncodingMode: gl.getUniformLocation(prog, "depthEncodingMode"),
 			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
 			depthProjectionParams: gl.getUniformLocation(prog, "depthProjectionParams"),
 			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
 		};
 	};
 
-	const buildSpatialLocs = function(prog) {
-		return {
-			sourceUv: gl.getAttribLocation(prog, "sourceUv"),
-			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
-			depthMode: gl.getUniformLocation(prog, "depthMode"),
-			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
-			depthFade: gl.getUniformLocation(prog, "depthFade"),
-			depthEchoWavelength: gl.getUniformLocation(prog, "depthEchoWavelength"),
-			depthEchoDutyCycle: gl.getUniformLocation(prog, "depthEchoDutyCycle"),
-			depthEchoFade: gl.getUniformLocation(prog, "depthEchoFade"),
-			depthPhaseOffset: gl.getUniformLocation(prog, "depthPhaseOffset"),
-			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
-			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
-			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
-			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
-			sourceProjectionParams: gl.getUniformLocation(prog, "sourceProjectionParams"),
-			sourceWorldFromView: gl.getUniformLocation(prog, "sourceWorldFromView"),
-			targetView: gl.getUniformLocation(prog, "targetView"),
-			targetProj: gl.getUniformLocation(prog, "targetProj")
-		};
-	};
 	const drawFlashlightPunch = function(punchState) {
 		if (!punchState.masks || punchState.masks.length === 0) { return; }
 		if (!flashlightProgram) {
@@ -937,60 +900,8 @@ const createPunchRenderer = function() {
 		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 	};
 
-	const drawSpatialDepthPunch = function(depthInfo, punchState, depthProfile) {
-		const reprojectionState = depthInfo && depthInfo.depthReprojectionState;
-		const profile = depthProfile || {linearScale: depthInfo && depthInfo.rawValueToMeters || 0.001, nearZ: 0};
-		if (!reprojectionState || !reprojectionState.enabledBool || !punchState || !reprojectionState.sourceWorldFromViewMatrix || !punchState.depthViewMatrix || !punchState.depthProjMatrix) {
-			return false;
-		}
-		if (!spatialTexture2dProgram) {
-			spatialTexture2dProgram = createProgram(gl, spatialVertSource, spatialFragSource, "Depth punch spatial reprojection");
-			spatialTexture2dLocs = buildSpatialLocs(spatialTexture2dProgram);
-		}
-		gl.useProgram(spatialTexture2dProgram);
-		gl.disable(gl.DEPTH_TEST);
-		gl.disable(gl.CULL_FACE);
-		gl.blendFuncSeparate(gl.ZERO, gl.SRC_ALPHA, gl.ZERO, gl.SRC_ALPHA);
-		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-		gl.uniform1i(spatialTexture2dLocs.depthTexture, 0);
-		gl.uniform1f(spatialTexture2dLocs.depthMode, punchState.depthMode == null ? 0 : punchState.depthMode);
-		gl.uniform1f(spatialTexture2dLocs.depthThreshold, punchState.depthThreshold);
-		gl.uniform1f(spatialTexture2dLocs.depthFade, punchState.depthFade);
-		gl.uniform1f(spatialTexture2dLocs.depthEchoWavelength, punchState.depthEchoWavelength == null ? 1 : punchState.depthEchoWavelength);
-		gl.uniform1f(spatialTexture2dLocs.depthEchoDutyCycle, punchState.depthEchoDutyCycle == null ? 0.5 : punchState.depthEchoDutyCycle);
-		gl.uniform1f(spatialTexture2dLocs.depthEchoFade, punchState.depthEchoFade == null ? 0 : punchState.depthEchoFade);
-		gl.uniform1f(spatialTexture2dLocs.depthPhaseOffset, punchState.depthPhaseOffset == null ? 0 : punchState.depthPhaseOffset);
-		gl.uniform1f(spatialTexture2dLocs.depthMrRetain, punchState.depthMrRetain || 0);
-		gl.uniform1f(spatialTexture2dLocs.rawValueToMeters, profile.linearScale);
-		gl.uniform1f(spatialTexture2dLocs.depthNearZ, profile.nearZ);
-		gl.uniform1f(spatialTexture2dLocs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
-		gl.uniform4f(
-			spatialTexture2dLocs.sourceProjectionParams,
-			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xScale : 1,
-			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yScale : 1,
-			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.xOffset : 0,
-			reprojectionState.sourceProjectionParams ? reprojectionState.sourceProjectionParams.yOffset : 0
-		);
-		gl.uniformMatrix4fv(spatialTexture2dLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
-		gl.uniformMatrix4fv(spatialTexture2dLocs.targetView, false, punchState.depthViewMatrix);
-		gl.uniformMatrix4fv(spatialTexture2dLocs.targetProj, false, punchState.depthProjMatrix);
-		reprojectionGrid = ensureSpatialDepthGrid(gl, reprojectionGrid, depthInfo, "balanced");
-		gl.bindBuffer(gl.ARRAY_BUFFER, reprojectionGrid.buffer);
-		gl.enableVertexAttribArray(spatialTexture2dLocs.sourceUv);
-		gl.vertexAttribPointer(spatialTexture2dLocs.sourceUv, 2, gl.FLOAT, false, 0, 0);
-		gl.drawArrays(gl.TRIANGLES, 0, reprojectionGrid.vertexCount);
-		gl.enable(gl.CULL_FACE);
-		gl.enable(gl.DEPTH_TEST);
-		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-		return true;
-	};
-
 	const drawDepthPunch = function(depthInfo, punchState, depthProfile) {
 		if (!depthInfo) { return; }
-		if (webgl2Bool && depthInfo.texture && drawSpatialDepthPunch(depthInfo, punchState, depthProfile)) {
-			return;
-		}
 		const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
 		if (!depthInfo.texture) {
 			return;
@@ -1016,6 +927,7 @@ const createPunchRenderer = function() {
 		gl.uniform1f(texture2dLocs.depthMrRetain, punchState.depthMrRetain || 0);
 		gl.uniform1f(texture2dLocs.rawValueToMeters, profile.linearScale);
 		gl.uniform1f(texture2dLocs.depthNearZ, profile.nearZ);
+		gl.uniform1f(texture2dLocs.depthEncodingMode, depthInfo && depthInfo.depthEncodingMode != null ? depthInfo.depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW);
 		gl.uniform1f(texture2dLocs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
 		gl.uniform4f(
 			texture2dLocs.depthProjectionParams,
@@ -1038,7 +950,6 @@ const createPunchRenderer = function() {
 	return {
 		init: function(glContext) {
 			gl = glContext;
-			webgl2Bool = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
 		draw: function(punchState, depthInfo, depthProfile) {
