@@ -25,12 +25,6 @@ const passthroughDepthModeDefinitions = [
 	{key: "echo", label: "Echo"}
 ];
 
-const passthroughDepthGridFactorDefinitions = [
-	{key: "0.25", label: "0.25", value: 0.25},
-	{key: "0.5", label: "0.5", value: 0.5},
-	{key: "0.75", label: "0.75", value: 0.75},
-	{key: "1", label: "1", value: 1}
-];
 
 const findModeIndexByKey = function(definitions, key) {
 	for (let i = 0; i < definitions.length; i += 1) {
@@ -331,7 +325,7 @@ const createPassthroughController = function(options) {
 		flashlightRadius: options.initialFlashlightRadius == null ? 0.15 : options.initialFlashlightRadius,
 		flashlightSoftness: options.initialFlashlightSoftness == null ? 0.05 : options.initialFlashlightSoftness,
 		depthModeKey: options.initialDepthModeKey || "distance",
-		depthGridFactorKey: options.initialDepthGridFactorKey || "0.75",
+
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
@@ -362,10 +356,7 @@ const createPassthroughController = function(options) {
 		return depthModeKey === "echo" ? 1 : 0;
 	};
 
-	const getDepthGridFactor = function() {
-		const index = findModeIndexByKey(passthroughDepthGridFactorDefinitions, state.depthGridFactorKey);
-		return index >= 0 ? passthroughDepthGridFactorDefinitions[index].value : DEFAULT_DEPTH_REPROJECTION_GRID_FACTOR;
-	};
+
 
 	const getDepthMrRetainForMode = function(depthModeKey) {
 		return depthModeKey === "echo" ? state.depthEchoMrRetain : state.depthDistanceMrRetain;
@@ -508,8 +499,7 @@ const createPassthroughController = function(options) {
 			flashlightActiveBool: state.flashlightActiveBool,
 			depthActiveBool: state.depthActiveBool,
 			depthRadialBool: state.depthRadialBool,
-			depthGridFactors: passthroughDepthGridFactorDefinitions,
-			selectedDepthGridFactorKey: state.depthGridFactorKey,
+
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: state.depthModeKey,
 			usableDepthAvailableBool: state.usableDepthAvailableBool,
@@ -719,9 +709,7 @@ const createPassthroughController = function(options) {
 			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 		},
-		cycleDepthGridFactor: function(direction) {
-			cycleStateMode("depthGridFactorKey", passthroughDepthGridFactorDefinitions, direction);
-		},
+
 		cycleLightingMode: function(direction) {
 			cycleStateMode("lightingModeKey", passthroughLightingModeDefinitions, direction);
 		},
@@ -741,9 +729,7 @@ const createPassthroughController = function(options) {
 			if (!state.depthActiveBool) {
 				return null;
 			}
-			return {
-				reprojectionGridFactor: getDepthGridFactor()
-			};
+			return {};
 		},
 		setControlValue: function(key, value) {
 			if (controlSetters[key]) {

@@ -404,16 +404,7 @@ const createPassthroughMenuSectionState = function(args) {
 			prevHoverKey: "passthroughDepthMode:prev",
 			nextHoverKey: "passthroughDepthMode:next"
 		}));
-		controls.push(createCyclerMenuControlState({
-			key: "passthroughDepthGridFactor",
-			label: "Grid Factor",
-			valueText: getMenuModeLabelByKey(uiState.depthGridFactors, uiState.selectedDepthGridFactorKey, "0.75"),
-			hoveredAction: getHoveredCyclerAction(args, "passthroughDepthGridFactor:prev", "passthroughDepthGridFactor:next"),
-			prevAction: {type: "passthroughDepthGridFactor.cycle", direction: -1},
-			nextAction: {type: "passthroughDepthGridFactor.cycle", direction: 1},
-			prevHoverKey: "passthroughDepthGridFactor:prev",
-			nextHoverKey: "passthroughDepthGridFactor:next"
-		}));
+
 	}
 	if (uiState.depthActiveBool && uiState.selectedDepthModeKey === "echo") {
 		controls.push(createChoiceRowMenuControlState({
@@ -1400,8 +1391,7 @@ const DEFAULT_MENU_PASSTHROUGH_UI_STATE = {
 	flashlightActiveBool: false,
 	depthActiveBool: false,
 	depthRadialBool: true,
-	depthGridFactors: passthroughDepthGridFactorDefinitions,
-	selectedDepthGridFactorKey: "0.75",
+
 	depthModes: passthroughDepthModeDefinitions,
 	selectedDepthModeKey: "distance",
 	usableDepthAvailableBool: false,
