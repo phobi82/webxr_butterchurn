@@ -729,7 +729,9 @@ const createPassthroughController = function(options) {
 			if (!state.depthActiveBool) {
 				return null;
 			}
-			return {};
+			return {
+				depthQualityMode: "stabilized"
+			};
 		},
 		setControlValue: function(key, value) {
 			if (controlSetters[key]) {

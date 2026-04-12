@@ -1,9 +1,17 @@
-// Canonical depth adapter for raw depth plus inverse reprojection.
-// Raw sensor data is fed directly to the inverse reprojection shader;
-// hardware bilinear upscaling (LINEAR filter) handles the 320x320 → render-res step for free.
+// Canonical depth adapter for stabilized source depth plus inverse reprojection.
+// Source depth is normalized once here so every consumer samples the same processed texture.
 
 const DEPTH_ENCODING_SOURCE_RAW = 0;
 const DEPTH_ENCODING_LINEAR_VIEW_Z = 1;
+const DEPTH_QUALITY_MODE_RAW = "raw";
+const DEPTH_QUALITY_MODE_STABILIZED = "stabilized";
+const DEFAULT_DEPTH_QUALITY_MODE = DEPTH_QUALITY_MODE_STABILIZED;
+const STABILIZED_DEPTH_DELTA_METERS = 0.12;
+
+const getDepthQualityMode = function(processingConfig) {
+	const modeKey = processingConfig && processingConfig.depthQualityMode ? String(processingConfig.depthQualityMode) : DEFAULT_DEPTH_QUALITY_MODE;
+	return modeKey === DEPTH_QUALITY_MODE_RAW ? DEPTH_QUALITY_MODE_RAW : DEPTH_QUALITY_MODE_STABILIZED;
+};
 
 const createDepthDecodeShaderChunk = function(functionName) {
 	const resolvedFunctionName = functionName || "decodeDepthMeters";
@@ -22,9 +30,10 @@ const createDepthProcessingRenderer = function(options) {
 	let buffer = null;
 	let cpuTexture = null;
 	let cpuUploadBuffer = null;
-	let cpuTextureParamsSet = false;
 	let arrayCopyProgram = null;
 	let arrayCopyLocs = null;
+	let textureCopyProgram = null;
+	let textureCopyLocs = null;
 	let arrayTargetTexture = null;
 	let arrayTargetFramebuffer = null;
 	let arrayTargetWidth = 0;
@@ -51,10 +60,13 @@ const createDepthProcessingRenderer = function(options) {
 			type: gl.UNSIGNED_BYTE
 		};
 	};
-	const ensureArrayTarget = function(width, height) {
+	const ensureArrayTarget = function(width, height, stabilizedBool) {
 		const safeWidth = Math.max(1, width | 0);
 		const safeHeight = Math.max(1, height | 0);
 		if (arrayTargetTexture && arrayTargetFramebuffer && arrayTargetWidth === safeWidth && arrayTargetHeight === safeHeight) {
+			gl.bindTexture(gl.TEXTURE_2D, arrayTargetTexture);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
 			return true;
 		}
 		arrayTargetWidth = safeWidth;
@@ -66,8 +78,8 @@ const createDepthProcessingRenderer = function(options) {
 			arrayTargetFramebuffer = gl.createFramebuffer();
 		}
 		gl.bindTexture(gl.TEXTURE_2D, arrayTargetTexture);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 		gl.texImage2D(
@@ -85,20 +97,30 @@ const createDepthProcessingRenderer = function(options) {
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, arrayTargetTexture, 0);
 		return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
 	};
-	const buildCanonicalDepthInfo = function(depthInfo, texture) {
+	const buildCanonicalDepthState = function(texture, depthEncodingMode, depthProfile, rawValueToMeters, uvTransform) {
 		return {
 			texture: texture || null,
+			depthEncodingMode: depthEncodingMode != null ? depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW,
+			depthProfile: depthProfile || {linearScale: rawValueToMeters || 0.001, nearZ: 0},
+			rawValueToMeters: rawValueToMeters != null ? rawValueToMeters : (depthProfile && depthProfile.linearScale != null ? depthProfile.linearScale : 0.001),
+			normDepthBufferFromNormView: uvTransform || identityMatrix()
+		};
+	};
+	const buildCanonicalDepthInfo = function(depthInfo, canonicalDepthState) {
+		return {
+			texture: canonicalDepthState && canonicalDepthState.texture ? canonicalDepthState.texture : null,
 			width: depthInfo.width || 0,
 			height: depthInfo.height || 0,
-			depthEncodingMode: DEPTH_ENCODING_SOURCE_RAW,
-			rawValueToMeters: depthInfo.rawValueToMeters || 0.001,
-			normDepthBufferFromNormView: depthInfo.normDepthBufferFromNormView || identityMatrix()
+			depthEncodingMode: canonicalDepthState && canonicalDepthState.depthEncodingMode != null ? canonicalDepthState.depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW,
+			rawValueToMeters: canonicalDepthState && canonicalDepthState.rawValueToMeters != null ? canonicalDepthState.rawValueToMeters : (depthInfo.rawValueToMeters || 0.001),
+			normDepthBufferFromNormView: canonicalDepthState && canonicalDepthState.normDepthBufferFromNormView ? canonicalDepthState.normDepthBufferFromNormView : (depthInfo.normDepthBufferFromNormView || identityMatrix()),
+			depthProfile: canonicalDepthState && canonicalDepthState.depthProfile ? canonicalDepthState.depthProfile : null
 		};
 	};
 	const buildTargetDepthInfo = function(args, texture) {
-		const viewport = args && args.viewport ? args.viewport : null;
-		const safeWidth = viewport && viewport.width ? viewport.width | 0 : 0;
-		const safeHeight = viewport && viewport.height ? viewport.height | 0 : 0;
+		const targetSize = args && args.targetDepthTextureSize ? args.targetDepthTextureSize : null;
+		const safeWidth = targetSize && targetSize.width ? targetSize.width | 0 : 0;
+		const safeHeight = targetSize && targetSize.height ? targetSize.height | 0 : 0;
 		return {
 			texture: texture || null,
 			width: safeWidth,
@@ -109,30 +131,77 @@ const createDepthProcessingRenderer = function(options) {
 			depthProfile: {linearScale: 1, nearZ: 0}
 		};
 	};
-	const ensureCpuTexture = function(depthInfo) {
+	const ensureCpuTexture = function(depthInfo, args) {
 		const pixelCount = (depthInfo.width | 0) * (depthInfo.height | 0);
 		const sourceData = depthInfo.data instanceof Uint16Array ? depthInfo.data : new Uint16Array(depthInfo.data);
+		const depthProfile = args && args.depthProfile ? args.depthProfile : {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+		const linearScale = depthProfile && depthProfile.linearScale != null ? depthProfile.linearScale : (depthInfo.rawValueToMeters || 0.001);
+		const stabilizedBool = getDepthQualityMode(args && args.processingConfig ? args.processingConfig : null) === DEPTH_QUALITY_MODE_STABILIZED;
 		if (!cpuTexture) {
 			cpuTexture = gl.createTexture();
 		}
 		if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
 			cpuUploadBuffer = new Float32Array(pixelCount);
 		}
-		cpuUploadBuffer.set(sourceData.subarray(0, pixelCount));
+		for (let i = 0; i < pixelCount; i += 1) {
+			cpuUploadBuffer[i] = sourceData[i] > 0 ? sourceData[i] * linearScale : 0;
+		}
 		gl.bindTexture(gl.TEXTURE_2D, cpuTexture);
 		if (webgl2Bool) {
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, depthInfo.width, depthInfo.height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
 		} else {
 			gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, depthInfo.width, depthInfo.height, 0, gl.LUMINANCE, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
 		}
-		if (!cpuTextureParamsSet) {
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-			cpuTextureParamsSet = true;
-		}
-		return cpuTexture;
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, stabilizedBool ? gl.LINEAR : gl.NEAREST);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		return buildCanonicalDepthState(cpuTexture, DEPTH_ENCODING_LINEAR_VIEW_Z, depthProfile, linearScale, identityMatrix());
+	};
+	const buildCanonicalCopyFragmentSource = function(sampleRawDepthSource, samplerPrecisionLine) {
+		return [
+			"#version 300 es\n",
+			"precision highp float;",
+			samplerPrecisionLine || "",
+			"uniform vec2 sourceTexelSize;",
+			"uniform float useStabilizedDepth;",
+			"uniform float rawValueToMeters;",
+			"uniform float depthNearZ;",
+			"uniform float depthEncodingMode;",
+			"in vec2 vScreenUv;",
+			"out vec4 fragColor;",
+			createDepthDecodeShaderChunk("decodeDepthMeters"),
+			"float sampleRawDepth(vec2 uv){" + sampleRawDepthSource + "}",
+			"float sampleClampedRawDepth(vec2 uv){return sampleRawDepth(clamp(uv,sourceTexelSize*0.5,vec2(1.0)-sourceTexelSize*0.5));}",
+			"float sampleNeighborMeters(vec2 uv,float centerMeters,float weight,inout float weightAccum){",
+			"float rawDepth=sampleClampedRawDepth(uv);",
+			"if(rawDepth<=0.0001){return 0.0;}",
+			"float neighborMeters=decodeDepthMeters(rawDepth);",
+			"if(abs(neighborMeters-centerMeters)>" + STABILIZED_DEPTH_DELTA_METERS.toFixed(3) + "){return 0.0;}",
+			"weightAccum+=weight;",
+			"return neighborMeters*weight;",
+			"}",
+			"void main(){",
+			"float centerRawDepth=sampleClampedRawDepth(vScreenUv);",
+			"if(centerRawDepth<=0.0001){fragColor=vec4(0.0,0.0,0.0,1.0);return;}",
+			"float centerMeters=decodeDepthMeters(centerRawDepth);",
+			"if(useStabilizedDepth<0.5){fragColor=vec4(centerMeters,0.0,0.0,1.0);return;}",
+			"float metersAccum=centerMeters;",
+			"float weightAccum=1.0;",
+			"vec2 offsetX=vec2(sourceTexelSize.x,0.0);",
+			"vec2 offsetY=vec2(0.0,sourceTexelSize.y);",
+			"vec2 offsetDiag=sourceTexelSize;",
+			"metersAccum+=sampleNeighborMeters(vScreenUv-offsetX,centerMeters,1.0,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv+offsetX,centerMeters,1.0,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv-offsetY,centerMeters,1.0,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv+offsetY,centerMeters,1.0,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv-offsetDiag,centerMeters,0.7071,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv+offsetDiag,centerMeters,0.7071,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv+vec2(sourceTexelSize.x,-sourceTexelSize.y),centerMeters,0.7071,weightAccum);",
+			"metersAccum+=sampleNeighborMeters(vScreenUv+vec2(-sourceTexelSize.x,sourceTexelSize.y),centerMeters,0.7071,weightAccum);",
+			"fragColor=vec4(metersAccum/max(weightAccum,1.0),0.0,0.0,1.0);",
+			"}"
+		].join("");
 	};
 	const ensureArrayCopyProgram = function() {
 		if (arrayCopyProgram) {
@@ -146,29 +215,56 @@ const createDepthProcessingRenderer = function(options) {
 			"vScreenUv=position*0.5+0.5;",
 			"gl_Position=vec4(position,0.0,1.0);",
 			"}"
-		].join(""), [
-			"#version 300 es\n",
-			"precision highp float;",
-			"precision mediump sampler2DArray;",
-			"uniform sampler2DArray sourceDepthTexture;",
-			"uniform int sourceDepthLayer;",
-			"in vec2 vScreenUv;",
-			"out vec4 fragColor;",
-			"void main(){",
-			"float rawDepth=texture(sourceDepthTexture,vec3(vScreenUv,float(sourceDepthLayer))).r;",
-			"fragColor=vec4(rawDepth,0.0,0.0,1.0);",
-			"}"
-		].join(""), "Canonical depth array copy");
+		].join(""), buildCanonicalCopyFragmentSource("return texture(sourceDepthTexture,vec3(uv,float(sourceDepthLayer))).r;", "precision mediump sampler2DArray;uniform sampler2DArray sourceDepthTexture;uniform int sourceDepthLayer;"), "Canonical depth array copy");
 		arrayCopyLocs = {
 			position: gl.getAttribLocation(arrayCopyProgram, "position"),
 			sourceDepthTexture: gl.getUniformLocation(arrayCopyProgram, "sourceDepthTexture"),
-			sourceDepthLayer: gl.getUniformLocation(arrayCopyProgram, "sourceDepthLayer")
+			sourceDepthLayer: gl.getUniformLocation(arrayCopyProgram, "sourceDepthLayer"),
+			sourceTexelSize: gl.getUniformLocation(arrayCopyProgram, "sourceTexelSize"),
+			useStabilizedDepth: gl.getUniformLocation(arrayCopyProgram, "useStabilizedDepth"),
+			rawValueToMeters: gl.getUniformLocation(arrayCopyProgram, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(arrayCopyProgram, "depthNearZ"),
+			depthEncodingMode: gl.getUniformLocation(arrayCopyProgram, "depthEncodingMode")
 		};
 	};
-	const canonicalizeGpuArrayDepth = function(depthInfo) {
+	const ensureTextureCopyProgram = function() {
+		if (textureCopyProgram) {
+			return;
+		}
+		textureCopyProgram = createProgram(gl, [
+			"#version 300 es\n",
+			"in vec2 position;",
+			"out vec2 vScreenUv;",
+			"void main(){",
+			"vScreenUv=position*0.5+0.5;",
+			"gl_Position=vec4(position,0.0,1.0);",
+			"}"
+		].join(""), buildCanonicalCopyFragmentSource("return texture(sourceDepthTexture,uv).r;", "uniform sampler2D sourceDepthTexture;"), "Canonical depth texture copy");
+		textureCopyLocs = {
+			position: gl.getAttribLocation(textureCopyProgram, "position"),
+			sourceDepthTexture: gl.getUniformLocation(textureCopyProgram, "sourceDepthTexture"),
+			sourceTexelSize: gl.getUniformLocation(textureCopyProgram, "sourceTexelSize"),
+			useStabilizedDepth: gl.getUniformLocation(textureCopyProgram, "useStabilizedDepth"),
+			rawValueToMeters: gl.getUniformLocation(textureCopyProgram, "rawValueToMeters"),
+			depthNearZ: gl.getUniformLocation(textureCopyProgram, "depthNearZ"),
+			depthEncodingMode: gl.getUniformLocation(textureCopyProgram, "depthEncodingMode")
+		};
+	};
+	const bindCanonicalCopyUniforms = function(copyLocs, depthInfo, depthProfile, processingConfig) {
+		const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+		const stabilizedBool = getDepthQualityMode(processingConfig) === DEPTH_QUALITY_MODE_STABILIZED;
+		gl.uniform2f(copyLocs.sourceTexelSize, 1 / Math.max(1, depthInfo.width | 0), 1 / Math.max(1, depthInfo.height | 0));
+		gl.uniform1f(copyLocs.useStabilizedDepth, stabilizedBool ? 1 : 0);
+		gl.uniform1f(copyLocs.rawValueToMeters, profile.linearScale != null ? profile.linearScale : (depthInfo.rawValueToMeters || 0.001));
+		gl.uniform1f(copyLocs.depthNearZ, profile.nearZ != null ? profile.nearZ : 0);
+		gl.uniform1f(copyLocs.depthEncodingMode, DEPTH_ENCODING_SOURCE_RAW);
+	};
+	const canonicalizeGpuArrayDepth = function(depthInfo, args) {
 		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 		const previousViewport = gl.getParameter(gl.VIEWPORT);
-		if (!webgl2Bool || !depthInfo.texture || !ensureArrayTarget(depthInfo.width, depthInfo.height)) {
+		const depthProfile = args && args.depthProfile ? args.depthProfile : {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+		const stabilizedBool = getDepthQualityMode(args && args.processingConfig ? args.processingConfig : null) === DEPTH_QUALITY_MODE_STABILIZED;
+		if (!webgl2Bool || !depthInfo.texture || !ensureArrayTarget(depthInfo.width, depthInfo.height, stabilizedBool)) {
 			return null;
 		}
 		ensureArrayCopyProgram();
@@ -182,13 +278,41 @@ const createDepthProcessingRenderer = function(options) {
 		gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthInfo.texture);
 		gl.uniform1i(arrayCopyLocs.sourceDepthTexture, 0);
 		gl.uniform1i(arrayCopyLocs.sourceDepthLayer, depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0));
+		bindCanonicalCopyUniforms(arrayCopyLocs, depthInfo, depthProfile, args && args.processingConfig ? args.processingConfig : null);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.enableVertexAttribArray(arrayCopyLocs.position);
 		gl.vertexAttribPointer(arrayCopyLocs.position, 2, gl.FLOAT, false, 0, 0);
 		gl.drawArrays(gl.TRIANGLES, 0, 3);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
 		gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
-		return arrayTargetTexture;
+		return buildCanonicalDepthState(arrayTargetTexture, DEPTH_ENCODING_LINEAR_VIEW_Z, depthProfile, depthProfile.linearScale, identityMatrix());
+	};
+	const canonicalizeGpuTextureDepth = function(depthInfo, args) {
+		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		const previousViewport = gl.getParameter(gl.VIEWPORT);
+		const depthProfile = args && args.depthProfile ? args.depthProfile : {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+		const stabilizedBool = getDepthQualityMode(args && args.processingConfig ? args.processingConfig : null) === DEPTH_QUALITY_MODE_STABILIZED;
+		if (!webgl2Bool || !depthInfo.texture || !ensureArrayTarget(depthInfo.width, depthInfo.height, stabilizedBool)) {
+			return null;
+		}
+		ensureTextureCopyProgram();
+		gl.bindFramebuffer(gl.FRAMEBUFFER, arrayTargetFramebuffer);
+		gl.viewport(0, 0, arrayTargetWidth, arrayTargetHeight);
+		gl.disable(gl.BLEND);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.CULL_FACE);
+		gl.useProgram(textureCopyProgram);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
+		gl.uniform1i(textureCopyLocs.sourceDepthTexture, 0);
+		bindCanonicalCopyUniforms(textureCopyLocs, depthInfo, depthProfile, args && args.processingConfig ? args.processingConfig : null);
+		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+		gl.enableVertexAttribArray(textureCopyLocs.position);
+		gl.vertexAttribPointer(textureCopyLocs.position, 2, gl.FLOAT, false, 0, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
+		gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+		return buildCanonicalDepthState(arrayTargetTexture, DEPTH_ENCODING_LINEAR_VIEW_Z, depthProfile, depthProfile.linearScale, identityMatrix());
 	};
 	const ensureTargetDepthResources = function(width, height) {
 		const safeWidth = Math.max(1, width | 0);
@@ -208,8 +332,9 @@ const createDepthProcessingRenderer = function(options) {
 			targetDepthBuffer = gl.createRenderbuffer();
 		}
 		gl.bindTexture(gl.TEXTURE_2D, targetDepthTexture);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+		// Consumers sample this processed texture directly, so centralize the upscale here.
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 		gl.texImage2D(
@@ -230,13 +355,20 @@ const createDepthProcessingRenderer = function(options) {
 		gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, targetDepthBuffer);
 		return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
 	};
+	const resolveTargetDepthTextureSize = function(depthInfo, viewport) {
+		const sourceWidth = Math.max(1, depthInfo && depthInfo.width ? depthInfo.width | 0 : 1);
+		const sourceHeight = Math.max(1, depthInfo && depthInfo.height ? depthInfo.height | 0 : 1);
+		return {
+			width: sourceWidth,
+			height: sourceHeight
+		};
+	};
 	const ensureInverseReprojectProgram = function() {
 		if (targetDepthProgram) {
 			return;
 		}
-		// Inverse reprojection: for each render pixel, look up depth in sensor space.
-		// Raw sensor depth is decoded inline; hardware bilinear (LINEAR filter) handles upscaling.
-		// Zero-depth samples are discarded.
+		// Inverse reprojection: for each render pixel, look up the processed sensor depth.
+		// Canonicalization already normalized raw depth into one shared sampling contract.
 		const vs = [
 			"#version 300 es\n",
 			"precision highp float;",
@@ -247,13 +379,14 @@ const createDepthProcessingRenderer = function(options) {
 			"gl_Position=vec4(position,0.0,1.0);",
 			"}"
 		].join("");
-		// Input: raw canonical depth texture (LINEAR filter, hardware bilinear upscaling).
+		// Input: canonical depth texture (raw or stabilized linear meters).
 		const fs = [
 			"#version 300 es\n",
 			"precision highp float;",
-			"uniform sampler2D depthTexture;",         // raw depth, LINEAR filter
+			"uniform sampler2D depthTexture;",
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
+			"uniform float depthEncodingMode;",
 			"uniform vec4 sourceProjectionParams;",
 			"uniform vec4 targetProjectionParams;",
 			"uniform mat4 sourceWorldFromView;",
@@ -263,10 +396,7 @@ const createDepthProcessingRenderer = function(options) {
 			"uniform mat4 targetProjMatrix;",
 			"in vec2 vScreenUv;",
 			"out vec4 fragColor;",
-			"float decodeDepth(float raw){",
-			"if(raw<=0.0001)return 0.0;",
-			"return depthNearZ>0.0?depthNearZ/max(1.0-raw,0.0001):raw*rawValueToMeters;",
-			"}",
+			createDepthDecodeShaderChunk("decodeDepth"),
 			"void main(){",
 			"vec2 renderNDC=vScreenUv*2.0-1.0;",
 			"vec2 renderRay=vec2(",
@@ -303,6 +433,7 @@ const createDepthProcessingRenderer = function(options) {
 			depthTexture:           gl.getUniformLocation(targetDepthProgram, "depthTexture"),
 			rawValueToMeters:       gl.getUniformLocation(targetDepthProgram, "rawValueToMeters"),
 			depthNearZ:             gl.getUniformLocation(targetDepthProgram, "depthNearZ"),
+			depthEncodingMode:      gl.getUniformLocation(targetDepthProgram, "depthEncodingMode"),
 			sourceProjectionParams: gl.getUniformLocation(targetDepthProgram, "sourceProjectionParams"),
 			targetProjectionParams: gl.getUniformLocation(targetDepthProgram, "targetProjectionParams"),
 			sourceWorldFromView:    gl.getUniformLocation(targetDepthProgram, "sourceWorldFromView"),
@@ -312,16 +443,17 @@ const createDepthProcessingRenderer = function(options) {
 			targetProjMatrix:       gl.getUniformLocation(targetDepthProgram, "targetProjMatrix")
 		};
 	};
-	const inverseReprojectDepth = function(depthInfo, args, canonicalTexture) {
+	const inverseReprojectDepth = function(depthInfo, args, canonicalDepthState) {
 		const viewport = args && args.viewport ? args.viewport : null;
 		const reprojectionState = args && args.depthReprojectionState ? args.depthReprojectionState : null;
-		const depthProfile = args && args.depthProfile ? args.depthProfile : null;
-		const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
+		const profile = canonicalDepthState && canonicalDepthState.depthProfile ? canonicalDepthState.depthProfile : (args && args.depthProfile ? args.depthProfile : {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0});
+		const targetTextureSize = resolveTargetDepthTextureSize(depthInfo, viewport);
 		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 		const previousViewport = gl.getParameter(gl.VIEWPORT);
 		if (
 			!webgl2Bool ||
-			!canonicalTexture ||
+			!canonicalDepthState ||
+			!canonicalDepthState.texture ||
 			!viewport ||
 			!reprojectionState ||
 			!reprojectionState.enabledBool ||
@@ -332,7 +464,7 @@ const createDepthProcessingRenderer = function(options) {
 			!reprojectionState.targetWorldFromViewMatrix ||
 			!reprojectionState.targetViewMatrix ||
 			!args.targetProjMatrix ||
-			!ensureTargetDepthResources(viewport.width, viewport.height)
+			!ensureTargetDepthResources(targetTextureSize.width, targetTextureSize.height)
 		) {
 			return null;
 		}
@@ -349,10 +481,11 @@ const createDepthProcessingRenderer = function(options) {
 		gl.disable(gl.BLEND);
 		gl.disable(gl.CULL_FACE);
 		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, canonicalTexture);
+		gl.bindTexture(gl.TEXTURE_2D, canonicalDepthState.texture);
 		gl.uniform1i(targetDepthLocs.depthTexture, 0);
-		gl.uniform1f(targetDepthLocs.rawValueToMeters, profile.linearScale != null ? profile.linearScale : (depthInfo.rawValueToMeters || 0.001));
+		gl.uniform1f(targetDepthLocs.rawValueToMeters, canonicalDepthState.rawValueToMeters != null ? canonicalDepthState.rawValueToMeters : (profile.linearScale != null ? profile.linearScale : (depthInfo.rawValueToMeters || 0.001)));
 		gl.uniform1f(targetDepthLocs.depthNearZ, profile.nearZ != null ? profile.nearZ : 0);
+		gl.uniform1f(targetDepthLocs.depthEncodingMode, canonicalDepthState.depthEncodingMode != null ? canonicalDepthState.depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW);
 		gl.uniform4f(targetDepthLocs.sourceProjectionParams,
 			reprojectionState.sourceProjectionParams.xScale,
 			reprojectionState.sourceProjectionParams.yScale,
@@ -374,6 +507,7 @@ const createDepthProcessingRenderer = function(options) {
 		gl.drawArrays(gl.TRIANGLES, 0, 3);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
 		gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+		args.targetDepthTextureSize = targetTextureSize;
 		return targetDepthTexture;
 	};
 	return {
@@ -383,26 +517,37 @@ const createDepthProcessingRenderer = function(options) {
 		},
 		process: function(args) {
 			const depthInfo = args && args.depthInfo ? args.depthInfo : null;
-			let canonicalTexture = null;
+			let canonicalDepthState = null;
 			let targetTexture = null;
 			if (!depthInfo || depthInfo.isValid === false) {
 				return null;
 			}
 			if (depthInfo.texture && depthInfo.textureType === "texture-array") {
-				canonicalTexture = canonicalizeGpuArrayDepth(depthInfo);
+				canonicalDepthState = canonicalizeGpuArrayDepth(depthInfo, args || null);
 			} else if (depthInfo.texture) {
-				canonicalTexture = depthInfo.texture;
+				if (getDepthQualityMode(args && args.processingConfig ? args.processingConfig : null) === DEPTH_QUALITY_MODE_STABILIZED) {
+					canonicalDepthState = canonicalizeGpuTextureDepth(depthInfo, args || null);
+				}
+				if (!canonicalDepthState) {
+					canonicalDepthState = buildCanonicalDepthState(
+						depthInfo.texture,
+						DEPTH_ENCODING_SOURCE_RAW,
+						args && args.depthProfile ? args.depthProfile : {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0},
+						depthInfo.rawValueToMeters || 0.001,
+						depthInfo.normDepthBufferFromNormView || identityMatrix()
+					);
+				}
 			} else if (depthInfo.data && depthInfo.width && depthInfo.height) {
-				canonicalTexture = ensureCpuTexture(depthInfo);
+				canonicalDepthState = ensureCpuTexture(depthInfo, args || null);
 			}
-			if (!canonicalTexture) {
+			if (!canonicalDepthState || !canonicalDepthState.texture) {
 				return null;
 			}
-			targetTexture = inverseReprojectDepth(depthInfo, args || {}, canonicalTexture);
+			targetTexture = inverseReprojectDepth(depthInfo, args || {}, canonicalDepthState);
 			if (targetTexture) {
 				return buildTargetDepthInfo(args || {}, targetTexture);
 			}
-			return buildCanonicalDepthInfo(depthInfo, canonicalTexture);
+			return buildCanonicalDepthInfo(depthInfo, canonicalDepthState);
 		}
 	};
 };

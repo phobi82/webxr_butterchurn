@@ -394,17 +394,11 @@ const buildDepthReprojectionState = function(runtimeState, passthroughPose, dept
 		}
 		results[i] = {
 			enabledBool: true,
-			modeKey: modeKey,
-			matchDepthViewBool: !!runtimeState.xrDepthMatchDepthViewBool,
-			sourceTimestampMs: sourcePoseState.timestampMs,
-			currentTimestampMs: currentPoseState.timestampMs,
 			sourceViewMatrix: sourcePoseState.viewMatrix,
 			sourceWorldFromViewMatrix: sourcePoseState.worldFromViewMatrix,
-			sourceProjectionMatrix: sourcePoseState.projectionMatrix,
 			sourceProjectionParams: sourcePoseState.projectionParams,
 			targetViewMatrix: currentPoseState.viewMatrix,
 			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix,
-			targetProjectionMatrix: currentPoseState.projectionMatrix,
 			targetProjectionParams: currentPoseState.projectionParams
 		};
 	}
