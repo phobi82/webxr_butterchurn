@@ -46,7 +46,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Inverse Reprojection**: `xr-depth` canonicalizes runtime depth once per eye, then builds one target-space 2D depth texture directly in sensor resolution instead of full render resolution. The processed texture is upscaled centrally inside `xr-depth`, so passthrough punch, world masking, and depth-aware lighting all reuse the same result without per-consumer upscale logic
+- **Inverse Reprojection**: `xr-depth` now canonicalizes `gpu-array`, `gpu-texture`, and CPU depth sources through one shared path, reprojects them once per view at native sensor resolution, packs `depth + worldPoint` into one target-space texture, and only then builds the shared high-resolution consumer texture with the final smoothing/upscale pass. Passthrough punch, world masking, and depth-aware lighting all read that same final contract instead of reconstructing world space per consumer
 - **Spatial Depth Masking**: depth masks are reprojected from the source depth pose into the current render view so headset reprojection can act on them spatially, without exposing a manual timing offset or legacy motion-compensation mode
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
 - **Depth-bound Light Projection**: passthrough lighting now reuses the shared canonical 2D depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
@@ -190,7 +190,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Canonical depth adapter that normalizes runtime depth sources and builds one shared target-space 2D depth texture per eye |
+| `xr-depth.js` | Canonical depth adapter that unifies array/texture/CPU depth sources, reprojects them once at sensor resolution, packs shared `depth + worldPoint`, and builds the final consumer depth texture |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |

@@ -284,16 +284,6 @@ const getPassthroughBlendDrive = function(audioMetrics) {
 	return clampNumber(audioMetrics.beatPulse || 0, 0, 1);
 };
 
-const buildPassthroughDepthProjectionParams = function(projMatrix) {
-	const rayParams = extractProjectionRayParams(projMatrix);
-	return {
-		xScale: rayParams.xScale,
-		yScale: rayParams.yScale,
-		xOffset: rayParams.xOffset,
-		yOffset: rayParams.yOffset
-	};
-};
-
 const selectKnownModeKey = function(definitions, key, currentKey) {
 	for (let i = 0; i < definitions.length; i += 1) {
 		if (definitions[i].key === key) {
@@ -444,9 +434,6 @@ const createPassthroughController = function(options) {
 		},
 		buildDepthRenderState: function(args) {
 			const baseState = state.depthModeKey === "echo" ? depthRuntime.getEffectiveEchoDepthState() : depthRuntime.getEffectiveDistanceDepthState();
-			baseState.depthProjectionParams = buildPassthroughDepthProjectionParams(args && (args.depthProjMatrix || args.projMatrix));
-			baseState.depthViewMatrix = args && (args.depthViewMatrix || args.viewMatrix) ? (args.depthViewMatrix || args.viewMatrix) : identityMatrix();
-			baseState.depthProjMatrix = args && (args.depthProjMatrix || args.projMatrix) ? (args.depthProjMatrix || args.projMatrix) : identityMatrix();
 			return baseState;
 		}
 	};
@@ -519,8 +506,6 @@ const createPassthroughController = function(options) {
 			effectSemanticModeLabel: getPassthroughEffectSemanticModeLabel(state.effectSemanticModeKey)
 		};
 	};
-	// Reusable buffer for view-world matrix in overlay render state
-	const reusableViewWorldMatrix = new Float32Array(16);
 	const buildOverlayRenderState = function(queryArgs, depthRenderState) {
 		queryArgs = queryArgs || {};
 		const visibleShare = getPassthroughVisibleShare(state, state.smoothedBlendDrive);
@@ -535,10 +520,6 @@ const createPassthroughController = function(options) {
 			maskCount: 0,
 			masks: [],
 			depth: depthRenderState,
-			depthProjectionParams: buildPassthroughDepthProjectionParams(queryArgs.depthProjMatrix || queryArgs.projMatrix),
-			depthViewMatrix: queryArgs.depthViewMatrix || queryArgs.viewMatrix || IDENTITY_MATRIX,
-			depthProjMatrix: queryArgs.depthProjMatrix || queryArgs.projMatrix || IDENTITY_MATRIX,
-			viewWorldMatrix: queryArgs.viewMatrix ? buildWorldFromViewMatrix(queryArgs.viewMatrix, reusableViewWorldMatrix) : IDENTITY_MATRIX,
 			darkAlpha: 1 - darkness,
 			additiveColor: lightingColor,
 			additiveStrength: additiveStrength,
@@ -730,7 +711,8 @@ const createPassthroughController = function(options) {
 				return null;
 			}
 			return {
-				depthQualityMode: "stabilized"
+				depthQualityMode: "stabilized",
+				depthMetricMode: state.depthRadialBool ? "radial" : "planar"
 			};
 		},
 		setControlValue: function(key, value) {
@@ -772,7 +754,6 @@ const createPunchRenderer = function() {
 	let buffer = null;
 	let texture2dProgram = null;
 	let texture2dLocs = null;
-	const depthUvTransform = new Float32Array(16);
 	let flashlightProgram = null;
 	let flashlightLocs = null;
 	const flashlightMaskCenters = new Float32Array(PASSTHROUGH_MAX_FLASHLIGHTS * 2);
@@ -790,22 +771,12 @@ const createPunchRenderer = function() {
 		"uniform float depthEchoFade;",
 		"uniform float depthPhaseOffset;",
 		"uniform float depthMrRetain;",
-		"uniform float rawValueToMeters;",
-		"uniform float depthNearZ;",
-		"uniform float depthEncodingMode;",
-		"uniform float depthMetricMode;",
-		"uniform vec4 depthProjectionParams;",
-		"uniform mat4 depthUvTransform;",
 		"varying vec2 vScreenUv;",
 		createDepthBandMaskShaderChunk("computeDepthMask"),
-		createDepthDecodeShaderChunk("decodeDepthMeters"),
-		createDepthProjectionMetricShaderChunk("resolveDepthMetric", "vScreenUv"),
 		"void main(){",
-		"vec2 depthUv=(depthUvTransform*vec4(vScreenUv,0.0,1.0)).xy;",
-		"float rawDepth=texture2D(depthTexture,depthUv).r;",
-		"float depthMeters=decodeDepthMeters(rawDepth);",
-		"float valid=step(0.001,rawDepth);",
-		"float mask=computeDepthMask(resolveDepthMetric(depthMeters));",
+		"float depthMeters=texture2D(depthTexture,vScreenUv).r;",
+		"float valid=step(0.001,depthMeters);",
+		"float mask=computeDepthMask(depthMeters);",
 		"float punchMask=mix(1.0,mask,valid);",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
@@ -841,13 +812,7 @@ const createPunchRenderer = function() {
 			depthEchoDutyCycle: gl.getUniformLocation(prog, "depthEchoDutyCycle"),
 			depthEchoFade: gl.getUniformLocation(prog, "depthEchoFade"),
 			depthPhaseOffset: gl.getUniformLocation(prog, "depthPhaseOffset"),
-			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain"),
-			rawValueToMeters: gl.getUniformLocation(prog, "rawValueToMeters"),
-			depthNearZ: gl.getUniformLocation(prog, "depthNearZ"),
-			depthEncodingMode: gl.getUniformLocation(prog, "depthEncodingMode"),
-			depthMetricMode: gl.getUniformLocation(prog, "depthMetricMode"),
-			depthProjectionParams: gl.getUniformLocation(prog, "depthProjectionParams"),
-			depthUvTransform: gl.getUniformLocation(prog, "depthUvTransform")
+			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain")
 		};
 	};
 
@@ -888,9 +853,8 @@ const createPunchRenderer = function() {
 		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 	};
 
-	const drawDepthPunch = function(depthInfo, punchState, depthProfile) {
+	const drawDepthPunch = function(depthInfo, punchState) {
 		if (!depthInfo) { return; }
-		const profile = depthProfile || {linearScale: depthInfo.rawValueToMeters || 0.001, nearZ: 0};
 		if (!depthInfo.texture) {
 			return;
 		}
@@ -913,19 +877,6 @@ const createPunchRenderer = function() {
 		gl.uniform1f(texture2dLocs.depthEchoFade, punchState.depthEchoFade == null ? 0 : punchState.depthEchoFade);
 		gl.uniform1f(texture2dLocs.depthPhaseOffset, punchState.depthPhaseOffset == null ? 0 : punchState.depthPhaseOffset);
 		gl.uniform1f(texture2dLocs.depthMrRetain, punchState.depthMrRetain || 0);
-		gl.uniform1f(texture2dLocs.rawValueToMeters, profile.linearScale);
-		gl.uniform1f(texture2dLocs.depthNearZ, profile.nearZ);
-		gl.uniform1f(texture2dLocs.depthEncodingMode, depthInfo && depthInfo.depthEncodingMode != null ? depthInfo.depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW);
-		gl.uniform1f(texture2dLocs.depthMetricMode, punchState.depthRadialBool ? 1 : 0);
-		gl.uniform4f(
-			texture2dLocs.depthProjectionParams,
-			punchState.depthProjectionParams ? punchState.depthProjectionParams.xScale : 1,
-			punchState.depthProjectionParams ? punchState.depthProjectionParams.yScale : 1,
-			punchState.depthProjectionParams ? punchState.depthProjectionParams.xOffset : 0,
-			punchState.depthProjectionParams ? punchState.depthProjectionParams.yOffset : 0
-		);
-		copyMatrix4OrIdentity(depthUvTransform, depthInfo.normDepthBufferFromNormView);
-		gl.uniformMatrix4fv(texture2dLocs.depthUvTransform, false, depthUvTransform);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.enableVertexAttribArray(texture2dLocs.position);
 		gl.vertexAttribPointer(texture2dLocs.position, 2, gl.FLOAT, false, 0, 0);
@@ -940,10 +891,10 @@ const createPunchRenderer = function() {
 			gl = glContext;
 			buffer = createFullscreenTriangleBuffer(gl);
 		},
-		draw: function(punchState, depthInfo, depthProfile) {
+		draw: function(punchState, depthInfo) {
 			if (!punchState) { return; }
 			if (punchState.depth) {
-				drawDepthPunch(depthInfo, punchState.depth, depthProfile);
+				drawDepthPunch(depthInfo, punchState.depth);
 			}
 			if (punchState.flashlight) {
 				drawFlashlightPunch(punchState.flashlight);
