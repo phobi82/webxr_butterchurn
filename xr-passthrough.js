@@ -711,7 +711,6 @@ const createPassthroughController = function(options) {
 				return null;
 			}
 			return {
-				depthQualityMode: "stabilized",
 				depthMetricMode: state.depthRadialBool ? "radial" : "planar"
 			};
 		},

@@ -403,19 +403,6 @@ const createDepthBandMaskShaderChunk = function(functionName) {
 	].join("");
 };
 
-const createDepthProjectionMetricShaderChunk = function(functionName, screenUvExpression) {
-	const resolvedFunctionName = functionName || "resolveDepthMetric";
-	const resolvedScreenUvExpression = screenUvExpression || "vScreenUv";
-	return [
-		"float " + resolvedFunctionName + "(float depthMeters){",
-		"if(depthMetricMode<0.5){return depthMeters;}",
-		"vec2 ndc=(" + resolvedScreenUvExpression + ")*2.0-1.0;",
-		"vec2 viewRay=vec2((ndc.x+depthProjectionParams.z)/depthProjectionParams.x,(ndc.y+depthProjectionParams.w)/depthProjectionParams.y);",
-		"return depthMeters*sqrt(1.0+dot(viewRay,viewRay));",
-		"}"
-	].join("");
-};
-
 // Dense UV grid used when depth has to be projected through world space instead of sampled as a screen quad.
 const createUvGridTriangleBuffer = function(gl, columns, rows) {
 	const safeColumns = Math.max(1, columns | 0);
