@@ -710,8 +710,20 @@ const createPassthroughController = function(options) {
 			if (!state.depthActiveBool) {
 				return null;
 			}
+			const baseState = depthRuntime.buildDepthRenderState(null);
+			if (!baseState) {
+				return null;
+			}
 			return {
-				depthMetricMode: state.depthRadialBool ? "radial" : "planar"
+				depthMetricMode: state.depthRadialBool ? "radial" : "planar",
+				depthMode: baseState.depthMode,
+				depthThreshold: baseState.depthThreshold,
+				depthFade: baseState.depthFade,
+				depthEchoWavelength: baseState.depthEchoWavelength,
+				depthEchoDutyCycle: baseState.depthEchoDutyCycle,
+				depthEchoFade: baseState.depthEchoFade,
+				depthPhaseOffset: baseState.depthPhaseOffset,
+				depthMrRetain: baseState.depthMrRetain
 			};
 		},
 		setControlValue: function(key, value) {
@@ -762,21 +774,12 @@ const createPunchRenderer = function() {
 	const texture2dFragSource = [
 		"precision highp float;",
 		"uniform sampler2D depthTexture;",
-		"uniform float depthMode;",
-		"uniform float depthThreshold;",
-		"uniform float depthFade;",
-		"uniform float depthEchoWavelength;",
-		"uniform float depthEchoDutyCycle;",
-		"uniform float depthEchoFade;",
-		"uniform float depthPhaseOffset;",
+		"uniform sampler2D depthMaskTexture;",
+		"uniform float depthMaskAvailable;",
 		"uniform float depthMrRetain;",
 		"varying vec2 vScreenUv;",
-		createDepthBandMaskShaderChunk("computeDepthMask"),
 		"void main(){",
-		"float depthMeters=texture2D(depthTexture,vScreenUv).r;",
-		"float valid=step(0.001,depthMeters);",
-		"float mask=computeDepthMask(depthMeters);",
-		"float punchMask=mix(1.0,mask,valid);",
+		"float punchMask=depthMaskAvailable>0.5?texture2D(depthMaskTexture,vScreenUv).r:step(0.001,texture2D(depthTexture,vScreenUv).r);",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
 	].join("");
@@ -804,13 +807,8 @@ const createPunchRenderer = function() {
 		return {
 			position: gl.getAttribLocation(prog, "position"),
 			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
-			depthMode: gl.getUniformLocation(prog, "depthMode"),
-			depthThreshold: gl.getUniformLocation(prog, "depthThreshold"),
-			depthFade: gl.getUniformLocation(prog, "depthFade"),
-			depthEchoWavelength: gl.getUniformLocation(prog, "depthEchoWavelength"),
-			depthEchoDutyCycle: gl.getUniformLocation(prog, "depthEchoDutyCycle"),
-			depthEchoFade: gl.getUniformLocation(prog, "depthEchoFade"),
-			depthPhaseOffset: gl.getUniformLocation(prog, "depthPhaseOffset"),
+			depthMaskTexture: gl.getUniformLocation(prog, "depthMaskTexture"),
+			depthMaskAvailable: gl.getUniformLocation(prog, "depthMaskAvailable"),
 			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain")
 		};
 	};
@@ -868,13 +866,10 @@ const createPunchRenderer = function() {
 		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
 		gl.uniform1i(texture2dLocs.depthTexture, 0);
-		gl.uniform1f(texture2dLocs.depthMode, punchState.depthMode == null ? 0 : punchState.depthMode);
-		gl.uniform1f(texture2dLocs.depthThreshold, punchState.depthThreshold);
-		gl.uniform1f(texture2dLocs.depthFade, punchState.depthFade);
-		gl.uniform1f(texture2dLocs.depthEchoWavelength, punchState.depthEchoWavelength == null ? 1 : punchState.depthEchoWavelength);
-		gl.uniform1f(texture2dLocs.depthEchoDutyCycle, punchState.depthEchoDutyCycle == null ? 0.5 : punchState.depthEchoDutyCycle);
-		gl.uniform1f(texture2dLocs.depthEchoFade, punchState.depthEchoFade == null ? 0 : punchState.depthEchoFade);
-		gl.uniform1f(texture2dLocs.depthPhaseOffset, punchState.depthPhaseOffset == null ? 0 : punchState.depthPhaseOffset);
+		gl.activeTexture(gl.TEXTURE1);
+		gl.bindTexture(gl.TEXTURE_2D, depthInfo.maskTexture || null);
+		gl.uniform1i(texture2dLocs.depthMaskTexture, 1);
+		gl.uniform1f(texture2dLocs.depthMaskAvailable, depthInfo.maskTexture ? 1 : 0);
 		gl.uniform1f(texture2dLocs.depthMrRetain, punchState.depthMrRetain || 0);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.enableVertexAttribArray(texture2dLocs.position);

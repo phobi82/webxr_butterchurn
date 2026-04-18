@@ -334,13 +334,63 @@ const computeRuntimeDepthProfile = function(depthFrameKind, depthDataFormat, raw
 	return {linearScale: rawValueToMeters || 0.001, nearZ: 0, label: "gpu-linear"};
 };
 
-const buildDepthPoseState = function(modeKey, timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix) {
+const invertMatrix4 = function(sourceMatrix, targetMatrix) {
+	const m = sourceMatrix;
+	const inv = targetMatrix;
+	inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
+	inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
+	inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
+	inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
+	inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
+	inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
+	inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
+	inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
+	inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
+	inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
+	inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
+	inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
+	inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
+	inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
+	inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
+	inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
+	const determinant = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+	if (Math.abs(determinant) < 1e-8) {
+		return null;
+	}
+	const invDeterminant = 1 / determinant;
+	for (let i = 0; i < 16; i += 1) {
+		inv[i] *= invDeterminant;
+	}
+	return inv;
+};
+
+const ensureDepthUvInverseMatrix = function(depthInfo) {
+	if (!depthInfo || !depthInfo.normDepthBufferFromNormView) {
+		return;
+	}
+	if (depthInfo.normViewFromNormDepthBufferMatrix) {
+		return;
+	}
+	if (depthInfo.normDepthBufferFromNormView.inverse && depthInfo.normDepthBufferFromNormView.inverse.matrix) {
+		depthInfo.normViewFromNormDepthBufferMatrix = new Float32Array(depthInfo.normDepthBufferFromNormView.inverse.matrix);
+		return;
+	}
+	const forwardMatrix = depthInfo.normDepthBufferFromNormView.matrix || depthInfo.normDepthBufferFromNormView;
+	if (!forwardMatrix || forwardMatrix.length !== 16) {
+		return;
+	}
+	const inverseMatrix = invertMatrix4(forwardMatrix, new Float32Array(16));
+	if (inverseMatrix) {
+		depthInfo.normViewFromNormDepthBufferMatrix = inverseMatrix;
+	}
+};
+
+const buildDepthPoseState = function(timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix) {
 	if (!viewMatrix || !worldFromViewMatrix || !projectionMatrix) {
 		return null;
 	}
 	const projectionParams = extractProjectionRayParams(projectionMatrix);
 	return {
-		modeKey: modeKey || "legacy-fallback",
 		timestampMs: timestampMs || 0,
 		viewMatrix: new Float32Array(viewMatrix),
 		worldFromViewMatrix: new Float32Array(worldFromViewMatrix),
@@ -354,13 +404,13 @@ const buildDepthPoseState = function(modeKey, timestampMs, viewMatrix, worldFrom
 	};
 };
 
-const buildDepthPoseStateFromView = function(view, timestampMs, modeKey) {
+const buildDepthPoseStateFromView = function(view, timestampMs) {
 	if (!view || !view.transform || !view.transform.inverse || !view.transform.inverse.matrix || !view.projectionMatrix) {
 		return null;
 	}
 	const viewMatrix = view.transform.inverse.matrix;
 	const worldFromViewMatrix = view.transform.matrix || buildWorldFromViewMatrix(viewMatrix, new Float32Array(16));
-	return buildDepthPoseState(modeKey, timestampMs, viewMatrix, worldFromViewMatrix, view.projectionMatrix);
+	return buildDepthPoseState(timestampMs, viewMatrix, worldFromViewMatrix, view.projectionMatrix);
 };
 
 const buildDepthPoseStateFromDepthInfo = function(depthInfo, fallbackPoseState, timestampMs) {
@@ -373,20 +423,19 @@ const buildDepthPoseStateFromDepthInfo = function(depthInfo, fallbackPoseState, 
 	}
 	const viewMatrix = depthInfo.transform.inverse.matrix;
 	const worldFromViewMatrix = depthInfo.transform.matrix || buildWorldFromViewMatrix(viewMatrix, new Float32Array(16));
-	return buildDepthPoseState("native-depth-pose", timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix);
+	return buildDepthPoseState(timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix);
 };
 
-const buildDepthReprojectionState = function(runtimeState, passthroughPose, depthInfoByView, timestampMs) {
+const buildDepthReprojectionState = function(passthroughPose, depthInfoByView, timestampMs) {
 	if (!passthroughPose || !passthroughPose.views) {
 		return [];
 	}
 	const results = [];
 	for (let i = 0; i < passthroughPose.views.length; i += 1) {
-		const currentPoseState = buildDepthPoseStateFromView(passthroughPose.views[i], timestampMs, "current-view");
+		const currentPoseState = buildDepthPoseStateFromView(passthroughPose.views[i], timestampMs);
 		let sourcePoseState = buildDepthPoseStateFromDepthInfo(depthInfoByView && depthInfoByView[i] ? depthInfoByView[i] : null, currentPoseState, timestampMs);
-		let modeKey = sourcePoseState ? sourcePoseState.modeKey : "legacy-fallback";
 		if (!sourcePoseState && currentPoseState) {
-			sourcePoseState = buildDepthPoseState("legacy-fallback", currentPoseState.timestampMs, currentPoseState.viewMatrix, currentPoseState.worldFromViewMatrix, currentPoseState.projectionMatrix);
+			sourcePoseState = buildDepthPoseState(currentPoseState.timestampMs, currentPoseState.viewMatrix, currentPoseState.worldFromViewMatrix, currentPoseState.projectionMatrix);
 		}
 		if (!currentPoseState || !sourcePoseState) {
 			results[i] = null;
@@ -394,12 +443,10 @@ const buildDepthReprojectionState = function(runtimeState, passthroughPose, dept
 		}
 		results[i] = {
 			enabledBool: true,
-			sourceViewMatrix: sourcePoseState.viewMatrix,
 			sourceWorldFromViewMatrix: sourcePoseState.worldFromViewMatrix,
 			sourceProjectionParams: sourcePoseState.projectionParams,
 			targetViewMatrix: currentPoseState.viewMatrix,
-			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix,
-			targetProjectionParams: currentPoseState.projectionParams
+			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix
 		};
 	}
 	return results;
@@ -634,6 +681,7 @@ const createRuntime = function(options) {
 			} catch (error) {
 				depthInfo = null;
 			}
+			ensureDepthUvInverseMatrix(depthInfo);
 			depthInfoByView.push(depthInfo);
 		}
 		return depthInfoByView;
@@ -853,7 +901,7 @@ const createRuntime = function(options) {
 			try { state.xrSession.resumeDepthSensing(); } catch (e) { console.warn("[Depth] resumeDepthSensing failed:", e.message || e); }
 		}
 		const passthroughDepthInfoByView = collectPassthroughDepthInfoByView(frame, passthroughPose || renderPose);
-		const depthReprojectionByView = buildDepthReprojectionState(state, passthroughPose || renderPose, passthroughDepthInfoByView, time);
+		const depthReprojectionByView = buildDepthReprojectionState(passthroughPose || renderPose, passthroughDepthInfoByView, time);
 		updateDepthAvailability(passthroughDepthInfoByView);
 		updatePassthroughFrame(delta, passthroughPose || renderPose);
 		syncVisualizerFrame(renderPose, time * 0.001);

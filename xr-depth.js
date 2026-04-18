@@ -6,7 +6,6 @@ const DEPTH_ENCODING_SOURCE_RAW = 0;
 const DEPTH_ENCODING_LINEAR_VIEW_Z = 1;
 const DEPTH_METRIC_MODE_PLANAR = "planar";
 const DEPTH_METRIC_MODE_RADIAL = "radial";
-const DEPTH_REPROJECTION_ACCEPT_TEXELS = 1.35;
 const DEPTH_FINAL_DEPTH_SIGMA_SCALE = 0.08;
 const DEPTH_FINAL_DEPTH_SIGMA_MIN = 0.06;
 const DEPTH_FINAL_DEPTH_CUTOFF_SCALE = 2.0;
@@ -26,15 +25,26 @@ const createDepthProcessingRenderer = function(options) {
 
 	let cpuTexture = null;
 	let cpuUploadBuffer = null;
-	const sourceDepthUvTransform = new Float32Array(16);
+	const identityMatrix4 = new Float32Array([
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	]);
+	const sourceViewUvTransform = new Float32Array(16);
 
 	let reprojectProgram = null;
 	let reprojectLocs = null;
-	let reprojectTexture = null;
-	let reprojectFramebuffer = null;
-	let reprojectDepthBuffer = null;
-	let reprojectWidth = 0;
-	let reprojectHeight = 0;
+	let depthReprojectTexture = null;
+	let depthReprojectFramebuffer = null;
+	let depthReprojectDepthBuffer = null;
+	let depthReprojectWidth = 0;
+	let depthReprojectHeight = 0;
+	let maskReprojectTexture = null;
+	let maskReprojectFramebuffer = null;
+	let maskReprojectDepthBuffer = null;
+	let maskReprojectWidth = 0;
+	let maskReprojectHeight = 0;
 
 	let finalProgram = null;
 	let finalLocs = null;
@@ -42,6 +52,13 @@ const createDepthProcessingRenderer = function(options) {
 	let finalFramebuffer = null;
 	let finalWidth = 0;
 	let finalHeight = 0;
+
+	let maskProgram = null;
+	let maskLocs = null;
+	let maskTexture = null;
+	let maskFramebuffer = null;
+	let maskWidth = 0;
+	let maskHeight = 0;
 
 	const fullscreenVertexSource = [
 		"#version 300 es\n",
@@ -63,23 +80,6 @@ const createDepthProcessingRenderer = function(options) {
 	const restoreFramebufferState = function(previousFramebuffer, previousViewport) {
 		gl.bindFramebuffer(gl.FRAMEBUFFER, previousFramebuffer);
 		gl.viewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
-	};
-
-	const setSourceDepthUvTransform = function(depthInfo) {
-		sourceDepthUvTransform.set([
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1
-		]);
-		if (!depthInfo || !depthInfo.normDepthBufferFromNormView) {
-			return;
-		}
-		if (depthInfo.normDepthBufferFromNormView.matrix) {
-			sourceDepthUvTransform.set(depthInfo.normDepthBufferFromNormView.matrix);
-			return;
-		}
-		sourceDepthUvTransform.set(depthInfo.normDepthBufferFromNormView);
 	};
 
 	const resolveViewportSize = function(args, fallbackWidth, fallbackHeight) {
@@ -114,34 +114,51 @@ const createDepthProcessingRenderer = function(options) {
 		return cpuTexture;
 	};
 
-	const ensureReprojectResources = function(width, height) {
+	const ensureReprojectResources = function(kindKey, width, height) {
 		const safeWidth = Math.max(1, width | 0);
 		const safeHeight = Math.max(1, height | 0);
-		if (reprojectTexture && reprojectFramebuffer && reprojectDepthBuffer && reprojectWidth === safeWidth && reprojectHeight === safeHeight) {
+		const depthTargetBool = kindKey !== "mask";
+		let texture = depthTargetBool ? depthReprojectTexture : maskReprojectTexture;
+		let framebuffer = depthTargetBool ? depthReprojectFramebuffer : maskReprojectFramebuffer;
+		let depthBuffer = depthTargetBool ? depthReprojectDepthBuffer : maskReprojectDepthBuffer;
+		let cachedWidth = depthTargetBool ? depthReprojectWidth : maskReprojectWidth;
+		let cachedHeight = depthTargetBool ? depthReprojectHeight : maskReprojectHeight;
+		if (texture && framebuffer && depthBuffer && cachedWidth === safeWidth && cachedHeight === safeHeight) {
 			return true;
 		}
-		reprojectWidth = safeWidth;
-		reprojectHeight = safeHeight;
-		if (!reprojectTexture) {
-			reprojectTexture = gl.createTexture();
+		if (!texture) {
+			texture = gl.createTexture();
 		}
-		if (!reprojectFramebuffer) {
-			reprojectFramebuffer = gl.createFramebuffer();
+		if (!framebuffer) {
+			framebuffer = gl.createFramebuffer();
 		}
-		if (!reprojectDepthBuffer) {
-			reprojectDepthBuffer = gl.createRenderbuffer();
+		if (!depthBuffer) {
+			depthBuffer = gl.createRenderbuffer();
 		}
-		gl.bindTexture(gl.TEXTURE_2D, reprojectTexture);
+		gl.bindTexture(gl.TEXTURE_2D, texture);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		gl.texImage2D(gl.TEXTURE_2D, 0, floatTargetConfig.internalFormat, reprojectWidth, reprojectHeight, 0, floatTargetConfig.format, floatTargetConfig.type, null);
-		gl.bindRenderbuffer(gl.RENDERBUFFER, reprojectDepthBuffer);
-		gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, reprojectWidth, reprojectHeight);
-		gl.bindFramebuffer(gl.FRAMEBUFFER, reprojectFramebuffer);
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, reprojectTexture, 0);
-		gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, reprojectDepthBuffer);
+		gl.texImage2D(gl.TEXTURE_2D, 0, floatTargetConfig.internalFormat, safeWidth, safeHeight, 0, floatTargetConfig.format, floatTargetConfig.type, null);
+		gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+		gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, safeWidth, safeHeight);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+		gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+		if (depthTargetBool) {
+			depthReprojectTexture = texture;
+			depthReprojectFramebuffer = framebuffer;
+			depthReprojectDepthBuffer = depthBuffer;
+			depthReprojectWidth = safeWidth;
+			depthReprojectHeight = safeHeight;
+		} else {
+			maskReprojectTexture = texture;
+			maskReprojectFramebuffer = framebuffer;
+			maskReprojectDepthBuffer = depthBuffer;
+			maskReprojectWidth = safeWidth;
+			maskReprojectHeight = safeHeight;
+		}
 		return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
 	};
 
@@ -149,33 +166,30 @@ const createDepthProcessingRenderer = function(options) {
 		if (reprojectProgram) {
 			return;
 		}
-		reprojectProgram = createProgram(gl, fullscreenVertexSource, [
+		reprojectProgram = createProgram(gl, [
 			"#version 300 es\n",
 			"precision highp float;",
+			"precision highp sampler2D;",
 			"precision mediump sampler2DArray;",
 			"uniform sampler2D sourceTexture2D;",
 			"uniform sampler2DArray sourceTextureArray;",
 			"uniform float useArraySource;",
 			"uniform int sourceLayer;",
+			"uniform int sourceWidth;",
+			"uniform int sourceHeight;",
 			"uniform float rawValueToMeters;",
 			"uniform float depthNearZ;",
 			"uniform float sourceEncodingMode;",
-			"uniform vec2 sourceTextureSize;",
-			"uniform mat4 sourceDepthUvTransform;",
+			"uniform float pointSize;",
+			"uniform mat4 sourceViewUvTransform;",
 			"uniform vec4 sourceProjectionParams;",
-			"uniform vec4 targetProjectionParams;",
-			"uniform vec2 targetTexelSize;",
 			"uniform mat4 sourceWorldFromView;",
-			"uniform mat4 sourceViewMatrix;",
-			"uniform mat4 targetWorldFromView;",
 			"uniform mat4 targetViewMatrix;",
 			"uniform mat4 targetProjMatrix;",
-			"in vec2 vScreenUv;",
-			"out vec4 fragColor;",
-			"float sampleRawDepthTexel(vec2 texelCoord){",
-			"vec2 uv=(clamp(texelCoord,vec2(0.0),sourceTextureSize-vec2(1.0))+0.5)/sourceTextureSize;",
-			"if(useArraySource>0.5){return texture(sourceTextureArray,vec3(uv,float(sourceLayer))).r;}",
-			"return texture(sourceTexture2D,uv).r;",
+			"flat out vec3 vTargetViewPoint;",
+			"float sampleRawDepth(ivec2 texelCoord){",
+			"if(useArraySource>0.5){return texelFetch(sourceTextureArray,ivec3(texelCoord,sourceLayer),0).r;}",
+			"return texelFetch(sourceTexture2D,texelCoord,0).r;",
 			"}",
 			"float decodeDepth(float rawDepth){",
 			"if(rawDepth<=0.0001){return 0.0;}",
@@ -183,105 +197,76 @@ const createDepthProcessingRenderer = function(options) {
 			"if(depthNearZ>0.0){return depthNearZ/max(1.0-rawDepth,0.0001);}",
 			"return rawDepth*rawValueToMeters;",
 			"}",
-			"float sampleMetricDepth(vec2 uv){",
-			"vec2 sourcePos=uv*sourceTextureSize-vec2(0.5);",
-			"vec2 base=floor(sourcePos);",
-			"vec2 frac=clamp(sourcePos-base,0.0,1.0);",
-			"float d00=decodeDepth(sampleRawDepthTexel(base));",
-			"float d10=decodeDepth(sampleRawDepthTexel(base+vec2(1.0,0.0)));",
-			"float d01=decodeDepth(sampleRawDepthTexel(base+vec2(0.0,1.0)));",
-			"float d11=decodeDepth(sampleRawDepthTexel(base+vec2(1.0,1.0)));",
-			"float w00=(1.0-frac.x)*(1.0-frac.y);",
-			"float w10=frac.x*(1.0-frac.y);",
-			"float w01=(1.0-frac.x)*frac.y;",
-			"float w11=frac.x*frac.y;",
-			"float depthSum=0.0;",
-			"float weightSum=0.0;",
-			"if(d00>0.0001){depthSum+=d00*w00;weightSum+=w00;}",
-			"if(d10>0.0001){depthSum+=d10*w10;weightSum+=w10;}",
-			"if(d01>0.0001){depthSum+=d01*w01;weightSum+=w01;}",
-			"if(d11>0.0001){depthSum+=d11*w11;weightSum+=w11;}",
-			"return weightSum>0.0001?depthSum/weightSum:0.0;",
-			"}",
-			"vec2 projectViewPoint(vec3 viewPoint, vec4 projectionParams){",
-			"float invZ=1.0/max(-viewPoint.z,0.0001);",
-			"return vec2(viewPoint.x*invZ*projectionParams.x-projectionParams.z,viewPoint.y*invZ*projectionParams.y-projectionParams.w)*0.5+0.5;",
-			"}",
 			"void main(){",
-			"vec2 targetNdc=vScreenUv*2.0-1.0;",
-			"vec2 targetRay=vec2((targetNdc.x+targetProjectionParams.z)/targetProjectionParams.x,(targetNdc.y+targetProjectionParams.w)/targetProjectionParams.y);",
-			"float guessDepth=1.5;",
-			"vec4 worldPoint=vec4(0.0);",
-			"vec4 renderPoint=vec4(0.0);",
-			"for(int i=0;i<3;i+=1){",
-			"vec3 guessViewPoint=vec3(targetRay*guessDepth,-guessDepth);",
-			"vec4 guessWorldPoint=targetWorldFromView*vec4(guessViewPoint,1.0);",
-			"vec4 sourceViewPoint=sourceViewMatrix*guessWorldPoint;",
-			"if(-sourceViewPoint.z<" + SPATIAL_DEPTH_NEAR_GUARD_METERS.toFixed(3) + "){discard;}",
-			"vec2 sourceUv=(sourceDepthUvTransform*vec4(projectViewPoint(sourceViewPoint.xyz,sourceProjectionParams),0.0,1.0)).xy;",
-			"if(sourceUv.x<0.0||sourceUv.x>1.0||sourceUv.y<0.0||sourceUv.y>1.0){discard;}",
-			"float sourceDepth=sampleMetricDepth(sourceUv);",
-			"if(sourceDepth<=0.0001){discard;}",
-			"float invSourceZ=1.0/max(-sourceViewPoint.z,0.0001);",
-			"vec3 sourceRay=vec3(sourceViewPoint.xy*invSourceZ,-1.0);",
-			"worldPoint=sourceWorldFromView*vec4(sourceRay*sourceDepth,1.0);",
-			"renderPoint=targetViewMatrix*worldPoint;",
-			"guessDepth=max(-renderPoint.z," + SPATIAL_DEPTH_NEAR_GUARD_METERS.toFixed(3) + ");",
-			"}",
-			"if(-renderPoint.z<" + SPATIAL_DEPTH_NEAR_GUARD_METERS.toFixed(3) + "){discard;}",
-			"vec4 clipPoint=targetProjMatrix*renderPoint;",
-			"float clipW=max(clipPoint.w,0.0001);",
-			"if(abs(clipPoint.x)>clipW*" + SPATIAL_DEPTH_CLIP_MARGIN.toFixed(3) + "||abs(clipPoint.y)>clipW*" + SPATIAL_DEPTH_CLIP_MARGIN.toFixed(3) + "){discard;}",
-			"vec2 projectedUv=clipPoint.xy/clipW*0.5+0.5;",
-			"vec2 reprojectionDelta=abs(projectedUv-vScreenUv);",
-			"if(reprojectionDelta.x>targetTexelSize.x*" + DEPTH_REPROJECTION_ACCEPT_TEXELS.toFixed(2) + "||reprojectionDelta.y>targetTexelSize.y*" + DEPTH_REPROJECTION_ACCEPT_TEXELS.toFixed(2) + "){discard;}",
-			"gl_FragDepth=clamp(clipPoint.z/clipW*0.5+0.5,0.0,1.0);",
-			"fragColor=vec4(renderPoint.xyz,1.0);",
+			"int sourceX=gl_VertexID%sourceWidth;",
+			"int sourceY=gl_VertexID/sourceWidth;",
+			"ivec2 texelCoord=ivec2(sourceX,sourceY);",
+			"float sourceDepth=decodeDepth(sampleRawDepth(texelCoord));",
+			"if(sourceDepth<=0.0001){gl_Position=vec4(2.0,2.0,1.0,1.0);gl_PointSize=1.0;return;}",
+			"vec2 depthUv=(vec2(float(sourceX),float(sourceY))+vec2(0.5))/vec2(float(sourceWidth),float(sourceHeight));",
+			"vec2 viewUv=(sourceViewUvTransform*vec4(depthUv,0.0,1.0)).xy;",
+			"if(viewUv.x<0.0||viewUv.x>1.0||viewUv.y<0.0||viewUv.y>1.0){gl_Position=vec4(2.0,2.0,1.0,1.0);gl_PointSize=1.0;return;}",
+			"vec2 sourceNdc=viewUv*2.0-1.0;",
+			"vec2 sourceRay=vec2((sourceNdc.x+sourceProjectionParams.z)/sourceProjectionParams.x,(sourceNdc.y+sourceProjectionParams.w)/sourceProjectionParams.y);",
+			"vec3 sourceViewPoint=vec3(sourceRay*sourceDepth,-sourceDepth);",
+			"vec4 worldPoint=sourceWorldFromView*vec4(sourceViewPoint,1.0);",
+			"vec4 targetViewPoint=targetViewMatrix*worldPoint;",
+			"if(-targetViewPoint.z<" + SPATIAL_DEPTH_NEAR_GUARD_METERS.toFixed(3) + "){gl_Position=vec4(2.0,2.0,1.0,1.0);gl_PointSize=1.0;return;}",
+			"vTargetViewPoint=targetViewPoint.xyz;",
+			"gl_Position=targetProjMatrix*targetViewPoint;",
+			"gl_PointSize=pointSize;",
+			"}"
+		].join(""), [
+			"#version 300 es\n",
+			"precision highp float;",
+			"flat in vec3 vTargetViewPoint;",
+			"out vec4 fragColor;",
+			"void main(){",
+			"vec2 pointUv=gl_PointCoord*2.0-1.0;",
+			"float radiusSq=dot(pointUv,pointUv);",
+			"if(radiusSq>1.0){discard;}",
+			"fragColor=vec4(vTargetViewPoint,1.0);",
 			"}"
 		].join(""), "Depth reproject");
 		reprojectLocs = {
-			position: gl.getAttribLocation(reprojectProgram, "position"),
 			sourceTexture2D: gl.getUniformLocation(reprojectProgram, "sourceTexture2D"),
 			sourceTextureArray: gl.getUniformLocation(reprojectProgram, "sourceTextureArray"),
 			useArraySource: gl.getUniformLocation(reprojectProgram, "useArraySource"),
 			sourceLayer: gl.getUniformLocation(reprojectProgram, "sourceLayer"),
+			sourceWidth: gl.getUniformLocation(reprojectProgram, "sourceWidth"),
+			sourceHeight: gl.getUniformLocation(reprojectProgram, "sourceHeight"),
 			rawValueToMeters: gl.getUniformLocation(reprojectProgram, "rawValueToMeters"),
 			depthNearZ: gl.getUniformLocation(reprojectProgram, "depthNearZ"),
 			sourceEncodingMode: gl.getUniformLocation(reprojectProgram, "sourceEncodingMode"),
-			sourceTextureSize: gl.getUniformLocation(reprojectProgram, "sourceTextureSize"),
-			sourceDepthUvTransform: gl.getUniformLocation(reprojectProgram, "sourceDepthUvTransform"),
+			pointSize: gl.getUniformLocation(reprojectProgram, "pointSize"),
+			sourceViewUvTransform: gl.getUniformLocation(reprojectProgram, "sourceViewUvTransform"),
 			sourceProjectionParams: gl.getUniformLocation(reprojectProgram, "sourceProjectionParams"),
-			targetProjectionParams: gl.getUniformLocation(reprojectProgram, "targetProjectionParams"),
-			targetTexelSize: gl.getUniformLocation(reprojectProgram, "targetTexelSize"),
 			sourceWorldFromView: gl.getUniformLocation(reprojectProgram, "sourceWorldFromView"),
-			sourceViewMatrix: gl.getUniformLocation(reprojectProgram, "sourceViewMatrix"),
-			targetWorldFromView: gl.getUniformLocation(reprojectProgram, "targetWorldFromView"),
 			targetViewMatrix: gl.getUniformLocation(reprojectProgram, "targetViewMatrix"),
 			targetProjMatrix: gl.getUniformLocation(reprojectProgram, "targetProjMatrix")
 		};
 	};
 
-	const reprojectDepth = function(sourceTexture, useArraySourceBool, sourceLayer, sourceEncodingMode, depthProfile, depthInfo, sourceWidth, sourceHeight, reprojectionState, targetProjMatrix) {
+	const reprojectDepth = function(kindKey, sourceTexture, useArraySourceBool, sourceLayer, sourceEncodingMode, depthProfile, depthInfo, sourceWidth, sourceHeight, targetWidth, targetHeight, reprojectionState, targetProjMatrix) {
 		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 		const previousViewport = gl.getParameter(gl.VIEWPORT);
+		const depthTargetBool = kindKey !== "mask";
+		const basePointSize = Math.max(1, Math.min(3, Math.sqrt((Math.max(1, targetWidth | 0) * Math.max(1, targetHeight | 0)) / (Math.max(1, sourceWidth | 0) * Math.max(1, sourceHeight | 0)))));
 		if (
 			!sourceTexture ||
 			!reprojectionState ||
 			!reprojectionState.enabledBool ||
 			!reprojectionState.sourceProjectionParams ||
-			!reprojectionState.sourceViewMatrix ||
 			!reprojectionState.sourceWorldFromViewMatrix ||
-			!reprojectionState.targetProjectionParams ||
 			!reprojectionState.targetViewMatrix ||
-			!reprojectionState.targetWorldFromViewMatrix ||
 			!targetProjMatrix ||
-			!ensureReprojectResources(sourceWidth, sourceHeight)
+			!ensureReprojectResources(kindKey, targetWidth, targetHeight)
 		) {
 			return null;
 		}
 		ensureReprojectProgram();
-		gl.bindFramebuffer(gl.FRAMEBUFFER, reprojectFramebuffer);
-		gl.viewport(0, 0, reprojectWidth, reprojectHeight);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, depthTargetBool ? depthReprojectFramebuffer : maskReprojectFramebuffer);
+		gl.viewport(0, 0, depthTargetBool ? depthReprojectWidth : maskReprojectWidth, depthTargetBool ? depthReprojectHeight : maskReprojectHeight);
 		gl.clearColor(0, 0, 0, 0);
 		gl.clearDepth(1);
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -299,24 +284,21 @@ const createDepthProcessingRenderer = function(options) {
 		gl.uniform1i(reprojectLocs.sourceTextureArray, 1);
 		gl.uniform1f(reprojectLocs.useArraySource, useArraySourceBool ? 1 : 0);
 		gl.uniform1i(reprojectLocs.sourceLayer, sourceLayer | 0);
+		gl.uniform1i(reprojectLocs.sourceWidth, Math.max(1, sourceWidth | 0));
+		gl.uniform1i(reprojectLocs.sourceHeight, Math.max(1, sourceHeight | 0));
 		gl.uniform1f(reprojectLocs.rawValueToMeters, depthProfile && depthProfile.linearScale != null ? depthProfile.linearScale : 0.001);
 		gl.uniform1f(reprojectLocs.depthNearZ, depthProfile && depthProfile.nearZ != null ? depthProfile.nearZ : 0);
 		gl.uniform1f(reprojectLocs.sourceEncodingMode, sourceEncodingMode != null ? sourceEncodingMode : DEPTH_ENCODING_SOURCE_RAW);
-		gl.uniform2f(reprojectLocs.sourceTextureSize, Math.max(1, sourceWidth | 0), Math.max(1, sourceHeight | 0));
-		setSourceDepthUvTransform(depthInfo);
-		gl.uniformMatrix4fv(reprojectLocs.sourceDepthUvTransform, false, sourceDepthUvTransform);
+		gl.uniform1f(reprojectLocs.pointSize, depthTargetBool ? basePointSize : Math.max(2, Math.min(3.5, basePointSize * 2)));
+		sourceViewUvTransform.set(depthInfo && depthInfo.normViewFromNormDepthBufferMatrix ? depthInfo.normViewFromNormDepthBufferMatrix : identityMatrix4);
+		gl.uniformMatrix4fv(reprojectLocs.sourceViewUvTransform, false, sourceViewUvTransform);
 		gl.uniform4f(reprojectLocs.sourceProjectionParams, reprojectionState.sourceProjectionParams.xScale, reprojectionState.sourceProjectionParams.yScale, reprojectionState.sourceProjectionParams.xOffset, reprojectionState.sourceProjectionParams.yOffset);
-		gl.uniform4f(reprojectLocs.targetProjectionParams, reprojectionState.targetProjectionParams.xScale, reprojectionState.targetProjectionParams.yScale, reprojectionState.targetProjectionParams.xOffset, reprojectionState.targetProjectionParams.yOffset);
-		gl.uniform2f(reprojectLocs.targetTexelSize, 1 / Math.max(1, reprojectWidth), 1 / Math.max(1, reprojectHeight));
 		gl.uniformMatrix4fv(reprojectLocs.sourceWorldFromView, false, reprojectionState.sourceWorldFromViewMatrix);
-		gl.uniformMatrix4fv(reprojectLocs.sourceViewMatrix, false, reprojectionState.sourceViewMatrix);
-		gl.uniformMatrix4fv(reprojectLocs.targetWorldFromView, false, reprojectionState.targetWorldFromViewMatrix);
 		gl.uniformMatrix4fv(reprojectLocs.targetViewMatrix, false, reprojectionState.targetViewMatrix);
 		gl.uniformMatrix4fv(reprojectLocs.targetProjMatrix, false, targetProjMatrix);
-		bindFullscreenTriangle(reprojectLocs.position);
-		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		gl.drawArrays(gl.POINTS, 0, Math.max(1, sourceWidth | 0) * Math.max(1, sourceHeight | 0));
 		restoreFramebufferState(previousFramebuffer, previousViewport);
-		return reprojectTexture;
+		return depthTargetBool ? depthReprojectTexture : maskReprojectTexture;
 	};
 
 	const ensureFinalResources = function(width, height) {
@@ -341,6 +323,31 @@ const createDepthProcessingRenderer = function(options) {
 		gl.texImage2D(gl.TEXTURE_2D, 0, floatTargetConfig.internalFormat, finalWidth, finalHeight, 0, floatTargetConfig.format, floatTargetConfig.type, null);
 		gl.bindFramebuffer(gl.FRAMEBUFFER, finalFramebuffer);
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, finalTexture, 0);
+		return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+	};
+
+	const ensureMaskResources = function(width, height) {
+		const safeWidth = Math.max(1, width | 0);
+		const safeHeight = Math.max(1, height | 0);
+		if (maskTexture && maskFramebuffer && maskWidth === safeWidth && maskHeight === safeHeight) {
+			return true;
+		}
+		maskWidth = safeWidth;
+		maskHeight = safeHeight;
+		if (!maskTexture) {
+			maskTexture = gl.createTexture();
+		}
+		if (!maskFramebuffer) {
+			maskFramebuffer = gl.createFramebuffer();
+		}
+		gl.bindTexture(gl.TEXTURE_2D, maskTexture);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+		gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, maskWidth, maskHeight, 0, gl.RED, gl.UNSIGNED_BYTE, null);
+		gl.bindFramebuffer(gl.FRAMEBUFFER, maskFramebuffer);
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, maskTexture, 0);
 		return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
 	};
 
@@ -429,6 +436,71 @@ const createDepthProcessingRenderer = function(options) {
 		};
 	};
 
+	const ensureMaskProgram = function() {
+		if (maskProgram) {
+			return;
+		}
+		maskProgram = createProgram(gl, fullscreenVertexSource, [
+			"#version 300 es\n",
+			"precision highp float;",
+			"uniform sampler2D packedDepthTexture;",
+			"uniform float depthMode;",
+			"uniform float depthThreshold;",
+			"uniform float depthFade;",
+			"uniform float depthEchoWavelength;",
+			"uniform float depthEchoDutyCycle;",
+			"uniform float depthEchoFade;",
+			"uniform float depthPhaseOffset;",
+			"uniform float radialMetric;",
+			"uniform float maskRadiusPx;",
+			"out vec4 fragColor;",
+			createDepthBandMaskShaderChunk("computeDepthMask"),
+			"float sampleMetricDepth(vec3 viewPoint){",
+			"float planarDepth=max(0.0,-viewPoint.z);",
+			"return radialMetric>0.5?length(viewPoint):planarDepth;",
+			"}",
+			"void main(){",
+			"ivec2 textureSizeI=textureSize(packedDepthTexture,0);",
+			"ivec2 centerTexel=clamp(ivec2(gl_FragCoord.xy),ivec2(0),textureSizeI-ivec2(1));",
+			"float visibility=0.0;",
+			"float weightSum=0.0;",
+			"float safeRadius=max(maskRadiusPx,1.0);",
+			"float radiusSq=safeRadius*safeRadius;",
+			"for(int iy=-3;iy<=3;iy+=1){",
+			"for(int ix=-3;ix<=3;ix+=1){",
+			"ivec2 sampleTexel=clamp(centerTexel+ivec2(ix,iy),ivec2(0),textureSizeI-ivec2(1));",
+			"float distSq=float(ix*ix+iy*iy);",
+			"if(distSq>radiusSq){continue;}",
+			"vec4 packed=texelFetch(packedDepthTexture,sampleTexel,0);",
+			"float sampleCoverage=packed.a;",
+			"if(sampleCoverage<=0.0001){continue;}",
+			"float depthMeters=sampleMetricDepth(packed.xyz);",
+			"if(depthMeters<=0.0001){continue;}",
+			"float weight=(sampleCoverage/(1.0+distSq));",
+			"visibility+=computeDepthMask(depthMeters)*weight;",
+			"weightSum+=weight;",
+			"}",
+			"}",
+			"visibility=weightSum>0.0001?visibility/weightSum:0.0;",
+			"visibility=smoothstep(0.18,0.82,visibility);",
+			"fragColor=vec4(visibility,visibility,visibility,1.0);",
+			"}"
+		].join(""), "Depth mask");
+		maskLocs = {
+			position: gl.getAttribLocation(maskProgram, "position"),
+			packedDepthTexture: gl.getUniformLocation(maskProgram, "packedDepthTexture"),
+			depthMode: gl.getUniformLocation(maskProgram, "depthMode"),
+			depthThreshold: gl.getUniformLocation(maskProgram, "depthThreshold"),
+			depthFade: gl.getUniformLocation(maskProgram, "depthFade"),
+			depthEchoWavelength: gl.getUniformLocation(maskProgram, "depthEchoWavelength"),
+			depthEchoDutyCycle: gl.getUniformLocation(maskProgram, "depthEchoDutyCycle"),
+			depthEchoFade: gl.getUniformLocation(maskProgram, "depthEchoFade"),
+			depthPhaseOffset: gl.getUniformLocation(maskProgram, "depthPhaseOffset"),
+			radialMetric: gl.getUniformLocation(maskProgram, "radialMetric"),
+			maskRadiusPx: gl.getUniformLocation(maskProgram, "maskRadiusPx")
+		};
+	};
+
 	const buildFinalDepth = function(packedDepthTexture, sourceWidth, sourceHeight, targetWidth, targetHeight, targetWorldFromViewMatrix, processingConfig) {
 		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 		const previousViewport = gl.getParameter(gl.VIEWPORT);
@@ -446,12 +518,43 @@ const createDepthProcessingRenderer = function(options) {
 		gl.bindTexture(gl.TEXTURE_2D, packedDepthTexture);
 		gl.uniform1i(finalLocs.packedDepthTexture, 0);
 		gl.uniform2f(finalLocs.sourceTextureSize, Math.max(1, sourceWidth | 0), Math.max(1, sourceHeight | 0));
-		gl.uniformMatrix4fv(finalLocs.targetWorldFromView, false, targetWorldFromViewMatrix || identityMatrix());
+		gl.uniformMatrix4fv(finalLocs.targetWorldFromView, false, targetWorldFromViewMatrix || identityMatrix4);
 		gl.uniform1f(finalLocs.radialMetric, getDepthMetricMode(processingConfig) === DEPTH_METRIC_MODE_RADIAL ? 1 : 0);
 		bindFullscreenTriangle(finalLocs.position);
 		gl.drawArrays(gl.TRIANGLES, 0, 3);
 		restoreFramebufferState(previousFramebuffer, previousViewport);
 		return finalTexture;
+	};
+
+	const buildMaskField = function(packedDepthTexture, sourceWidth, sourceHeight, fieldWidth, fieldHeight, consumerWidth, consumerHeight, processingConfig) {
+		const previousFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		const previousViewport = gl.getParameter(gl.VIEWPORT);
+		if (!packedDepthTexture || !ensureMaskResources(fieldWidth, fieldHeight)) {
+			return null;
+		}
+		ensureMaskProgram();
+		gl.bindFramebuffer(gl.FRAMEBUFFER, maskFramebuffer);
+		gl.viewport(0, 0, maskWidth, maskHeight);
+		gl.disable(gl.BLEND);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.CULL_FACE);
+		gl.useProgram(maskProgram);
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, packedDepthTexture);
+		gl.uniform1i(maskLocs.packedDepthTexture, 0);
+		gl.uniform1f(maskLocs.depthMode, processingConfig && processingConfig.depthMode != null ? processingConfig.depthMode : 0);
+		gl.uniform1f(maskLocs.depthThreshold, processingConfig && processingConfig.depthThreshold != null ? processingConfig.depthThreshold : 0);
+		gl.uniform1f(maskLocs.depthFade, processingConfig && processingConfig.depthFade != null ? processingConfig.depthFade : 0);
+		gl.uniform1f(maskLocs.depthEchoWavelength, processingConfig && processingConfig.depthEchoWavelength != null ? processingConfig.depthEchoWavelength : 1);
+		gl.uniform1f(maskLocs.depthEchoDutyCycle, processingConfig && processingConfig.depthEchoDutyCycle != null ? processingConfig.depthEchoDutyCycle : 0.5);
+		gl.uniform1f(maskLocs.depthEchoFade, processingConfig && processingConfig.depthEchoFade != null ? processingConfig.depthEchoFade : 0);
+		gl.uniform1f(maskLocs.depthPhaseOffset, processingConfig && processingConfig.depthPhaseOffset != null ? processingConfig.depthPhaseOffset : 0);
+		gl.uniform1f(maskLocs.radialMetric, getDepthMetricMode(processingConfig) === DEPTH_METRIC_MODE_RADIAL ? 1 : 0);
+		gl.uniform1f(maskLocs.maskRadiusPx, Math.max(2, Math.min(3, Math.sqrt((Math.max(1, consumerWidth | 0) * Math.max(1, consumerHeight | 0)) / (Math.max(1, sourceWidth | 0) * Math.max(1, sourceHeight | 0))))));
+		bindFullscreenTriangle(maskLocs.position);
+		gl.drawArrays(gl.TRIANGLES, 0, 3);
+		restoreFramebufferState(previousFramebuffer, previousViewport);
+		return maskTexture;
 	};
 
 	return {
@@ -490,7 +593,9 @@ const createDepthProcessingRenderer = function(options) {
 				return null;
 			}
 
+			const consumerSize = resolveViewportSize(args || null, depthInfo.width, depthInfo.height);
 			const reprojectedTexture = reprojectDepth(
+				"depth",
 				sourceTexture,
 				useArraySourceBool,
 				depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0),
@@ -499,6 +604,8 @@ const createDepthProcessingRenderer = function(options) {
 				depthInfo,
 				depthInfo.width,
 				depthInfo.height,
+				consumerSize.width,
+				consumerSize.height,
 				reprojectionState,
 				args && args.targetProjMatrix ? args.targetProjMatrix : null
 			);
@@ -506,11 +613,10 @@ const createDepthProcessingRenderer = function(options) {
 				return null;
 			}
 
-			const consumerSize = resolveViewportSize(args || null, depthInfo.width, depthInfo.height);
 			const finalDepthTexture = buildFinalDepth(
 				reprojectedTexture,
-				depthInfo.width,
-				depthInfo.height,
+				consumerSize.width,
+				consumerSize.height,
 				consumerSize.width,
 				consumerSize.height,
 				reprojectionState.targetWorldFromViewMatrix,
@@ -519,9 +625,40 @@ const createDepthProcessingRenderer = function(options) {
 			if (!finalDepthTexture) {
 				return null;
 			}
+			const maskReprojectedTexture = reprojectDepth(
+				"mask",
+				sourceTexture,
+				useArraySourceBool,
+				depthInfo.imageIndex != null ? depthInfo.imageIndex : (depthInfo.textureLayer || 0),
+				sourceEncodingMode,
+				depthProfile,
+				depthInfo,
+				depthInfo.width,
+				depthInfo.height,
+				depthInfo.width,
+				depthInfo.height,
+				reprojectionState,
+				args && args.targetProjMatrix ? args.targetProjMatrix : null
+			);
+			if (!maskReprojectedTexture) {
+				return null;
+			}
+			const finalMaskTexture = buildMaskField(
+				maskReprojectedTexture,
+				depthInfo.width,
+				depthInfo.height,
+				depthInfo.width,
+				depthInfo.height,
+				consumerSize.width,
+				consumerSize.height,
+				args && args.processingConfig ? args.processingConfig : null
+			);
 
 			return {
 				texture: finalDepthTexture,
+				maskTexture: finalMaskTexture,
+				maskWidth: maskWidth,
+				maskHeight: maskHeight,
 				width: consumerSize.width,
 				height: consumerSize.height,
 				depthEncodingMode: DEPTH_ENCODING_LINEAR_VIEW_Z,

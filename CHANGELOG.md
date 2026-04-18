@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Replaced the old target-driven depth reprojection with a source-driven point reprojection path in `xr-depth.js`, so headset depth is reconstructed from measured source samples instead of an inverse target-pixel solve.
+- Split processed depth and depth-mask construction into two central products inside `xr-depth.js`: a full-resolution shared depth texture for depth/world-point consumers, and a separate low-resolution shared mask field that is linearly upsampled through the returned `maskTexture`.
+- Split the internal reprojection caches in `xr-depth.js` so the full-resolution depth reprojection and the low-resolution mask reprojection no longer resize the same framebuffer pair back and forth every frame.
 - Rebuilt `xr-depth.js` again from scratch into one fixed float/GPU pipeline with a small shared contract: source depth is normalized once into linear meters, inverse-reprojected once at sensor resolution, and finalized once into the shared packed `depth + worldPoint` texture that passthrough punch, world masking, and depth-aware lighting all consume; removed the leftover quality-mode config branch so `xr-passthrough` now only selects planar vs radial depth metric.
 - Aggressively simplified `xr-depth.js` around a clear 4-stage pipeline (CPU-upload → canonicalize → inverse-reproject → bilateral-upscale): rebuilt the consumer-build upscale as a dense 5x5 (25-tap) full bilateral filter whose spatial Gaussian is anchored to the fractional output sample position (not the nearest texel, so neighboring output pixels no longer snap between kernel centers and the sensor-resolution stair-stepping on slanted walls smooths out) and whose depth weight is a smooth Gaussian with an adaptive sigma plus a 2.5-sigma silhouette cutoff (replacing the previous hard `step()` gate that produced visible edge rings around depth discontinuities); the radial metric is now the true world-space distance from the sensor world position to the sampled surface point (`length(worldPoint - sensorWorldPosition)`), so concentric distance rings stay anchored to the real sensor origin and no longer wander with head rotation; stripped dead decode uniforms and the identity `decodeDepth` call from the reprojection shader, removed trivial state-object wrappers (`buildCanonicalDepthState`, `buildProcessedDepthInfo`, `resolveMetricProjectionParams`, `resolveTargetDepthTextureSize`, `bindCanonicalCopyUniforms`, `selectFloatTargetConfig`), regrouped the renderer state variables by pipeline stage, and removed the now-dead `createDepthProjectionMetricShaderChunk` helper from `xr-shared.js`.
 - Rebuilt `xr-depth.js` around one shared packed depth contract: `gpu-array`, `gpu-texture`, and CPU depth sources now canonicalize through one path, inverse reprojection still runs at native sensor resolution, and the low-resolution target pass now packs `depth + worldPoint` before one final shared upscale/smoothing pass builds the consumer texture.
@@ -32,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rebuilt the live codebase back into a flat root-level architecture with bundled core files (`xr-shared`, `xr-audio`, `xr-lighting`, `xr-passthrough`, `xr-depth`, `xr-menu`, `xr-movement`, `xr-render`, `xr-visualizer`, `xr-runtime`, `xr-app`) so the project no longer depends on a spread-out subdirectory source layout.
 - Tuned shared scene-light derivation so broad wash-heavy presets contribute more strongly to VR ambient fill, keeping the virtual world lighting closer to the visible modified-reality wash.
 - Changed fallback wall placement to respect fixture `vertical`, so wall-bound effects stay on believable wall tracks instead of collapsing to ceiling height.
+
+### Fixed
+- Removed the repeating Fresnel-like depth stepping and the gaze-bound main ring on large flat surfaces by replacing the old inverse depth reprojection path with a forward source-driven reprojection.
+- Restored a smooth non-blocky shared depth mask by moving mask reconstruction out of the sparse full-resolution gather path and into one dedicated low-resolution mask-field path in `xr-depth.js`.
+
+### Known Issues
+- The new shared low-resolution depth mask is much smoother than the earlier sparse/blocky variants, but it still flickers and can briefly break open during motion on device. This checkpoint keeps that remaining stability issue visible instead of hiding it behind consumer-side logic.
 
 ## [0.8.8] - 2026-04-02
 
