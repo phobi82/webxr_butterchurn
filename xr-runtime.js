@@ -334,57 +334,6 @@ const computeRuntimeDepthProfile = function(depthFrameKind, depthDataFormat, raw
 	return {linearScale: rawValueToMeters || 0.001, nearZ: 0, label: "gpu-linear"};
 };
 
-const invertMatrix4 = function(sourceMatrix, targetMatrix) {
-	const m = sourceMatrix;
-	const inv = targetMatrix;
-	inv[0] = m[5] * m[10] * m[15] - m[5] * m[11] * m[14] - m[9] * m[6] * m[15] + m[9] * m[7] * m[14] + m[13] * m[6] * m[11] - m[13] * m[7] * m[10];
-	inv[4] = -m[4] * m[10] * m[15] + m[4] * m[11] * m[14] + m[8] * m[6] * m[15] - m[8] * m[7] * m[14] - m[12] * m[6] * m[11] + m[12] * m[7] * m[10];
-	inv[8] = m[4] * m[9] * m[15] - m[4] * m[11] * m[13] - m[8] * m[5] * m[15] + m[8] * m[7] * m[13] + m[12] * m[5] * m[11] - m[12] * m[7] * m[9];
-	inv[12] = -m[4] * m[9] * m[14] + m[4] * m[10] * m[13] + m[8] * m[5] * m[14] - m[8] * m[6] * m[13] - m[12] * m[5] * m[10] + m[12] * m[6] * m[9];
-	inv[1] = -m[1] * m[10] * m[15] + m[1] * m[11] * m[14] + m[9] * m[2] * m[15] - m[9] * m[3] * m[14] - m[13] * m[2] * m[11] + m[13] * m[3] * m[10];
-	inv[5] = m[0] * m[10] * m[15] - m[0] * m[11] * m[14] - m[8] * m[2] * m[15] + m[8] * m[3] * m[14] + m[12] * m[2] * m[11] - m[12] * m[3] * m[10];
-	inv[9] = -m[0] * m[9] * m[15] + m[0] * m[11] * m[13] + m[8] * m[1] * m[15] - m[8] * m[3] * m[13] - m[12] * m[1] * m[11] + m[12] * m[3] * m[9];
-	inv[13] = m[0] * m[9] * m[14] - m[0] * m[10] * m[13] - m[8] * m[1] * m[14] + m[8] * m[2] * m[13] + m[12] * m[1] * m[10] - m[12] * m[2] * m[9];
-	inv[2] = m[1] * m[6] * m[15] - m[1] * m[7] * m[14] - m[5] * m[2] * m[15] + m[5] * m[3] * m[14] + m[13] * m[2] * m[7] - m[13] * m[3] * m[6];
-	inv[6] = -m[0] * m[6] * m[15] + m[0] * m[7] * m[14] + m[4] * m[2] * m[15] - m[4] * m[3] * m[14] - m[12] * m[2] * m[7] + m[12] * m[3] * m[6];
-	inv[10] = m[0] * m[5] * m[15] - m[0] * m[7] * m[13] - m[4] * m[1] * m[15] + m[4] * m[3] * m[13] + m[12] * m[1] * m[7] - m[12] * m[3] * m[5];
-	inv[14] = -m[0] * m[5] * m[14] + m[0] * m[6] * m[13] + m[4] * m[1] * m[14] - m[4] * m[2] * m[13] - m[12] * m[1] * m[6] + m[12] * m[2] * m[5];
-	inv[3] = -m[1] * m[6] * m[11] + m[1] * m[7] * m[10] + m[5] * m[2] * m[11] - m[5] * m[3] * m[10] - m[9] * m[2] * m[7] + m[9] * m[3] * m[6];
-	inv[7] = m[0] * m[6] * m[11] - m[0] * m[7] * m[10] - m[4] * m[2] * m[11] + m[4] * m[3] * m[10] + m[8] * m[2] * m[7] - m[8] * m[3] * m[6];
-	inv[11] = -m[0] * m[5] * m[11] + m[0] * m[7] * m[9] + m[4] * m[1] * m[11] - m[4] * m[3] * m[9] - m[8] * m[1] * m[7] + m[8] * m[3] * m[5];
-	inv[15] = m[0] * m[5] * m[10] - m[0] * m[6] * m[9] - m[4] * m[1] * m[10] + m[4] * m[2] * m[9] + m[8] * m[1] * m[6] - m[8] * m[2] * m[5];
-	const determinant = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
-	if (Math.abs(determinant) < 1e-8) {
-		return null;
-	}
-	const invDeterminant = 1 / determinant;
-	for (let i = 0; i < 16; i += 1) {
-		inv[i] *= invDeterminant;
-	}
-	return inv;
-};
-
-const ensureDepthUvInverseMatrix = function(depthInfo) {
-	if (!depthInfo || !depthInfo.normDepthBufferFromNormView) {
-		return;
-	}
-	if (depthInfo.normViewFromNormDepthBufferMatrix) {
-		return;
-	}
-	if (depthInfo.normDepthBufferFromNormView.inverse && depthInfo.normDepthBufferFromNormView.inverse.matrix) {
-		depthInfo.normViewFromNormDepthBufferMatrix = new Float32Array(depthInfo.normDepthBufferFromNormView.inverse.matrix);
-		return;
-	}
-	const forwardMatrix = depthInfo.normDepthBufferFromNormView.matrix || depthInfo.normDepthBufferFromNormView;
-	if (!forwardMatrix || forwardMatrix.length !== 16) {
-		return;
-	}
-	const inverseMatrix = invertMatrix4(forwardMatrix, new Float32Array(16));
-	if (inverseMatrix) {
-		depthInfo.normViewFromNormDepthBufferMatrix = inverseMatrix;
-	}
-};
-
 const buildDepthPoseState = function(timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix) {
 	if (!viewMatrix || !worldFromViewMatrix || !projectionMatrix) {
 		return null;
@@ -443,10 +392,12 @@ const buildDepthReprojectionState = function(passthroughPose, depthInfoByView, t
 		}
 		results[i] = {
 			enabledBool: true,
+			sourceViewMatrix: sourcePoseState.viewMatrix,
 			sourceWorldFromViewMatrix: sourcePoseState.worldFromViewMatrix,
 			sourceProjectionParams: sourcePoseState.projectionParams,
 			targetViewMatrix: currentPoseState.viewMatrix,
-			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix
+			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix,
+			targetProjectionParams: currentPoseState.projectionParams
 		};
 	}
 	return results;
@@ -681,7 +632,6 @@ const createRuntime = function(options) {
 			} catch (error) {
 				depthInfo = null;
 			}
-			ensureDepthUvInverseMatrix(depthInfo);
 			depthInfoByView.push(depthInfo);
 		}
 		return depthInfoByView;
