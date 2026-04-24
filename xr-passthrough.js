@@ -164,7 +164,7 @@ const getPassthroughControlDefinitions = function(state) {
 					key: "depthDiagnosticRange",
 					label: "Range",
 					value: state.depthDiagnosticRange,
-					min: 0.5,
+					min: 0.20,
 					max: 8,
 					minLabel: "Near",
 					maxLabel: "Far",
@@ -175,10 +175,10 @@ const getPassthroughControlDefinitions = function(state) {
 					label: "Cycles",
 					value: state.depthDiagnosticRainbowFrequency,
 					min: 0.25,
-					max: 12,
-					minLabel: "Slow",
-					maxLabel: "Fast",
-					valueText: state.depthDiagnosticRainbowFrequency.toFixed(2) + " cycles"
+					max: 20,
+					minLabel: "less",
+					maxLabel: "many",
+					valueText: state.depthDiagnosticRainbowFrequency.toFixed(2)
 				});
 			} else {
 				controls.push(
@@ -603,8 +603,8 @@ const createPassthroughController = function(options) {
 		return {
 			depthMetricMode: state.depthRadialBool ? "radial" : "planar",
 			paletteKey: state.depthDiagnosticPaletteKey,
-			rangeMeters: clampNumber(state.depthDiagnosticRange, 0.5, 8),
-			rainbowFrequency: clampNumber(state.depthDiagnosticRainbowFrequency, 0.25, 12)
+			rangeMeters: clampNumber(state.depthDiagnosticRange, 0.2, 8),
+			rainbowFrequency: clampNumber(state.depthDiagnosticRainbowFrequency, 0.25, 20)
 		};
 	};
 	const toggleStateBool = function(key) {
@@ -649,10 +649,10 @@ const createPassthroughController = function(options) {
 			state.depthFade = clampNumber(value, 0, 2);
 		},
 		depthDiagnosticRange: function(value) {
-			state.depthDiagnosticRange = clampNumber(value, 0.5, 8);
+			state.depthDiagnosticRange = clampNumber(value, 0.2, 8);
 		},
 		depthDiagnosticRainbowFrequency: function(value) {
-			state.depthDiagnosticRainbowFrequency = clampNumber(value, 0.25, 12);
+			state.depthDiagnosticRainbowFrequency = clampNumber(value, 0.25, 20);
 		},
 		depthDistanceReactiveIntensity: function(value) {
 			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
