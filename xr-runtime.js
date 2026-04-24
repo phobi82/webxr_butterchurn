@@ -740,11 +740,6 @@ const createRuntime = function(options) {
 					passthroughController.cycleDepthMode(action.direction);
 				}
 				return;
-			case "depthDiagnosticView.cycle":
-				if (passthroughController && passthroughController.cycleDepthDiagnosticView) {
-					passthroughController.cycleDepthDiagnosticView(action.direction);
-				}
-				return;
 			case "depthDiagnosticPalette.cycle":
 				if (passthroughController && passthroughController.cycleDepthDiagnosticPalette) {
 					passthroughController.cycleDepthDiagnosticPalette(action.direction);

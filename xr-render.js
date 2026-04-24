@@ -576,9 +576,7 @@ const createDepthDiagnosticsRenderer = function() {
 	const fragmentSource = [
 		"precision highp float;",
 		"uniform sampler2D fieldTexture;",
-		"uniform sampler2D coverageTexture;",
 		"uniform float maxDistance;",
-		"uniform float diagnosticViewMode;",
 		"uniform float diagnosticPaletteMode;",
 		"uniform float rainbowFrequency;",
 		"varying vec2 vScreenUv;",
@@ -613,11 +611,8 @@ const createDepthDiagnosticsRenderer = function() {
 		"return colorRamp(fract(palettePhase));",
 		"}",
 		"void main(){",
-		"float coverage=texture2D(coverageTexture,vScreenUv).r;",
 		"float depthMeters=texture2D(fieldTexture,vScreenUv).r;",
-		"if(diagnosticViewMode>1.5){gl_FragColor=vec4(diagnosticColor(coverage),1.0);return;}",
 		"if(depthMeters<=0.0001){gl_FragColor=vec4(0.0,0.0,0.0,1.0);return;}",
-		"if(diagnosticViewMode>0.5&&coverage<0.35){gl_FragColor=vec4(0.0,0.0,0.0,1.0);return;}",
 		"gl_FragColor=vec4(diagnosticColor(depthMeters/max(maxDistance,0.001)),1.0);",
 		"}"
 	].join("");
@@ -629,15 +624,13 @@ const createDepthDiagnosticsRenderer = function() {
 			locs = {
 				position: gl.getAttribLocation(program, "position"),
 				fieldTexture: gl.getUniformLocation(program, "fieldTexture"),
-				coverageTexture: gl.getUniformLocation(program, "coverageTexture"),
 				maxDistance: gl.getUniformLocation(program, "maxDistance"),
-				diagnosticViewMode: gl.getUniformLocation(program, "diagnosticViewMode"),
 				diagnosticPaletteMode: gl.getUniformLocation(program, "diagnosticPaletteMode"),
 				rainbowFrequency: gl.getUniformLocation(program, "rainbowFrequency")
 			};
 		},
 		draw: function(renderState, depthInfo) {
-			if (!renderState || !depthInfo || !depthInfo.fieldTexture || !depthInfo.coverageTexture) {
+			if (!renderState || !depthInfo || !depthInfo.fieldTexture) {
 				return;
 			}
 			gl.useProgram(program);
@@ -648,11 +641,7 @@ const createDepthDiagnosticsRenderer = function() {
 			gl.activeTexture(gl.TEXTURE0);
 			gl.bindTexture(gl.TEXTURE_2D, depthInfo.fieldTexture);
 			gl.uniform1i(locs.fieldTexture, 0);
-			gl.activeTexture(gl.TEXTURE1);
-			gl.bindTexture(gl.TEXTURE_2D, depthInfo.coverageTexture);
-			gl.uniform1i(locs.coverageTexture, 1);
 			gl.uniform1f(locs.maxDistance, renderState.rangeMeters == null ? 4 : renderState.rangeMeters);
-			gl.uniform1f(locs.diagnosticViewMode, renderState.viewKey === "coverage" ? 2 : (renderState.viewKey === "fieldCoverage" ? 1 : 0));
 			gl.uniform1f(locs.diagnosticPaletteMode, renderState.paletteKey === "bands" ? 2 : (renderState.paletteKey === "grayscale" ? 1 : 0));
 			gl.uniform1f(locs.rainbowFrequency, renderState.rainbowFrequency == null ? 2 : renderState.rainbowFrequency);
 			gl.bindBuffer(gl.ARRAY_BUFFER, buffer);

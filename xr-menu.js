@@ -406,16 +406,6 @@ const createPassthroughMenuSectionState = function(args) {
 		}));
 		if (uiState.selectedDepthModeKey === "diagnostic") {
 			controls.push(createCyclerMenuControlState({
-				key: "depthDiagnosticView",
-				label: "Diagnostic View",
-				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticViews, uiState.selectedDepthDiagnosticViewKey, "Field"),
-				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticView:prev", "depthDiagnosticView:next"),
-				prevAction: {type: "depthDiagnosticView.cycle", direction: -1},
-				nextAction: {type: "depthDiagnosticView.cycle", direction: 1},
-				prevHoverKey: "depthDiagnosticView:prev",
-				nextHoverKey: "depthDiagnosticView:next"
-			}));
-			controls.push(createCyclerMenuControlState({
 				key: "depthDiagnosticPalette",
 				label: "Palette",
 				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticPalettes, uiState.selectedDepthDiagnosticPaletteKey, "Rainbow"),

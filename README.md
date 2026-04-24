@@ -46,7 +46,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Unified Depth Pipeline**: `xr-runtime` only packages per-eye depth source packets, while `xr-depth` owns canonicalization, low-resolution inverse reprojection, high-resolution field reconstruction, explicit coverage reconstruction, and centralized visibility derivation
+- **Unified Depth Pipeline**: `xr-runtime` only packages per-eye depth source packets, while `xr-depth` owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation
 - **Source-Agnostic Processing**: `gpu-array`, `gpu-texture`, and CPU depth all flow through the same canonical path, so future depth-source backends can reuse the same downstream processing
 - **Stable Metric Semantics**: planar depth uses target view-space `-z`; radial depth is derived from reconstructed world points and the sensor origin after reconstruction, so radial distance stays anchored to the real sensor pose
 - **Central Visibility Semantics**: `fade = 0` is a hard threshold on the reconstructed field, while `fade > 0` fades only over the configured metric interval from `threshold` to `threshold + fade`; consumers do not rebuild fallback masks from raw depth presence
@@ -192,7 +192,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Canonical depth pipeline: source canonicalization, low-resolution inverse reprojection, high-resolution depth/world reconstruction, and centralized mask classification |
+| `xr-depth.js` | Canonical depth pipeline: source canonicalization, GPU depth-grid warp, and centralized mask classification |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |
@@ -206,10 +206,11 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 
 - `matchDepthView` stays disabled by default. The runtime still requests WebXR depth, but the downstream pipeline does not depend on depth-view matching.
 - `xr-runtime.js` emits one `DepthSourcePacket` per eye and does not own decoding, reprojection, reconstruction, or masking.
-- `xr-depth.js` is the only module that understands raw depth encodings, source UV transforms, metric derivation, coverage reconstruction, and visibility classification.
+- `xr-depth.js` is the only module that understands raw depth encodings, source UV transforms, grid warp, metric derivation, and visibility classification.
 - Consumers use `fieldTexture`, `coverageTexture`, and `visibilityTexture` from `xr-depth.js`; they do not perform their own reprojection, fallback masking, or world-point reconstruction.
 - The shared processed field texture stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
-- `Depth -> Diagnostic` now supports `Field`, `Field+Cov`, and `Coverage` views, plus `Rainbow`, `Grayscale`, and `Bands` palettes. `Palette Freq` controls how many palette cycles repeat across the selected diagnostic range.
+- `coverageTexture` now represents warped grid occupancy in the target image, not a separate high-resolution confidence reconstruction pass.
+- `Depth -> Diagnostic` now renders the warped field directly with `Rainbow`, `Grayscale`, and `Bands` palettes. `Range` sets the diagnostic depth span, defaulting to 6 meters, and `Cycles` controls how many palette cycles repeat within that range.
 
 ## GitHub Pages
 

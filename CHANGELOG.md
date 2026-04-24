@@ -8,14 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Rebuilt the WebXR depth stack around one central staged pipeline: `xr-runtime.js` now emits per-eye `DepthSourcePacket` objects, `xr-render.js` forwards only those packets plus processing policy, and `xr-depth.js` now owns canonicalization, low-resolution inverse reprojection, high-resolution reconstruction, explicit coverage reconstruction, and centralized visibility derivation.
+- Rebuilt the WebXR depth stack around one central staged pipeline: `xr-runtime.js` now emits per-eye `DepthSourcePacket` objects, `xr-render.js` forwards only those packets plus processing policy, and `xr-depth.js` now owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation.
 - Unified `gpu-array`, `gpu-texture`, and CPU depth sources behind the same canonical source-depth path, so future headset-specific depth adapters can reuse the same downstream reprojection and reconstruction stages.
 - Removed raw-depth decoding from the reprojection stage. Raw source values are now decoded only during canonicalization, and `normDepthBufferFromNormView` is applied only there.
-- Kept exactly one inverse reprojection path at sensor resolution, then reconstruct one shared high-resolution processed field that packs metric depth in `r` and reconstructed world position in `g`, `b`, `a`, plus a separate high-resolution coverage texture.
+- Replaced the earlier sparse inverse-reprojection plus high-resolution reconstruction path with one GPU-warped shared depth grid that renders directly into the target image and stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
 - Changed radial depth handling so radial distance is derived from reconstructed world points and the source sensor origin, while planar depth continues to use target view-space `-z`.
-- Rebuilt the shared visibility path so visibility is now derived from the final high-resolution processed field plus explicit coverage, instead of running a second mask-only reprojection path or letting consumers fall back to `step(depth)`.
+- Rebuilt the shared visibility path so visibility is now derived from the final warped field plus warped occupancy coverage, instead of running a second mask-only reprojection path or letting consumers fall back to `step(depth)`.
 - Changed depth fade semantics in the shared shader logic: `fade = 0` is now a hard threshold on the centralized visibility path, and `fade > 0` now means fade across the exact metric interval from `threshold` to `threshold + fade`.
-- Expanded the persistent depth diagnostics mode with a palette cycler (`Rainbow`, `Grayscale`, `Bands`) and a `Palette Freq` slider that controls how many palette cycles repeat across the selected diagnostic range.
+- Expanded the persistent depth diagnostics mode with a palette cycler (`Rainbow`, `Grayscale`, `Bands`), a diagnostic `Range` control that now defaults to 6 meters, and a `Cycles` slider that controls how many palette cycles repeat within that range.
 
 ### Fixed
 - Removed the old runtime reprojection-profile path and renderer-side raw-depth handoff, so depth ownership is now centralized instead of split across runtime, render, and depth modules.

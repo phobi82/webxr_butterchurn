@@ -26,12 +26,6 @@ const passthroughDepthModeDefinitions = [
 	{key: "diagnostic", label: "Diagnostic"}
 ];
 
-const passthroughDepthDiagnosticViewDefinitions = [
-	{key: "field", label: "Field"},
-	{key: "fieldCoverage", label: "Field+Cov"},
-	{key: "coverage", label: "Coverage"}
-];
-
 const passthroughDepthDiagnosticPaletteDefinitions = [
 	{key: "rainbow", label: "Rainbow"},
 	{key: "grayscale", label: "Grayscale"},
@@ -178,7 +172,7 @@ const getPassthroughControlDefinitions = function(state) {
 				});
 				controls.push({
 					key: "depthDiagnosticRainbowFrequency",
-					label: "Palette Freq",
+					label: "Cycles",
 					value: state.depthDiagnosticRainbowFrequency,
 					min: 0.25,
 					max: 12,
@@ -359,9 +353,8 @@ const createPassthroughController = function(options) {
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
-		depthDiagnosticViewKey: options.initialDepthDiagnosticViewKey || "field",
 		depthDiagnosticPaletteKey: options.initialDepthDiagnosticPaletteKey || "rainbow",
-		depthDiagnosticRange: options.initialDepthDiagnosticRange == null ? 4 : options.initialDepthDiagnosticRange,
+		depthDiagnosticRange: options.initialDepthDiagnosticRange == null ? 6 : options.initialDepthDiagnosticRange,
 		depthDiagnosticRainbowFrequency: options.initialDepthDiagnosticRainbowFrequency == null ? 2 : options.initialDepthDiagnosticRainbowFrequency,
 		depthDistanceReactiveBool: false,
 		depthDistanceReactiveIntensity: options.initialDepthDistanceReactiveIntensity == null ? 1 : options.initialDepthDistanceReactiveIntensity,
@@ -533,8 +526,6 @@ const createPassthroughController = function(options) {
 
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: state.depthModeKey,
-			depthDiagnosticViews: passthroughDepthDiagnosticViewDefinitions,
-			selectedDepthDiagnosticViewKey: state.depthDiagnosticViewKey,
 			depthDiagnosticPalettes: passthroughDepthDiagnosticPaletteDefinitions,
 			selectedDepthDiagnosticPaletteKey: state.depthDiagnosticPaletteKey,
 			usableDepthAvailableBool: state.usableDepthAvailableBool,
@@ -611,7 +602,6 @@ const createPassthroughController = function(options) {
 		}
 		return {
 			depthMetricMode: state.depthRadialBool ? "radial" : "planar",
-			viewKey: state.depthDiagnosticViewKey,
 			paletteKey: state.depthDiagnosticPaletteKey,
 			rangeMeters: clampNumber(state.depthDiagnosticRange, 0.5, 8),
 			rainbowFrequency: clampNumber(state.depthDiagnosticRainbowFrequency, 0.25, 12)
@@ -753,9 +743,6 @@ const createPassthroughController = function(options) {
 		cycleDepthMode: function(direction) {
 			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
-		},
-		cycleDepthDiagnosticView: function(direction) {
-			cycleStateMode("depthDiagnosticViewKey", passthroughDepthDiagnosticViewDefinitions, direction);
 		},
 		cycleDepthDiagnosticPalette: function(direction) {
 			cycleStateMode("depthDiagnosticPaletteKey", passthroughDepthDiagnosticPaletteDefinitions, direction);
