@@ -22,7 +22,20 @@ const passthroughLightingAnchorModeDefinitions = [
 
 const passthroughDepthModeDefinitions = [
 	{key: "distance", label: "Distance"},
-	{key: "echo", label: "Echo"}
+	{key: "echo", label: "Echo"},
+	{key: "diagnostic", label: "Diagnostic"}
+];
+
+const passthroughDepthDiagnosticViewDefinitions = [
+	{key: "field", label: "Field"},
+	{key: "fieldCoverage", label: "Field+Cov"},
+	{key: "coverage", label: "Coverage"}
+];
+
+const passthroughDepthDiagnosticPaletteDefinitions = [
+	{key: "rainbow", label: "Rainbow"},
+	{key: "grayscale", label: "Grayscale"},
+	{key: "bands", label: "Bands"}
 ];
 
 
@@ -133,12 +146,14 @@ const getPassthroughControlDefinitions = function(state) {
 				});
 			}
 		} else {
-			distanceReactiveControl = {
-				key: "depthDistanceReactiveToggle",
-				label: "Sound-reactive",
-				checkedBool: !!state.depthDistanceReactiveBool
-			};
-			if (state.depthDistanceReactiveBool) {
+			if (state.depthModeKey === "distance") {
+				distanceReactiveControl = {
+					key: "depthDistanceReactiveToggle",
+					label: "Sound-reactive",
+					checkedBool: !!state.depthDistanceReactiveBool
+				};
+			}
+			if (state.depthModeKey === "distance" && state.depthDistanceReactiveBool) {
 				controls.push({
 					key: "depthDistanceReactiveIntensity",
 					label: "Intensity",
@@ -150,14 +165,39 @@ const getPassthroughControlDefinitions = function(state) {
 					valueText: Math.round(state.depthDistanceReactiveIntensity * 100) + "%"
 				});
 			}
+			if (state.depthModeKey === "diagnostic") {
+				controls.push({
+					key: "depthDiagnosticRange",
+					label: "Range",
+					value: state.depthDiagnosticRange,
+					min: 0.5,
+					max: 8,
+					minLabel: "Near",
+					maxLabel: "Far",
+					valueText: state.depthDiagnosticRange.toFixed(2) + "m"
+				});
+				controls.push({
+					key: "depthDiagnosticRainbowFrequency",
+					label: "Palette Freq",
+					value: state.depthDiagnosticRainbowFrequency,
+					min: 0.25,
+					max: 12,
+					minLabel: "Slow",
+					maxLabel: "Fast",
+					valueText: state.depthDiagnosticRainbowFrequency.toFixed(2) + " cycles"
+				});
+			} else {
+				controls.push(
+					{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 8, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(2) + "m"},
+					{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
+				);
+			}
+		}
+		if (state.depthModeKey !== "diagnostic") {
 			controls.push(
-				{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 8, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(2) + "m"},
-				{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
+				{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
 			);
 		}
-		controls.push(
-			{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
-		);
 	}
 	return {
 		controls: controls,
@@ -319,6 +359,10 @@ const createPassthroughController = function(options) {
 		depthRadialBool: options.initialDepthRadialBool == null ? true : !!options.initialDepthRadialBool,
 		depthThreshold: 0.80,
 		depthFade: 0.20,
+		depthDiagnosticViewKey: options.initialDepthDiagnosticViewKey || "field",
+		depthDiagnosticPaletteKey: options.initialDepthDiagnosticPaletteKey || "rainbow",
+		depthDiagnosticRange: options.initialDepthDiagnosticRange == null ? 4 : options.initialDepthDiagnosticRange,
+		depthDiagnosticRainbowFrequency: options.initialDepthDiagnosticRainbowFrequency == null ? 2 : options.initialDepthDiagnosticRainbowFrequency,
 		depthDistanceReactiveBool: false,
 		depthDistanceReactiveIntensity: options.initialDepthDistanceReactiveIntensity == null ? 1 : options.initialDepthDistanceReactiveIntensity,
 		depthDistanceMrRetain: 0.3,
@@ -489,6 +533,10 @@ const createPassthroughController = function(options) {
 
 			depthModes: passthroughDepthModeDefinitions,
 			selectedDepthModeKey: state.depthModeKey,
+			depthDiagnosticViews: passthroughDepthDiagnosticViewDefinitions,
+			selectedDepthDiagnosticViewKey: state.depthDiagnosticViewKey,
+			depthDiagnosticPalettes: passthroughDepthDiagnosticPaletteDefinitions,
+			selectedDepthDiagnosticPaletteKey: state.depthDiagnosticPaletteKey,
 			usableDepthAvailableBool: state.usableDepthAvailableBool,
 			passthroughControls: passthroughControlState.controls || [],
 			distanceReactiveControl: passthroughControlState.distanceReactiveControl || null,
@@ -533,21 +581,19 @@ const createPassthroughController = function(options) {
 	const getPunchRenderState = function(queryArgs) {
 		var depth = null;
 		var flashlight = null;
-		var worldMask = null;
-		if (state.depthActiveBool && state.depthVisualMaskingEnabledBool) {
-			depth = depthRuntime.buildDepthRenderState(queryArgs);
-			worldMask = depthRuntime.buildDepthRenderState(queryArgs);
-		}
+	if (state.depthActiveBool && state.depthVisualMaskingEnabledBool && state.depthModeKey !== "diagnostic") {
+		depth = depthRuntime.buildDepthRenderState(queryArgs);
+	}
 		if (state.flashlightActiveBool) {
 			var masks = getFlashlightMasks(queryArgs || {});
 			if (masks.length) {
 				flashlight = {masks: masks};
 			}
 		}
-		if (!depth && !flashlight && !worldMask) {
+		if (!depth && !flashlight) {
 			return null;
 		}
-		return {depth: depth, flashlight: flashlight, worldMask: worldMask};
+		return {depth: depth, flashlight: flashlight};
 	};
 	const getBackgroundCompositeState = function() {
 		return {
@@ -557,7 +603,19 @@ const createPassthroughController = function(options) {
 		};
 	};
 	const getOverlayRenderState = function(queryArgs) {
-		return buildOverlayRenderState(queryArgs, state.depthActiveBool && state.depthVisualMaskingEnabledBool ? depthRuntime.buildDepthRenderState(queryArgs) : null);
+		return buildOverlayRenderState(queryArgs, state.depthActiveBool && state.depthVisualMaskingEnabledBool && state.depthModeKey !== "diagnostic" ? depthRuntime.buildDepthRenderState(queryArgs) : null);
+	};
+	const getDepthDiagnosticsRenderState = function() {
+		if (!state.depthActiveBool || state.depthModeKey !== "diagnostic") {
+			return null;
+		}
+		return {
+			depthMetricMode: state.depthRadialBool ? "radial" : "planar",
+			viewKey: state.depthDiagnosticViewKey,
+			paletteKey: state.depthDiagnosticPaletteKey,
+			rangeMeters: clampNumber(state.depthDiagnosticRange, 0.5, 8),
+			rainbowFrequency: clampNumber(state.depthDiagnosticRainbowFrequency, 0.25, 12)
+		};
 	};
 	const toggleStateBool = function(key) {
 		state[key] = !state[key];
@@ -599,6 +657,12 @@ const createPassthroughController = function(options) {
 		},
 		depthFade: function(value) {
 			state.depthFade = clampNumber(value, 0, 2);
+		},
+		depthDiagnosticRange: function(value) {
+			state.depthDiagnosticRange = clampNumber(value, 0.5, 8);
+		},
+		depthDiagnosticRainbowFrequency: function(value) {
+			state.depthDiagnosticRainbowFrequency = clampNumber(value, 0.25, 12);
 		},
 		depthDistanceReactiveIntensity: function(value) {
 			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
@@ -690,6 +754,12 @@ const createPassthroughController = function(options) {
 			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
 			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
 		},
+		cycleDepthDiagnosticView: function(direction) {
+			cycleStateMode("depthDiagnosticViewKey", passthroughDepthDiagnosticViewDefinitions, direction);
+		},
+		cycleDepthDiagnosticPalette: function(direction) {
+			cycleStateMode("depthDiagnosticPaletteKey", passthroughDepthDiagnosticPaletteDefinitions, direction);
+		},
 
 		cycleLightingMode: function(direction) {
 			cycleStateMode("lightingModeKey", passthroughLightingModeDefinitions, direction);
@@ -722,8 +792,7 @@ const createPassthroughController = function(options) {
 				depthEchoWavelength: baseState.depthEchoWavelength,
 				depthEchoDutyCycle: baseState.depthEchoDutyCycle,
 				depthEchoFade: baseState.depthEchoFade,
-				depthPhaseOffset: baseState.depthPhaseOffset,
-				depthMrRetain: baseState.depthMrRetain
+				depthPhaseOffset: baseState.depthPhaseOffset
 			};
 		},
 		setControlValue: function(key, value) {
@@ -743,6 +812,7 @@ const createPassthroughController = function(options) {
 		getPunchRenderState: getPunchRenderState,
 		getBackgroundCompositeState: getBackgroundCompositeState,
 		getOverlayRenderState: getOverlayRenderState,
+		getDepthDiagnosticsRenderState: getDepthDiagnosticsRenderState,
 		getUiState: getUiState
 	};
 };
@@ -773,13 +843,11 @@ const createPunchRenderer = function() {
 	// Canonical 2D raw-depth fullscreen punch shader.
 	const texture2dFragSource = [
 		"precision highp float;",
-		"uniform sampler2D depthTexture;",
-		"uniform sampler2D depthMaskTexture;",
-		"uniform float depthMaskAvailable;",
+		"uniform sampler2D visibilityTexture;",
 		"uniform float depthMrRetain;",
 		"varying vec2 vScreenUv;",
 		"void main(){",
-		"float punchMask=depthMaskAvailable>0.5?texture2D(depthMaskTexture,vScreenUv).r:step(0.001,texture2D(depthTexture,vScreenUv).r);",
+		"float punchMask=texture2D(visibilityTexture,vScreenUv).r;",
 		"gl_FragColor=vec4(0.0,0.0,0.0,mix(depthMrRetain,1.0,punchMask));",
 		"}"
 	].join("");
@@ -806,9 +874,7 @@ const createPunchRenderer = function() {
 	const buildDepthLocs = function(prog) {
 		return {
 			position: gl.getAttribLocation(prog, "position"),
-			depthTexture: gl.getUniformLocation(prog, "depthTexture"),
-			depthMaskTexture: gl.getUniformLocation(prog, "depthMaskTexture"),
-			depthMaskAvailable: gl.getUniformLocation(prog, "depthMaskAvailable"),
+			visibilityTexture: gl.getUniformLocation(prog, "visibilityTexture"),
 			depthMrRetain: gl.getUniformLocation(prog, "depthMrRetain")
 		};
 	};
@@ -852,7 +918,7 @@ const createPunchRenderer = function() {
 
 	const drawDepthPunch = function(depthInfo, punchState) {
 		if (!depthInfo) { return; }
-		if (!depthInfo.texture) {
+		if (!depthInfo.visibilityTexture) {
 			return;
 		}
 		if (!texture2dProgram) {
@@ -864,12 +930,8 @@ const createPunchRenderer = function() {
 		gl.disable(gl.CULL_FACE);
 		gl.blendFuncSeparate(gl.ZERO, gl.SRC_ALPHA, gl.ZERO, gl.SRC_ALPHA);
 		gl.activeTexture(gl.TEXTURE0);
-		gl.bindTexture(gl.TEXTURE_2D, depthInfo.texture);
-		gl.uniform1i(texture2dLocs.depthTexture, 0);
-		gl.activeTexture(gl.TEXTURE1);
-		gl.bindTexture(gl.TEXTURE_2D, depthInfo.maskTexture || null);
-		gl.uniform1i(texture2dLocs.depthMaskTexture, 1);
-		gl.uniform1f(texture2dLocs.depthMaskAvailable, depthInfo.maskTexture ? 1 : 0);
+		gl.bindTexture(gl.TEXTURE_2D, depthInfo.visibilityTexture);
+		gl.uniform1i(texture2dLocs.visibilityTexture, 0);
 		gl.uniform1f(texture2dLocs.depthMrRetain, punchState.depthMrRetain || 0);
 		gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
 		gl.enableVertexAttribArray(texture2dLocs.position);

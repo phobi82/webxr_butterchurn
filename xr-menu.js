@@ -404,6 +404,28 @@ const createPassthroughMenuSectionState = function(args) {
 			prevHoverKey: "passthroughDepthMode:prev",
 			nextHoverKey: "passthroughDepthMode:next"
 		}));
+		if (uiState.selectedDepthModeKey === "diagnostic") {
+			controls.push(createCyclerMenuControlState({
+				key: "depthDiagnosticView",
+				label: "Diagnostic View",
+				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticViews, uiState.selectedDepthDiagnosticViewKey, "Field"),
+				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticView:prev", "depthDiagnosticView:next"),
+				prevAction: {type: "depthDiagnosticView.cycle", direction: -1},
+				nextAction: {type: "depthDiagnosticView.cycle", direction: 1},
+				prevHoverKey: "depthDiagnosticView:prev",
+				nextHoverKey: "depthDiagnosticView:next"
+			}));
+			controls.push(createCyclerMenuControlState({
+				key: "depthDiagnosticPalette",
+				label: "Palette",
+				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticPalettes, uiState.selectedDepthDiagnosticPaletteKey, "Rainbow"),
+				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticPalette:prev", "depthDiagnosticPalette:next"),
+				prevAction: {type: "depthDiagnosticPalette.cycle", direction: -1},
+				nextAction: {type: "depthDiagnosticPalette.cycle", direction: 1},
+				prevHoverKey: "depthDiagnosticPalette:prev",
+				nextHoverKey: "depthDiagnosticPalette:next"
+			}));
+		}
 
 	}
 	if (uiState.depthActiveBool && uiState.selectedDepthModeKey === "echo") {

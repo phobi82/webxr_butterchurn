@@ -383,7 +383,7 @@ const createDepthBandMaskShaderChunk = function(functionName) {
 	const resolvedFunctionName = functionName || "computeDepthMask";
 	return [
 		"float " + resolvedFunctionName + "(float depthMeters){",
-		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(max(0.0,depthThreshold-depthFade*0.5),depthThreshold+depthFade*0.5,depthMeters);}",
+		"if(depthMode<0.5){return depthFade<=0.0001?step(depthThreshold,depthMeters):smoothstep(depthThreshold,depthThreshold+depthFade,depthMeters);}",
 		"float wavelength=max(depthEchoWavelength,0.0001);",
 		"float dutyCycle=clamp(depthEchoDutyCycle,0.0,1.0);",
 		"float visibleWidth=wavelength*dutyCycle;",
@@ -395,7 +395,7 @@ const createDepthBandMaskShaderChunk = function(functionName) {
 		"float hiddenWidth=wavelength-visibleWidth;",
 		"float visibleHalfWidth=visibleWidth*0.5;",
 		"float fadeHalfWidth=0.5*min(visibleWidth,hiddenWidth)*clamp(depthEchoFade,0.0,1.0);",
-		"if(fadeHalfWidth<=0.0001){return step(distanceFromBandCenter,visibleHalfWidth);}",
+		"if(fadeHalfWidth<=0.0001){return 1.0-step(visibleHalfWidth,distanceFromBandCenter);}",
 		"float innerEdge=max(0.0,visibleHalfWidth-fadeHalfWidth);",
 		"float outerEdge=visibleHalfWidth+fadeHalfWidth;",
 		"return 1.0-smoothstep(innerEdge,outerEdge,distanceFromBandCenter);",

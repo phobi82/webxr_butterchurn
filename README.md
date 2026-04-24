@@ -46,8 +46,10 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Inverse Reprojection**: `xr-depth` is now a fixed shared pipeline with no quality-mode branching: it normalizes `gpu-array`, `gpu-texture`, and CPU depth into linear meters, reprojects once per view at sensor resolution, then builds one packed `depth + worldPoint` consumer texture for passthrough punch, world masking, and depth-aware lighting
-- **Spatial Depth Masking**: depth masks are reprojected from the source depth pose into the current render view so headset reprojection can act on them spatially, without exposing a manual timing offset or legacy motion-compensation mode
+- **Unified Depth Pipeline**: `xr-runtime` only packages per-eye depth source packets, while `xr-depth` owns canonicalization, low-resolution inverse reprojection, high-resolution field reconstruction, explicit coverage reconstruction, and centralized visibility derivation
+- **Source-Agnostic Processing**: `gpu-array`, `gpu-texture`, and CPU depth all flow through the same canonical path, so future depth-source backends can reuse the same downstream processing
+- **Stable Metric Semantics**: planar depth uses target view-space `-z`; radial depth is derived from reconstructed world points and the sensor origin after reconstruction, so radial distance stays anchored to the real sensor pose
+- **Central Visibility Semantics**: `fade = 0` is a hard threshold on the reconstructed field, while `fade > 0` fades only over the configured metric interval from `threshold` to `threshold + fade`; consumers do not rebuild fallback masks from raw depth presence
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
 - **Depth-bound Light Projection**: passthrough lighting now reuses the shared canonical 2D depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
 - **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
@@ -190,7 +192,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Canonical depth adapter that unifies array/texture/CPU depth sources, reprojects them once at sensor resolution, packs shared `depth + worldPoint`, and builds the final consumer depth texture |
+| `xr-depth.js` | Canonical depth pipeline: source canonicalization, low-resolution inverse reprojection, high-resolution depth/world reconstruction, and centralized mask classification |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |
@@ -199,6 +201,15 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 | `xr-app.js` | App shell normalization and shared app composition |
 
 </details>
+
+## Depth Architecture Notes
+
+- `matchDepthView` stays disabled by default. The runtime still requests WebXR depth, but the downstream pipeline does not depend on depth-view matching.
+- `xr-runtime.js` emits one `DepthSourcePacket` per eye and does not own decoding, reprojection, reconstruction, or masking.
+- `xr-depth.js` is the only module that understands raw depth encodings, source UV transforms, metric derivation, coverage reconstruction, and visibility classification.
+- Consumers use `fieldTexture`, `coverageTexture`, and `visibilityTexture` from `xr-depth.js`; they do not perform their own reprojection, fallback masking, or world-point reconstruction.
+- The shared processed field texture stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
+- `Depth -> Diagnostic` now supports `Field`, `Field+Cov`, and `Coverage` views, plus `Rainbow`, `Grayscale`, and `Bands` palettes. `Palette Freq` controls how many palette cycles repeat across the selected diagnostic range.
 
 ## GitHub Pages
 
