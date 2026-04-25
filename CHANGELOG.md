@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded the persistent depth diagnostics mode with a palette cycler (`Rainbow`, `Grayscale`, `Bands`), a diagnostic `Range` control that now defaults to 6 meters, and a `Cycles` slider that controls how many palette cycles repeat within that range.
 
 ### Fixed
+- Discard warped grid triangles as a whole when any corner falls inside the near-eye guard, avoiding large projected mask wedges from very close lower-field geometry.
 - Changed the warped depth-grid triangulation to use adaptive per-cell diagonals, choosing the locally more continuous split in each cell. This softens systematic blocky contour steps and reduces slanted wedge artifacts from near-field geometry.
 - Removed the old runtime reprojection-profile path and renderer-side raw-depth handoff, so depth ownership is now centralized instead of split across runtime, render, and depth modules.
 - Removed consumer-side fallback visibility derivation from raw depth presence, so visibility semantics are now enforced by `xr-depth.js` instead of being reimplemented in render consumers.
