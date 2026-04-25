@@ -32,6 +32,9 @@ const passthroughDepthDiagnosticPaletteDefinitions = [
 	{key: "bands", label: "Bands"}
 ];
 
+const formatPassthroughPercentText = function(value) {
+	return Math.round(value * 100) + "%";
+};
 
 const findModeIndexByKey = function(definitions, key) {
 	for (let i = 0; i < definitions.length; i += 1) {
@@ -55,43 +58,24 @@ const getReactivePassthroughDrive = function(audioDrive) {
 
 const getPassthroughVisibleShare = function(state, audioDrive) {
 	if (state.mixModeKey === "audioReactive") {
-		const directionMix = clampNumber(Math.abs(state.audioReactiveIntensity), 0, 1);
+		const intensity = state.sliders.audioReactiveIntensity.value;
+		const directionMix = Math.abs(intensity);
 		const reactiveDrive = getReactivePassthroughDrive(audioDrive);
-		const targetShare = state.audioReactiveIntensity >= 0 ? reactiveDrive : 1 - reactiveDrive;
+		const targetShare = intensity >= 0 ? reactiveDrive : 1 - reactiveDrive;
 		return clampNumber(0.5 + (targetShare - 0.5) * directionMix, 0, 1);
 	}
-	return clampNumber(state.manualMix, 0, 1);
+	return state.sliders.manualMix.value;
 };
 
 const getBackgroundControlDefinitions = function(state) {
 	if (state.mixModeKey === "audioReactive") {
 		return {
-			controls: [
-				{
-					key: "audioReactiveIntensity",
-					label: "Intensity",
-					value: state.audioReactiveIntensity,
-					min: -1,
-					max: 1,
-					minLabel: "Vis -> Mod. Reality",
-					maxLabel: "Mod. Reality -> Vis"
-				}
-			],
+			controls: [state.sliders.audioReactiveIntensity],
 			mixModeVisibleBool: true
 		};
 	}
 	return {
-		controls: [
-			{
-				key: "manualMix",
-				label: "Mix",
-				value: state.manualMix,
-				min: 0,
-				max: 1,
-				minLabel: "Visualizer",
-				maxLabel: "Modified Reality"
-			}
-		],
+		controls: [state.sliders.manualMix],
 		mixModeVisibleBool: true
 	};
 };
@@ -103,18 +87,18 @@ const getPassthroughControlDefinitions = function(state) {
 	var echoReactiveIntensityVisibleBool = false;
 	if (state.flashlightActiveBool) {
 		controls.push(
-			{key: "flashlightRadius", label: "Radius", value: state.flashlightRadius, min: 0.05, max: 0.45, minLabel: "Tight", maxLabel: "Wide"},
-			{key: "flashlightSoftness", label: "Softness", value: state.flashlightSoftness, min: 0.01, max: 0.35, minLabel: "Hard", maxLabel: "Soft"}
+			state.sliders.flashlightRadius,
+			state.sliders.flashlightSoftness
 		);
 	}
 	if (state.depthActiveBool) {
 		if (state.depthModeKey === "echo") {
 			controls.push(
-				{key: "depthEchoPhase", label: "Phase", value: state.depthEchoPhase, min: 0, max: Math.max(0.1, state.depthEchoWavelength), minLabel: "0m", maxLabel: state.depthEchoWavelength.toFixed(1) + "m", valueText: state.depthEchoPhase.toFixed(1) + "m"},
-				{key: "depthEchoPhaseSpeed", label: "Phase-Speed", value: state.depthEchoPhaseSpeed, min: -10, max: 10, minLabel: "-10m/s", maxLabel: "10m/s", valueText: state.depthEchoPhaseSpeed.toFixed(1) + "m/s"},
-				{key: "depthEchoWavelength", label: "Wavelength", value: state.depthEchoWavelength, min: 0.1, max: 10, minLabel: "0.1m", maxLabel: "10m", valueText: state.depthEchoWavelength.toFixed(1) + "m"},
-				{key: "depthEchoDutyCycle", label: "DutyCycle", value: state.depthEchoDutyCycle, min: 0, max: 1, minLabel: "0%", maxLabel: "100%", valueText: Math.round(state.depthEchoDutyCycle * 100) + "%"},
-				{key: "depthEchoFade", label: "Fade", value: state.depthEchoFade, min: 0, max: 1, minLabel: "Hard", maxLabel: "Flow", valueText: Math.round(state.depthEchoFade * 100) + "%"}
+				state.sliders.depthEchoPhase,
+				state.sliders.depthEchoPhaseSpeed,
+				state.sliders.depthEchoWavelength,
+				state.sliders.depthEchoDutyCycle,
+				state.sliders.depthEchoFade
 			);
 			echoReactiveControls.push(
 				{key: "depthEchoPhaseReactive", label: "Phase", checkedBool: !!state.depthEchoPhaseReactiveBool},
@@ -128,16 +112,7 @@ const getPassthroughControlDefinitions = function(state) {
 				state.depthEchoFadeReactiveBool
 			);
 			if (echoReactiveIntensityVisibleBool) {
-				controls.push({
-					key: "depthEchoReactiveIntensity",
-					label: "Intensity",
-					value: state.depthEchoReactiveIntensity,
-					min: -1,
-					max: 1,
-					minLabel: "-100%",
-					maxLabel: "100%",
-					valueText: Math.round(state.depthEchoReactiveIntensity * 100) + "%"
-				});
+				controls.push(state.sliders.depthEchoReactiveIntensity);
 			}
 		} else {
 			if (state.depthModeKey === "distance") {
@@ -148,49 +123,20 @@ const getPassthroughControlDefinitions = function(state) {
 				};
 			}
 			if (state.depthModeKey === "distance" && state.depthDistanceReactiveBool) {
-				controls.push({
-					key: "depthDistanceReactiveIntensity",
-					label: "Intensity",
-					value: state.depthDistanceReactiveIntensity,
-					min: -1,
-					max: 1,
-					minLabel: "-100%",
-					maxLabel: "100%",
-					valueText: Math.round(state.depthDistanceReactiveIntensity * 100) + "%"
-				});
+				controls.push(state.sliders.depthDistanceReactiveIntensity);
 			}
 			if (state.depthModeKey === "diagnostic") {
-				controls.push({
-					key: "depthDiagnosticRange",
-					label: "Range",
-					value: state.depthDiagnosticRange,
-					min: 0.20,
-					max: 8,
-					minLabel: "Near",
-					maxLabel: "Far",
-					valueText: state.depthDiagnosticRange.toFixed(2) + "m"
-				});
-				controls.push({
-					key: "depthDiagnosticRainbowFrequency",
-					label: "Cycles",
-					value: state.depthDiagnosticRainbowFrequency,
-					min: 0.25,
-					max: 20,
-					minLabel: "less",
-					maxLabel: "many",
-					valueText: state.depthDiagnosticRainbowFrequency.toFixed(2)
-				});
+				controls.push(state.sliders.depthDiagnosticRange);
+				controls.push(state.sliders.depthDiagnosticRainbowFrequency);
 			} else {
 				controls.push(
-					{key: "depthThreshold", label: "Distance", value: state.depthThreshold, min: 0, max: 8, minLabel: "0m", maxLabel: "Far", valueText: state.depthThreshold.toFixed(2) + "m"},
-					{key: "depthFade", label: "Fade", value: state.depthFade, min: 0, max: 2, minLabel: "Hard", maxLabel: "Soft", valueText: state.depthFade.toFixed(2) + "m"}
+					state.sliders.depthThreshold,
+					state.sliders.depthFade
 				);
 			}
 		}
 		if (state.depthModeKey !== "diagnostic") {
-			controls.push(
-				{key: "depthMrRetain", label: "MR Blend", value: state.depthMrRetain, min: 0, max: 1, minLabel: "Passthrough", maxLabel: "Mod. Reality", valueText: Math.round(state.depthMrRetain * 100) + "%"}
-			);
+			controls.push(state.sliders.depthMrRetain);
 		}
 	}
 	return {
@@ -210,36 +156,10 @@ const getPassthroughLightingControlDefinitions = function(state) {
 	}
 	const effectSemanticControlsVisibleBool = state.lightingModeKey === "club" || state.lightingModeKey === "spots";
 	return {
-		controls: [
-			{
-				key: "lightingDarkness",
-				label: "Darkness",
-				value: state.lightingDarkness == null ? 0.05 : state.lightingDarkness,
-				min: 0,
-				max: 1,
-				minLabel: "Lights Only",
-				maxLabel: "Additive"
-			}
-		],
+		controls: [state.sliders.lightingDarkness],
 		effectSemanticControls: effectSemanticControlsVisibleBool ? [
-			{
-				key: "effectAdditiveShare",
-				label: "Additive",
-				value: state.effectAdditiveShare == null ? 1 : state.effectAdditiveShare,
-				min: 0,
-				max: 1,
-				minLabel: "Off",
-				maxLabel: "Full"
-			},
-			{
-				key: "effectAlphaBlendShare",
-				label: "Alpha Blend",
-				value: state.effectAlphaBlendShare == null ? 1 : state.effectAlphaBlendShare,
-				min: 0,
-				max: 1,
-				minLabel: "Off",
-				maxLabel: "Full"
-			}
+			state.sliders.effectAdditiveShare,
+			state.sliders.effectAlphaBlendShare
 		] : []
 	};
 };
@@ -393,79 +313,79 @@ const createPassthroughController = function(options) {
 
 	const depthRuntime = {
 		quantizeDepthEchoPhaseSpeed: function(value) {
-			return clampNumber(Math.round(value * 10) / 10, -10, 10);
+			return Math.round(value * 10) / 10;
 		},
 		quantizeDepthEchoWavelength: function(value) {
-			return clampNumber(Math.round(value * 10) / 10, 0.1, 10);
+			return Math.round(value * 10) / 10;
 		},
 		wrapEchoPhase: function(phaseValue, wavelength) {
 			wavelength = Math.max(0.1, wavelength || 0.1);
 			return ((phaseValue % wavelength) + wavelength) % wavelength;
 		},
 		applyReactiveDelta: function(baseValue, reactiveValue, intensity) {
-			return baseValue + (reactiveValue - baseValue) * clampNumber(intensity, -1, 1);
+			return baseValue + (reactiveValue - baseValue) * intensity;
 		},
 		getEffectiveDistanceDepthState: function() {
-			var effectiveThreshold = state.depthThreshold;
+			var effectiveThreshold = state.sliders.depthThreshold.value;
 			if (state.depthDistanceReactiveBool) {
 				effectiveThreshold = clampNumber(
-					state.depthThreshold + (state.smoothedAudioDrive - 0.5) * 16 * clampNumber(state.depthDistanceReactiveIntensity, -1, 1),
-					0,
-					8
+					effectiveThreshold + (state.smoothedAudioDrive - 0.5) * 16 * state.sliders.depthDistanceReactiveIntensity.value,
+					state.sliders.depthThreshold.min,
+					state.sliders.depthThreshold.max
 				);
 			}
 			return {
 				depthMode: getDepthModeFloat(state.depthModeKey),
 				depthThreshold: effectiveThreshold,
-				depthFade: state.depthFade,
-				depthEchoWavelength: state.depthEchoWavelength,
-				depthEchoDutyCycle: state.depthEchoDutyCycle,
-				depthEchoFade: state.depthEchoFade,
-				depthPhaseOffset: depthRuntime.wrapEchoPhase(state.depthEchoPhase + state.depthEchoPhaseOffset, state.depthEchoWavelength),
-				depthMrRetain: state.depthMrRetain,
+				depthFade: state.sliders.depthFade.value,
+				depthEchoWavelength: state.sliders.depthEchoWavelength.value,
+				depthEchoDutyCycle: state.sliders.depthEchoDutyCycle.value,
+				depthEchoFade: state.sliders.depthEchoFade.value,
+				depthPhaseOffset: depthRuntime.wrapEchoPhase(state.sliders.depthEchoPhase.value + state.depthEchoPhaseOffset, state.sliders.depthEchoWavelength.value),
+				depthMrRetain: state.sliders.depthMrRetain.value,
 				depthRadialBool: state.depthRadialBool
 			};
 		},
 		getEffectiveEchoDepthState: function() {
-			var effectiveWavelength = state.depthEchoWavelength;
-			var effectiveDutyCycle = state.depthEchoDutyCycle;
-			var effectiveFade = state.depthEchoFade;
+			var effectiveWavelength = state.sliders.depthEchoWavelength.value;
+			var effectiveDutyCycle = state.sliders.depthEchoDutyCycle.value;
+			var effectiveFade = state.sliders.depthEchoFade.value;
 			var audioDrive = clampNumber(state.smoothedAudioDrive, 0, 1);
-			var reactiveIntensity = clampNumber(state.depthEchoReactiveIntensity, -1, 1);
+			var reactiveIntensity = state.sliders.depthEchoReactiveIntensity.value;
 			if (state.depthEchoWavelengthReactiveBool) {
 				effectiveWavelength = clampNumber(
-					depthRuntime.applyReactiveDelta(state.depthEchoWavelength, state.depthEchoWavelength * lerpNumber(1.45, 0.55, audioDrive), reactiveIntensity),
-					0.1,
-					10
+					depthRuntime.applyReactiveDelta(effectiveWavelength, effectiveWavelength * lerpNumber(1.45, 0.55, audioDrive), reactiveIntensity),
+					state.sliders.depthEchoWavelength.min,
+					state.sliders.depthEchoWavelength.max
 				);
 			}
 			if (state.depthEchoDutyCycleReactiveBool) {
 				effectiveDutyCycle = clampNumber(
-					depthRuntime.applyReactiveDelta(state.depthEchoDutyCycle, state.depthEchoDutyCycle + (audioDrive - 0.5) * 3.2, reactiveIntensity),
-					0,
-					1
+					depthRuntime.applyReactiveDelta(effectiveDutyCycle, effectiveDutyCycle + (audioDrive - 0.5) * 3.2, reactiveIntensity),
+					state.sliders.depthEchoDutyCycle.min,
+					state.sliders.depthEchoDutyCycle.max
 				);
 			}
 			if (state.depthEchoFadeReactiveBool) {
 				effectiveFade = clampNumber(
-					depthRuntime.applyReactiveDelta(state.depthEchoFade, state.depthEchoFade + (audioDrive - 0.5) * 1.8, reactiveIntensity),
-					0,
-					1
+					depthRuntime.applyReactiveDelta(effectiveFade, effectiveFade + (audioDrive - 0.5) * 1.8, reactiveIntensity),
+					state.sliders.depthEchoFade.min,
+					state.sliders.depthEchoFade.max
 				);
 			}
-			var effectivePhase = depthRuntime.wrapEchoPhase(state.depthEchoPhase + state.depthEchoPhaseOffset, effectiveWavelength);
+			var effectivePhase = depthRuntime.wrapEchoPhase(state.sliders.depthEchoPhase.value + state.depthEchoPhaseOffset, effectiveWavelength);
 			if (state.depthEchoPhaseReactiveBool) {
 				effectivePhase = depthRuntime.wrapEchoPhase(effectivePhase + audioDrive * effectiveWavelength * reactiveIntensity * 2, effectiveWavelength);
 			}
 			return {
 				depthMode: getDepthModeFloat(state.depthModeKey),
-				depthThreshold: state.depthThreshold,
-				depthFade: state.depthFade,
+				depthThreshold: state.sliders.depthThreshold.value,
+				depthFade: state.sliders.depthFade.value,
 				depthEchoWavelength: effectiveWavelength,
 				depthEchoDutyCycle: effectiveDutyCycle,
 				depthEchoFade: effectiveFade,
 				depthPhaseOffset: effectivePhase,
-				depthMrRetain: state.depthMrRetain,
+				depthMrRetain: state.sliders.depthMrRetain.value,
 				depthRadialBool: state.depthRadialBool
 			};
 		},
@@ -474,6 +394,222 @@ const createPassthroughController = function(options) {
 			return baseState;
 		}
 	};
+
+	state.sliders = {
+		audioReactiveIntensity: createSlider({
+			key: "audioReactiveIntensity",
+			label: "Intensity",
+			value: state.audioReactiveIntensity,
+			min: -1,
+			max: 1,
+			minLabel: "Vis -> Mod. Reality",
+			maxLabel: "Mod. Reality -> Vis"
+		}),
+		manualMix: createSlider({
+			key: "manualMix",
+			label: "Mix",
+			value: state.manualMix,
+			min: 0,
+			max: 1,
+			minLabel: "Visualizer",
+			maxLabel: "Modified Reality"
+		}),
+		flashlightRadius: createSlider({
+			key: "flashlightRadius",
+			label: "Radius",
+			value: state.flashlightRadius,
+			min: 0.05,
+			max: 0.45,
+			minLabel: "Tight",
+			maxLabel: "Wide"
+		}),
+		flashlightSoftness: createSlider({
+			key: "flashlightSoftness",
+			label: "Softness",
+			value: state.flashlightSoftness,
+			min: 0.01,
+			max: 0.35,
+			minLabel: "Hard",
+			maxLabel: "Soft"
+		}),
+		depthEchoPhase: createSlider({
+			key: "depthEchoPhase",
+			label: "Phase",
+			value: state.depthEchoPhase,
+			min: 0,
+			max: Math.max(0.1, state.depthEchoWavelength),
+			minLabel: "0m",
+			maxLabel: state.depthEchoWavelength.toFixed(1) + "m",
+			formatValue: function(value) { return value.toFixed(1) + "m"; }
+		}),
+		depthEchoPhaseSpeed: createSlider({
+			key: "depthEchoPhaseSpeed",
+			label: "Phase-Speed",
+			value: state.depthEchoPhaseSpeed,
+			min: -10,
+			max: 10,
+			minLabel: "-10m/s",
+			maxLabel: "10m/s",
+			formatValue: function(value) { return value.toFixed(1) + "m/s"; },
+			normalizeValue: depthRuntime.quantizeDepthEchoPhaseSpeed
+		}),
+		depthEchoWavelength: createSlider({
+			key: "depthEchoWavelength",
+			label: "Wavelength",
+			value: state.depthEchoWavelength,
+			min: 0.1,
+			max: 10,
+			minLabel: "0.1m",
+			maxLabel: "10m",
+			formatValue: function(value) { return value.toFixed(1) + "m"; },
+			normalizeValue: depthRuntime.quantizeDepthEchoWavelength
+		}),
+		depthEchoDutyCycle: createSlider({
+			key: "depthEchoDutyCycle",
+			label: "DutyCycle",
+			value: state.depthEchoDutyCycle,
+			min: 0,
+			max: 1,
+			minLabel: "0%",
+			maxLabel: "100%",
+			formatValue: formatPassthroughPercentText
+		}),
+		depthEchoFade: createSlider({
+			key: "depthEchoFade",
+			label: "Fade",
+			value: state.depthEchoFade,
+			min: 0,
+			max: 1,
+			minLabel: "Hard",
+			maxLabel: "Flow",
+			formatValue: formatPassthroughPercentText
+		}),
+		depthEchoReactiveIntensity: createSlider({
+			key: "depthEchoReactiveIntensity",
+			label: "Intensity",
+			value: state.depthEchoReactiveIntensity,
+			min: -1,
+			max: 1,
+			minLabel: "-100%",
+			maxLabel: "100%",
+			formatValue: formatPassthroughPercentText
+		}),
+		depthDistanceReactiveIntensity: createSlider({
+			key: "depthDistanceReactiveIntensity",
+			label: "Intensity",
+			value: state.depthDistanceReactiveIntensity,
+			min: -1,
+			max: 1,
+			minLabel: "-100%",
+			maxLabel: "100%",
+			formatValue: formatPassthroughPercentText
+		}),
+		depthDiagnosticRange: createSlider({
+			key: "depthDiagnosticRange",
+			label: "Range",
+			value: state.depthDiagnosticRange,
+			min: 0.2,
+			max: 8,
+			minLabel: "Near",
+			maxLabel: "Far",
+			formatValue: function(value) { return value.toFixed(2) + "m"; }
+		}),
+		depthDiagnosticRainbowFrequency: createSlider({
+			key: "depthDiagnosticRainbowFrequency",
+			label: "Cycles",
+			value: state.depthDiagnosticRainbowFrequency,
+			min: 0.25,
+			max: 20,
+			minLabel: "less",
+			maxLabel: "many",
+			formatValue: function(value) { return value.toFixed(2); }
+		}),
+		depthThreshold: createSlider({
+			key: "depthThreshold",
+			label: "Distance",
+			value: state.depthThreshold,
+			min: 0,
+			max: 8,
+			minLabel: "0m",
+			maxLabel: "Far",
+			formatValue: function(value) { return value.toFixed(2) + "m"; }
+		}),
+		depthFade: createSlider({
+			key: "depthFade",
+			label: "Fade",
+			value: state.depthFade,
+			min: 0,
+			max: 2,
+			minLabel: "Hard",
+			maxLabel: "Soft",
+			formatValue: function(value) { return value.toFixed(2) + "m"; }
+		}),
+		depthMrRetain: createSlider({
+			key: "depthMrRetain",
+			label: "MR Blend",
+			value: state.depthMrRetain,
+			min: 0,
+			max: 1,
+			minLabel: "Passthrough",
+			maxLabel: "Mod. Reality",
+			formatValue: formatPassthroughPercentText
+		}),
+		lightingDarkness: createSlider({
+			key: "lightingDarkness",
+			label: "Darkness",
+			value: state.lightingDarkness,
+			min: 0,
+			max: 1,
+			minLabel: "Lights Only",
+			maxLabel: "Additive"
+		}),
+		effectAdditiveShare: createSlider({
+			key: "effectAdditiveShare",
+			label: "Additive",
+			value: state.effectAdditiveShare,
+			min: 0,
+			max: 1,
+			minLabel: "Off",
+			maxLabel: "Full"
+		}),
+		effectAlphaBlendShare: createSlider({
+			key: "effectAlphaBlendShare",
+			label: "Alpha Blend",
+			value: state.effectAlphaBlendShare,
+			min: 0,
+			max: 1,
+			minLabel: "Off",
+			maxLabel: "Full"
+		})
+	};
+	const updateDepthEchoPhaseSliderRange = function() {
+		state.sliders.depthEchoPhase.max = Math.max(0.1, state.sliders.depthEchoWavelength.value);
+		state.sliders.depthEchoPhase.maxLabel = state.sliders.depthEchoWavelength.value.toFixed(1) + "m";
+		updateSlider(state.sliders.depthEchoPhase, state.sliders.depthEchoPhase.value);
+	};
+	const syncDepthMrRetainForMode = function() {
+		if (state.depthModeKey === "echo") {
+			state.depthEchoMrRetain = state.sliders.depthMrRetain.value;
+		} else {
+			state.depthDistanceMrRetain = state.sliders.depthMrRetain.value;
+		}
+	};
+	const setPassthroughSliderValue = function(key, value) {
+		const slider = state.sliders[key];
+		if (!slider) {
+			return;
+		}
+		updateSlider(slider, value);
+		if (key === "depthEchoWavelength") {
+			updateDepthEchoPhaseSliderRange();
+			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, slider.value);
+		}
+		if (key === "depthMrRetain") {
+			syncDepthMrRetainForMode();
+		}
+	};
+	updateDepthEchoPhaseSliderRange();
+	syncDepthMrRetainForMode();
 
 	const getFlashlightMasks = function(args) {
 		if (!state.flashlightActiveBool) {
@@ -499,8 +635,8 @@ const createPassthroughController = function(options) {
 			masks.push({
 				x: projectedUv.x,
 				y: projectedUv.y,
-				radius: clampNumber(state.flashlightRadius, 0.02, 0.45),
-				softness: clampNumber(state.flashlightSoftness, 0.01, 0.35)
+				radius: state.sliders.flashlightRadius.value,
+				softness: state.sliders.flashlightSoftness.value
 			});
 			if (masks.length >= PASSTHROUGH_MAX_FLASHLIGHTS) {
 				break;
@@ -551,9 +687,9 @@ const createPassthroughController = function(options) {
 		const lightingState = queryArgs.sceneLightingState || null;
 		const lightingColor = getAveragedLightingColor(lightingState);
 		const additiveStrength = state.lightingModeKey === "uniform" ? clampNumber(state.smoothedAudioDrive * 0.9, 0, 0.95) : 0;
-		const darkness = state.lightingModeKey === "none" ? 1 : clampNumber(state.lightingDarkness, 0, 1);
-		const lightLayerAdditiveScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 0 : clampNumber(state.effectAdditiveShare, 0, 1);
-		const lightLayerAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : clampNumber(state.effectAlphaBlendShare, 0, 1);
+		const darkness = state.lightingModeKey === "none" ? 1 : state.sliders.lightingDarkness.value;
+		const lightLayerAdditiveScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ALPHA_BLEND_ONLY ? 0 : state.sliders.effectAdditiveShare.value;
+		const lightLayerAlphaBlendScale = state.effectSemanticModeKey === PASSTHROUGH_EFFECT_SEMANTIC_MODE_ADDITIVE_ONLY ? 0 : state.sliders.effectAlphaBlendShare.value;
 		return {
 			visibleShare: visibleShare,
 			maskCount: 0,
@@ -603,8 +739,8 @@ const createPassthroughController = function(options) {
 		return {
 			depthMetricMode: state.depthRadialBool ? "radial" : "planar",
 			paletteKey: state.depthDiagnosticPaletteKey,
-			rangeMeters: clampNumber(state.depthDiagnosticRange, 0.2, 8),
-			rainbowFrequency: clampNumber(state.depthDiagnosticRainbowFrequency, 0.25, 20)
+			rangeMeters: state.sliders.depthDiagnosticRange.value,
+			rainbowFrequency: state.sliders.depthDiagnosticRainbowFrequency.value
 		};
 	};
 	const toggleStateBool = function(key) {
@@ -616,75 +752,8 @@ const createPassthroughController = function(options) {
 	const selectKnownStateMode = function(key, definitions, nextKey) {
 		state[key] = selectKnownModeKey(definitions, nextKey, state[key]);
 	};
-	const controlSetters = {
-		manualMix: function(value) {
-			state.manualMix = clampNumber(value, 0, 1);
-		},
-		audioReactiveIntensity: function(value) {
-			state.audioReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		flashlightRadius: function(value) {
-			state.flashlightRadius = clampNumber(value, 0.05, 0.45);
-		},
-		flashlightSoftness: function(value) {
-			state.flashlightSoftness = clampNumber(value, 0.01, 0.35);
-		},
-		lightingDarkness: function(value) {
-			state.lightingDarkness = clampNumber(value, 0, 1);
-		},
-		lightingAnchorMode: function(value) {
-			const nextIndex = clampNumber(Math.round(value), 0, passthroughLightingAnchorModeDefinitions.length - 1);
-			state.lightingAnchorModeKey = passthroughLightingAnchorModeDefinitions[nextIndex].key;
-		},
-		effectAdditiveShare: function(value) {
-			state.effectAdditiveShare = clampNumber(value, 0, 1);
-		},
-		effectAlphaBlendShare: function(value) {
-			state.effectAlphaBlendShare = clampNumber(value, 0, 1);
-		},
-		depthThreshold: function(value) {
-			state.depthThreshold = clampNumber(value, 0, 8);
-		},
-		depthFade: function(value) {
-			state.depthFade = clampNumber(value, 0, 2);
-		},
-		depthDiagnosticRange: function(value) {
-			state.depthDiagnosticRange = clampNumber(value, 0.2, 8);
-		},
-		depthDiagnosticRainbowFrequency: function(value) {
-			state.depthDiagnosticRainbowFrequency = clampNumber(value, 0.25, 20);
-		},
-		depthDistanceReactiveIntensity: function(value) {
-			state.depthDistanceReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		depthEchoPhase: function(value) {
-			state.depthEchoPhase = clampNumber(value, 0, Math.max(0.1, state.depthEchoWavelength));
-		},
-		depthEchoWavelength: function(value) {
-			state.depthEchoWavelength = depthRuntime.quantizeDepthEchoWavelength(value);
-			state.depthEchoPhase = clampNumber(state.depthEchoPhase, 0, state.depthEchoWavelength);
-			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
-		},
-		depthEchoDutyCycle: function(value) {
-			state.depthEchoDutyCycle = clampNumber(value, 0, 1);
-		},
-		depthEchoFade: function(value) {
-			state.depthEchoFade = clampNumber(value, 0, 1);
-		},
-		depthEchoPhaseSpeed: function(value) {
-			state.depthEchoPhaseSpeed = depthRuntime.quantizeDepthEchoPhaseSpeed(value);
-		},
-		depthEchoReactiveIntensity: function(value) {
-			state.depthEchoReactiveIntensity = clampNumber(value, -1, 1);
-		},
-		depthMrRetain: function(value) {
-			state.depthMrRetain = clampNumber(value, 0, 1);
-			if (state.depthModeKey === "echo") {
-				state.depthEchoMrRetain = state.depthMrRetain;
-			} else {
-				state.depthDistanceMrRetain = state.depthMrRetain;
-			}
-		}
+	const getMenuSliderControlValue = function(control) {
+		return control && control.type === "slider" && control.value != null ? control.value : null;
 	};
 	const echoReactiveStateKeys = {
 		depthEchoPhaseReactive: "depthEchoPhaseReactiveBool",
@@ -701,17 +770,17 @@ const createPassthroughController = function(options) {
 		const smoothFactor = clampNumber(delta * 9.5, 0.05, 1);
 		state.smoothedAudioDrive = lerpNumber(state.smoothedAudioDrive, targetDrive, smoothFactor);
 		state.smoothedBlendDrive = lerpNumber(state.smoothedBlendDrive, targetBlendDrive, smoothFactor);
-		let effectivePhaseSpeed = state.depthEchoPhaseSpeed;
+		let effectivePhaseSpeed = state.sliders.depthEchoPhaseSpeed.value;
 		if (state.depthEchoPhaseSpeedReactiveBool) {
 			effectivePhaseSpeed = clampNumber(
-				depthRuntime.applyReactiveDelta(state.depthEchoPhaseSpeed, state.depthEchoPhaseSpeed + (state.smoothedBlendDrive - 0.5) * 20, state.depthEchoReactiveIntensity),
-				-10,
-				10
+				depthRuntime.applyReactiveDelta(effectivePhaseSpeed, effectivePhaseSpeed + (state.smoothedBlendDrive - 0.5) * 20, state.sliders.depthEchoReactiveIntensity.value),
+				state.sliders.depthEchoPhaseSpeed.min,
+				state.sliders.depthEchoPhaseSpeed.max
 			);
 		}
 		state.depthEchoPhaseOffset += effectivePhaseSpeed * delta;
-		if (state.depthEchoWavelength > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
-			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.depthEchoWavelength);
+		if (state.sliders.depthEchoWavelength.value > 0.0001 && Number.isFinite(state.depthEchoPhaseOffset)) {
+			state.depthEchoPhaseOffset = depthRuntime.wrapEchoPhase(state.depthEchoPhaseOffset, state.sliders.depthEchoWavelength.value);
 		}
 	};
 	const setDepthAvailability = function(availableBool) {
@@ -742,7 +811,7 @@ const createPassthroughController = function(options) {
 		},
 		cycleDepthMode: function(direction) {
 			cycleStateMode("depthModeKey", passthroughDepthModeDefinitions, direction);
-			state.depthMrRetain = getDepthMrRetainForMode(state.depthModeKey);
+			updateSlider(state.sliders.depthMrRetain, getDepthMrRetainForMode(state.depthModeKey));
 		},
 		cycleDepthDiagnosticPalette: function(direction) {
 			cycleStateMode("depthDiagnosticPaletteKey", passthroughDepthDiagnosticPaletteDefinitions, direction);
@@ -783,8 +852,9 @@ const createPassthroughController = function(options) {
 			};
 		},
 		setControlValue: function(key, value) {
-			if (controlSetters[key]) {
-				controlSetters[key](value);
+			const sliderValue = getMenuSliderControlValue(value);
+			if (sliderValue != null) {
+				setPassthroughSliderValue(key, sliderValue);
 			}
 		},
 		toggleDepthDistanceReactive: function() {

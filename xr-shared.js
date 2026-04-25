@@ -8,6 +8,41 @@ const clampNumber = function(value, minValue, maxValue) {
 	return Math.max(minValue, Math.min(maxValue, value));
 };
 
+const getSliderValueFromT = function(slider, sliderT) {
+	return slider.min + clampNumber(sliderT == null ? 0 : sliderT, 0, 1) * (slider.max - slider.min);
+};
+
+const updateSlider = function(slider, value) {
+	const normalizedValue = slider.normalizeValue ? slider.normalizeValue(value) : value;
+	slider.value = clampNumber(normalizedValue, slider.min, slider.max);
+	slider.sliderT = slider.max === slider.min ? 0 : (slider.value - slider.min) / (slider.max - slider.min);
+	slider.valueText = slider.formatValue ? slider.formatValue(slider.value) : slider.valueText;
+	return slider;
+};
+
+const createSlider = function(args) {
+	args = args || {};
+	const slider = {
+		type: "slider",
+		key: args.key || "",
+		label: args.label || "",
+		min: args.min == null ? 0 : args.min,
+		max: args.max == null ? 1 : args.max,
+		minLabel: args.minLabel || "",
+		maxLabel: args.maxLabel || "",
+		formatValue: args.formatValue || null,
+		normalizeValue: args.normalizeValue || null,
+		value: 0,
+		sliderT: 0,
+		valueText: args.valueText || "",
+		hoveredBool: !!args.hoveredBool,
+		activeBool: !!args.activeBool,
+		sliderKey: args.sliderKey || args.key || "",
+		hoverKey: args.hoverKey || args.key || ""
+	};
+	return updateSlider(slider, args.value == null ? getSliderValueFromT(slider, args.sliderT) : args.value);
+};
+
 const emptyAudioMetrics = Object.freeze({
 	level: 0,
 	peak: 0,

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Refactored menu sliders into menu-owned controls with centralized range clamping, value derivation, hover/active state, and passthrough value handoff.
 - Rebuilt the WebXR depth stack around one central staged pipeline: `xr-runtime.js` now emits per-eye `DepthSourcePacket` objects, `xr-render.js` forwards only those packets plus processing policy, and `xr-depth.js` now owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation.
 - Unified `gpu-array`, `gpu-texture`, and CPU depth sources behind the same canonical source-depth path, so future headset-specific depth adapters can reuse the same downstream reprojection and reconstruction stages.
 - Removed raw-depth decoding from the reprojection stage. Raw source values are now decoded only during canonicalization, and `normDepthBufferFromNormView` is applied only there.
