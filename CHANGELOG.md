@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed radial depth handling so radial distance is derived from reconstructed world points and the source sensor origin, while planar depth continues to use target view-space `-z`.
 - Rebuilt the shared visibility path so visibility is now derived from the final warped field plus warped occupancy coverage, instead of running a second mask-only reprojection path or letting consumers fall back to `step(depth)`.
 - Changed depth fade semantics in the shared shader logic: `fade = 0` is now a hard threshold on the centralized visibility path, and `fade > 0` now means fade across the exact metric interval from `threshold` to `threshold + fade`.
-- Expanded the persistent depth diagnostics mode with a palette cycler (`Rainbow`, `Grayscale`, `Bands`), a diagnostic `Range` control that now defaults to 6 meters, and a `Cycles` slider that controls how many palette cycles repeat within that range.
+- Expanded the persistent depth diagnostics mode with direct source/processed depth views, WebXR depth source (`GPU`/`CPU`), type (`Smooth`/`Raw`), and data format (`LumAlpha`/`Float32`/`UShort`) preferences, a palette cycler (`Rainbow`, `Grayscale`, `Bands`), `Range`, and `Cycles`.
 
 ### Fixed
 - Discard warped grid triangles as a whole when any corner falls inside the near-eye guard, avoiding large projected mask wedges from very close lower-field geometry.

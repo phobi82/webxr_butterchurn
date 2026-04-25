@@ -610,6 +610,9 @@ const createDepthProcessingRenderer = function(options) {
 			}
 			const finalVisibilityTexture = buildVisibilityField(highResField, processingConfig);
 			return {
+				sourceDepthTexture: canonicalDepthState.texture,
+				sourceDepthWidth: canonicalDepthState.width,
+				sourceDepthHeight: canonicalDepthState.height,
 				fieldTexture: highResField.fieldTexture,
 				coverageTexture: highResField.coverageTexture,
 				visibilityTexture: finalVisibilityTexture,

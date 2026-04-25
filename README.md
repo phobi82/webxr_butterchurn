@@ -210,7 +210,7 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 - Consumers use `fieldTexture`, `coverageTexture`, and `visibilityTexture` from `xr-depth.js`; they do not perform their own reprojection, fallback masking, or world-point reconstruction.
 - The shared processed field texture stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
 - `coverageTexture` now represents warped grid occupancy in the target image, not a separate high-resolution confidence reconstruction pass.
-- `Depth -> Diagnostic` now renders the warped field directly with `Rainbow`, `Grayscale`, and `Bands` palettes. `Range` sets the diagnostic depth span, defaulting to 6 meters, and `Cycles` controls how many palette cycles repeat within that range.
+- `Depth -> Diagnostic` can show either direct source depth or processed depth with `Rainbow`, `Grayscale`, and `Bands` palettes. It also exposes diagnostic WebXR depth source (`GPU`/`CPU`), type (`Smooth`/`Raw`), and data format (`LumAlpha`/`Float32`/`UShort`) preferences; those session preferences take effect after entering XR again.
 
 ## GitHub Pages
 

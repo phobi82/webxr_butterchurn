@@ -630,7 +630,8 @@ const createDepthDiagnosticsRenderer = function() {
 			};
 		},
 		draw: function(renderState, depthInfo) {
-			if (!renderState || !depthInfo || !depthInfo.fieldTexture) {
+			const diagnosticTexture = renderState && renderState.viewKey === "source" ? depthInfo && depthInfo.sourceDepthTexture : depthInfo && depthInfo.fieldTexture;
+			if (!renderState || !diagnosticTexture) {
 				return;
 			}
 			gl.useProgram(program);
@@ -639,7 +640,7 @@ const createDepthDiagnosticsRenderer = function() {
 			gl.enable(gl.BLEND);
 			gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ZERO, gl.ONE, gl.ZERO);
 			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, depthInfo.fieldTexture);
+			gl.bindTexture(gl.TEXTURE_2D, diagnosticTexture);
 			gl.uniform1i(locs.fieldTexture, 0);
 			gl.uniform1f(locs.maxDistance, renderState.rangeMeters == null ? 4 : renderState.rangeMeters);
 			gl.uniform1f(locs.diagnosticPaletteMode, renderState.paletteKey === "bands" ? 2 : (renderState.paletteKey === "grayscale" ? 1 : 0));

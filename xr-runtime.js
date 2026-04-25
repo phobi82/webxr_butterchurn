@@ -112,8 +112,19 @@ const createXrSessionBridge = function(options) {
 	const xrWebGLLayer = options.xrWebGLLayer || null;
 	const xrWebGLBinding = options.xrWebGLBinding || null;
 	const xrRigidTransform = options.xrRigidTransform || null;
-	const depthDataFormats = options.depthDataFormats || ["luminance-alpha", "float32"];
 	const matchDepthViewBool = options.matchDepthViewBool == null ? false : !!options.matchDepthViewBool;
+	const resolveDepthSessionPreferences = function(depthSessionOptions) {
+		depthSessionOptions = depthSessionOptions || {};
+		const typePreference = depthSessionOptions.typeKey === "raw" ? ["raw", "smooth"] : ["smooth", "raw"];
+		const usagePreference = depthSessionOptions.sourceKey === "cpu" ? ["cpu-optimized"] : ["gpu-optimized", "cpu-optimized"];
+		const formatKey = depthSessionOptions.formatKey || "luminance-alpha";
+		const formatPreference = formatKey === "unsigned-short" ? ["unsigned-short", "luminance-alpha", "float32"] : (formatKey === "float32" ? ["float32", "luminance-alpha", "unsigned-short"] : ["luminance-alpha", "float32", "unsigned-short"]);
+		return {
+			typePreference: typePreference,
+			usagePreference: usagePreference,
+			formatPreference: formatPreference
+		};
+	};
 	const getSafeSessionDepthState = function(session) {
 		let depthUsage = "", depthDataFormat = "";
 		try { depthUsage = session.depthUsage || ""; } catch (e) {}
@@ -124,22 +135,23 @@ const createXrSessionBridge = function(options) {
 			depthSensingActiveBool: depthUsage === "cpu-optimized" || depthUsage === "gpu-optimized"
 		};
 	};
-	const startSessionWithDepthLadder = async function(sessionMode) {
+	const startSessionWithDepthLadder = async function(sessionMode, depthSessionOptions) {
+		const depthPreferences = resolveDepthSessionPreferences(depthSessionOptions);
 		// VR: no depth needed, skip to plain session
 		if (sessionMode !== "immersive-ar") {
 			return {session: await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]})};
 		}
 		// Step 1: GPU depth (Quest uses gpu-optimized; no projection layer needed, XRWebGLBinding handles depth queries)
-		if (xrWebGLBinding) {
+		if (xrWebGLBinding && depthPreferences.usagePreference[0] !== "cpu-optimized") {
 			try {
 				const session = await xrApi.requestSession(sessionMode, {
 					requiredFeatures: ["local-floor"],
 					optionalFeatures: ["depth-sensing"],
 					depthSensing: {
-						usagePreference: ["gpu-optimized", "cpu-optimized"],
-						dataFormatPreference: ["unsigned-short", "luminance-alpha", "float32"],
-						formatPreference: ["unsigned-short", "luminance-alpha", "float32"],
-						depthTypeRequest: ["smooth", "raw"],
+						usagePreference: depthPreferences.usagePreference,
+						dataFormatPreference: depthPreferences.formatPreference,
+						formatPreference: depthPreferences.formatPreference,
+						depthTypeRequest: depthPreferences.typePreference,
 						matchDepthView: matchDepthViewBool
 					}
 				});
@@ -153,9 +165,9 @@ const createXrSessionBridge = function(options) {
 				optionalFeatures: ["depth-sensing"],
 				depthSensing: {
 					usagePreference: ["cpu-optimized"],
-					dataFormatPreference: depthDataFormats,
-					formatPreference: depthDataFormats,
-					depthTypeRequest: ["smooth", "raw"],
+					dataFormatPreference: depthPreferences.formatPreference,
+					formatPreference: depthPreferences.formatPreference,
+					depthTypeRequest: depthPreferences.typePreference,
 					matchDepthView: matchDepthViewBool
 				}
 			});
@@ -187,13 +199,13 @@ const createXrSessionBridge = function(options) {
 	return {
 		availableBool: !!xrApi,
 		getSupportState: getSupportState,
-		startSession: async function(gl, onEnd) {
+		startSession: async function(gl, onEnd, depthSessionOptions) {
 			const supportState = await getSupportState();
 			if (!supportState.preferredSessionMode) {
 				throw new Error("No immersive XR session mode available.");
 			}
 			const sessionMode = supportState.preferredSessionMode;
-			const ladderResult = await startSessionWithDepthLadder(sessionMode);
+			const ladderResult = await startSessionWithDepthLadder(sessionMode, depthSessionOptions);
 			const session = ladderResult.session;
 			if (onEnd) {
 				session.addEventListener("end", onEnd);
@@ -745,6 +757,26 @@ const createRuntime = function(options) {
 					passthroughController.cycleDepthDiagnosticPalette(action.direction);
 				}
 				return;
+			case "depthDiagnosticView.cycle":
+				if (passthroughController && passthroughController.cycleDepthDiagnosticView) {
+					passthroughController.cycleDepthDiagnosticView(action.direction);
+				}
+				return;
+			case "depthDiagnosticSource.cycle":
+				if (passthroughController && passthroughController.cycleDepthDiagnosticSource) {
+					passthroughController.cycleDepthDiagnosticSource(action.direction);
+				}
+				return;
+			case "depthDiagnosticType.cycle":
+				if (passthroughController && passthroughController.cycleDepthDiagnosticType) {
+					passthroughController.cycleDepthDiagnosticType(action.direction);
+				}
+				return;
+			case "depthDiagnosticFormat.cycle":
+				if (passthroughController && passthroughController.cycleDepthDiagnosticFormat) {
+					passthroughController.cycleDepthDiagnosticFormat(action.direction);
+				}
+				return;
 			case "depthEchoReactive.toggle":
 				if (passthroughController && passthroughController.toggleDepthEchoReactive) {
 					passthroughController.toggleDepthEchoReactive(action.key);
@@ -928,7 +960,8 @@ const createRuntime = function(options) {
 					reject(new Error("XR session request timed out after " + (SESSION_TIMEOUT_MS / 1000) + "s"));
 				}, SESSION_TIMEOUT_MS);
 			});
-			const xrState = await Promise.race([sessionBridge.startSession(state.gl, endSession), timeoutPromise]);
+			const depthSessionOptions = passthroughController && passthroughController.getDepthSessionOptions ? passthroughController.getDepthSessionOptions() : null;
+			const xrState = await Promise.race([sessionBridge.startSession(state.gl, endSession, depthSessionOptions), timeoutPromise]);
 			state.xrSession = xrState.session;
 			state.xrSessionMode = xrState.sessionMode || "immersive-vr";
 			state.xrEnvironmentBlendMode = xrState.environmentBlendMode || "opaque";
