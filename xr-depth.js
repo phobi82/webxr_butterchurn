@@ -21,8 +21,6 @@ const createDepthProcessingRenderer = function(options) {
 	let buffer = null;
 	let floatTargetConfig = null;
 
-	let cpuTexture = null;
-	let cpuUploadBuffer = null;
 	const identityMatrix4 = new Float32Array([
 		1, 0, 0, 0,
 		0, 1, 0, 0,
@@ -85,42 +83,14 @@ const createDepthProcessingRenderer = function(options) {
 		};
 	};
 
-	const uploadCpuDepth = function(depthInfo, rawValueToMeters) {
-		const width = Math.max(1, depthInfo.width | 0);
-		const height = Math.max(1, depthInfo.height | 0);
-		const pixelCount = width * height;
-		const sourceData = depthInfo.data instanceof Uint16Array ? depthInfo.data : new Uint16Array(depthInfo.data);
-		const linearScale = rawValueToMeters || depthInfo.rawValueToMeters || 0.001;
-		if (!cpuTexture) {
-			cpuTexture = gl.createTexture();
-		}
-		if (!cpuUploadBuffer || cpuUploadBuffer.length < pixelCount) {
-			cpuUploadBuffer = new Float32Array(pixelCount);
-		}
-		for (let i = 0; i < pixelCount; i += 1) {
-			cpuUploadBuffer[i] = sourceData[i] > 0 ? sourceData[i] * linearScale : 0;
-		}
-		gl.bindTexture(gl.TEXTURE_2D, cpuTexture);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-		gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, width, height, 0, gl.RED, gl.FLOAT, cpuUploadBuffer.subarray(0, pixelCount));
-		return cpuTexture;
-	};
-
 	const resolveDepthDecodeParams = function(depthSourcePacket, sourceEncodingMode) {
 		if (sourceEncodingMode === DEPTH_ENCODING_LINEAR_VIEW_Z) {
 			return {linearScale: 1, nearZ: 0};
 		}
-		const rawValueToMeters = depthSourcePacket && depthSourcePacket.rawValueToMeters ? depthSourcePacket.rawValueToMeters : 0.001;
-		if (rawValueToMeters >= 1) {
-			return {linearScale: 0, nearZ: 0.1};
+		if (depthSourcePacket && depthSourcePacket.depthDecodeMode === "gpuHyperbolic") {
+			return {linearScale: 0, nearZ: depthSourcePacket.depthNearZ || 0.1};
 		}
-		if (depthSourcePacket && depthSourcePacket.depthDataFormat === "unsigned-short") {
-			return {linearScale: rawValueToMeters * 65535, nearZ: 0};
-		}
-		return {linearScale: rawValueToMeters, nearZ: 0};
+		return {linearScale: depthSourcePacket && depthSourcePacket.rawValueToMeters ? depthSourcePacket.rawValueToMeters : 0.001, nearZ: 0};
 	};
 
 	const ensureCanonicalResources = function(width, height) {
@@ -271,17 +241,12 @@ const createDepthProcessingRenderer = function(options) {
 		let sourceTexture = null;
 		let useArraySourceBool = false;
 		let sourceEncodingMode = DEPTH_ENCODING_SOURCE_RAW;
-		if (!depthInfo || depthInfo.isValid === false || !depthInfo.width || !depthInfo.height) {
+		if (!depthInfo || depthInfo.isValid === false || !depthInfo.width || !depthInfo.height || !depthInfo.texture) {
 			return null;
 		}
-		sourceTexture = depthInfo.texture || null;
+		sourceTexture = depthInfo.texture;
 		useArraySourceBool = depthSourcePacket.textureType === "texture-array";
 		sourceEncodingMode = depthInfo.depthEncodingMode != null ? depthInfo.depthEncodingMode : DEPTH_ENCODING_SOURCE_RAW;
-		if (!sourceTexture && depthInfo.data && depthInfo.width && depthInfo.height) {
-			sourceTexture = uploadCpuDepth(depthInfo, depthSourcePacket.rawValueToMeters);
-			useArraySourceBool = false;
-			sourceEncodingMode = DEPTH_ENCODING_LINEAR_VIEW_Z;
-		}
 		if (!sourceTexture || !ensureCanonicalResources(depthInfo.width, depthInfo.height)) {
 			return null;
 		}

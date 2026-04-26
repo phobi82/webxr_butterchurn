@@ -383,36 +383,6 @@ const createPassthroughMenuSectionState = function(args) {
 				nextHoverKey: "depthDiagnosticView:next"
 			}));
 			controls.push(createCyclerMenuControlState({
-				key: "depthDiagnosticSource",
-				label: "Source",
-				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticSources, uiState.selectedDepthDiagnosticSourceKey, "GPU"),
-				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticSource:prev", "depthDiagnosticSource:next"),
-				prevAction: {type: "depthDiagnosticSource.cycle", direction: -1},
-				nextAction: {type: "depthDiagnosticSource.cycle", direction: 1},
-				prevHoverKey: "depthDiagnosticSource:prev",
-				nextHoverKey: "depthDiagnosticSource:next"
-			}));
-			controls.push(createCyclerMenuControlState({
-				key: "depthDiagnosticType",
-				label: "Type",
-				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticTypes, uiState.selectedDepthDiagnosticTypeKey, "Smooth"),
-				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticType:prev", "depthDiagnosticType:next"),
-				prevAction: {type: "depthDiagnosticType.cycle", direction: -1},
-				nextAction: {type: "depthDiagnosticType.cycle", direction: 1},
-				prevHoverKey: "depthDiagnosticType:prev",
-				nextHoverKey: "depthDiagnosticType:next"
-			}));
-			controls.push(createCyclerMenuControlState({
-				key: "depthDiagnosticFormat",
-				label: "Format",
-				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticFormats, uiState.selectedDepthDiagnosticFormatKey, "UShort"),
-				hoveredAction: getHoveredCyclerAction(args, "depthDiagnosticFormat:prev", "depthDiagnosticFormat:next"),
-				prevAction: {type: "depthDiagnosticFormat.cycle", direction: -1},
-				nextAction: {type: "depthDiagnosticFormat.cycle", direction: 1},
-				prevHoverKey: "depthDiagnosticFormat:prev",
-				nextHoverKey: "depthDiagnosticFormat:next"
-			}));
-			controls.push(createCyclerMenuControlState({
 				key: "depthDiagnosticPalette",
 				label: "Palette",
 				valueText: getMenuModeLabelByKey(uiState.depthDiagnosticPalettes, uiState.selectedDepthDiagnosticPaletteKey, "Rainbow"),

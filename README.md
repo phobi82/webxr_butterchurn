@@ -47,7 +47,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
 - **Unified Depth Pipeline**: `xr-runtime` only packages per-eye depth source packets, while `xr-depth` owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation
-- **Source-Agnostic Processing**: `gpu-array`, `gpu-texture`, and CPU depth all flow through the same canonical path, so future depth-source backends can reuse the same downstream processing
+- **Profiled GPU Depth Processing**: the current live path requests Quest-style GPU raw depth (`gpu-optimized`, `unsigned-short`, `raw`) and keeps the decode profile explicit so additional headset profiles can be added without changing downstream consumers
 - **Stable Metric Semantics**: planar depth uses target view-space `-z`; radial depth is derived from reconstructed world points and the sensor origin after reconstruction, so radial distance stays anchored to the real sensor pose
 - **Central Visibility Semantics**: `fade = 0` is a hard threshold on the reconstructed field, while `fade > 0` fades only over the configured metric interval from `threshold` to `threshold + fade`; consumers do not rebuild fallback masks from raw depth presence
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
@@ -164,6 +164,8 @@ For longer debugging sessions, switch `adb` from USB to Wi-Fi:
 
 Run `switch-quest-adb-to-wifi.bat` from the repo root to execute the full sequence automatically. The script auto-detects one USB-connected Quest even when other `adb` targets are present, reports if a Quest is already connected over Wi-Fi without USB, and stops if multiple Quest headsets are connected over USB at the same time.
 
+For Pico headsets, run `switch-pico-adb-to-wifi.bat`. It follows the same sequence and auto-detects USB-connected Pico devices by Android product properties.
+
 or do it manual:
 1. Connect the Quest once over USB and confirm USB debugging on the headset.
 2. Run `adb tcpip 5555`.
@@ -178,6 +180,57 @@ adb forward tcp:9222 localabstract:chrome_devtools_remote
 ```
 
 Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloads, so refresh the list before reattaching. Remote `Enter VR` usually still requires a real headset-side user gesture.
+
+</details>
+
+<details>
+<summary><strong>Pico Development Setup</strong></summary>
+
+### Pico Debugging Over Wi-Fi
+
+Run `switch-pico-adb-to-wifi.bat` from the repo root to switch a USB-connected Pico headset to ADB over Wi-Fi. The script reads the Pico WLAN address before restarting ADB in TCP mode, disconnects any stale Wi-Fi target, reconnects to `<pico-ip>:5555`, and verifies that `adb get-state` returns `device` instead of accepting an `offline` entry.
+
+### Pico Browser Remote Debugging
+
+Pico Browser exposes a WebLayer DevTools socket, not the standard Quest/Chrome socket. Find the current socket:
+
+```
+adb -s <pico-ip>:5555 shell cat /proc/net/unix | findstr /I "devtools weblayer"
+```
+
+Forward the reported socket, for example:
+
+```
+adb -s <pico-ip>:5555 forward tcp:9222 localabstract:weblayer_devtools_remote_<pid>
+```
+
+Then open or query `http://127.0.0.1:9222/json/list` and attach to the `WebXR Visualizer` page. The `<pid>` can change after browser restarts, so refresh the socket and target list before reattaching.
+
+### Pico WebXR Depth Status
+
+Tested on Pico 4 Ultra OS `5.15.4` with Pico Browser `4.0.38` (`Chrome/125.0.6422.53`). `immersive-ar` works with `environmentBlendMode: alpha-blend`, and the browser exposes WebXR depth-related constructors such as `XRWebGLBinding`, `XRWebGLDepthInformation`, and `XRCPUDepthInformation`.
+
+However, live script-injection checks in a manually entered XR session showed that WebXR Depth Sensing is not active for the session:
+
+```
+session.depthUsage -> InvalidStateError: Depth sensing feature is not supported by the session
+session.depthDataFormat -> InvalidStateError: Depth sensing feature is not supported by the session
+frame.getDepthInformation(view) -> NotSupportedError: Depth sensing feature is not supported by the session
+XRWebGLBinding.getDepthInformation(view) -> null
+```
+
+The following Pico Browser flags were also tested:
+
+```
+chrome://flags/#webxr-incubations -> Enabled
+chrome://flags/#enable-openxr-android -> Enabled
+chrome://flags/#enable-openxr-extended -> Enabled
+chrome://flags/#webxr-runtime -> OpenXR
+```
+
+After a full Pico Browser `force-stop`, restart, and manual `Enter VR`, the same live-session probe still reported that Depth Sensing was unsupported.
+
+The current Quest raw-depth request also does not directly apply to Pico Browser: `unsigned-short` is rejected as an invalid `XRDepthDataFormat` enum value. Do not add Pico depth processing unless a future browser/runtime exposes usable depth frames in a live XR session.
 
 </details>
 
@@ -205,12 +258,12 @@ Then open `http://127.0.0.1:9222/json/list`. Page targets can change after reloa
 ## Depth Architecture Notes
 
 - `matchDepthView` stays disabled by default. The runtime still requests WebXR depth, but the downstream pipeline does not depend on depth-view matching.
-- `xr-runtime.js` emits one `DepthSourcePacket` per eye and does not own decoding, reprojection, reconstruction, or masking.
-- `xr-depth.js` is the only module that understands raw depth encodings, source UV transforms, grid warp, metric derivation, and visibility classification.
+- `xr-runtime.js` requests the fixed Quest GPU raw depth profile, emits one `DepthSourcePacket` per eye, and does not own reprojection, reconstruction, or masking.
+- `xr-depth.js` is the only module that understands GPU raw-depth decoding, source UV transforms, grid warp, metric derivation, and visibility classification.
 - Consumers use `fieldTexture`, `coverageTexture`, and `visibilityTexture` from `xr-depth.js`; they do not perform their own reprojection, fallback masking, or world-point reconstruction.
 - The shared processed field texture stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
 - `coverageTexture` now represents warped grid occupancy in the target image, not a separate high-resolution confidence reconstruction pass.
-- `Depth -> Diagnostic` can show either direct source depth or processed depth with `Rainbow`, `Grayscale`, and `Bands` palettes. It also exposes diagnostic WebXR depth source (`GPU`/`CPU`), type (`Smooth`/`Raw`), and data format (`LumAlpha`/`Float32`/`UShort`) preferences; those session preferences take effect after entering XR again.
+- `Depth -> Diagnostic` can show either direct source depth or processed depth with `Rainbow`, `Grayscale`, and `Bands` palettes. `Range` and `Cycles` control how the selected palette repeats over metric depth.
 
 ## GitHub Pages
 

@@ -37,22 +37,6 @@ const passthroughDepthDiagnosticViewDefinitions = [
 	{key: "processed", label: "Processed"}
 ];
 
-const passthroughDepthDiagnosticSourceDefinitions = [
-	{key: "gpu", label: "GPU"},
-	{key: "cpu", label: "CPU"}
-];
-
-const passthroughDepthDiagnosticTypeDefinitions = [
-	{key: "smooth", label: "Smooth"},
-	{key: "raw", label: "Raw"}
-];
-
-const passthroughDepthDiagnosticFormatDefinitions = [
-	{key: "luminance-alpha", label: "LumAlpha"},
-	{key: "float32", label: "Float32"},
-	{key: "unsigned-short", label: "UShort"}
-];
-
 const formatPassthroughPercentText = function(value) {
 	return Math.round(value * 100) + "%";
 };
@@ -296,9 +280,6 @@ const createPassthroughController = function(options) {
 		depthFade: 0.20,
 		depthDiagnosticPaletteKey: options.initialDepthDiagnosticPaletteKey || "rainbow",
 		depthDiagnosticViewKey: options.initialDepthDiagnosticViewKey || "processed",
-		depthDiagnosticSourceKey: options.initialDepthDiagnosticSourceKey || "gpu",
-		depthDiagnosticTypeKey: options.initialDepthDiagnosticTypeKey || "smooth",
-		depthDiagnosticFormatKey: options.initialDepthDiagnosticFormatKey || "unsigned-short",
 		depthDiagnosticRange: options.initialDepthDiagnosticRange == null ? 6 : options.initialDepthDiagnosticRange,
 		depthDiagnosticRainbowFrequency: options.initialDepthDiagnosticRainbowFrequency == null ? 2 : options.initialDepthDiagnosticRainbowFrequency,
 		depthDistanceReactiveBool: false,
@@ -691,12 +672,6 @@ const createPassthroughController = function(options) {
 			selectedDepthDiagnosticPaletteKey: state.depthDiagnosticPaletteKey,
 			depthDiagnosticViews: passthroughDepthDiagnosticViewDefinitions,
 			selectedDepthDiagnosticViewKey: state.depthDiagnosticViewKey,
-			depthDiagnosticSources: passthroughDepthDiagnosticSourceDefinitions,
-			selectedDepthDiagnosticSourceKey: state.depthDiagnosticSourceKey,
-			depthDiagnosticTypes: passthroughDepthDiagnosticTypeDefinitions,
-			selectedDepthDiagnosticTypeKey: state.depthDiagnosticTypeKey,
-			depthDiagnosticFormats: passthroughDepthDiagnosticFormatDefinitions,
-			selectedDepthDiagnosticFormatKey: state.depthDiagnosticFormatKey,
 			usableDepthAvailableBool: state.usableDepthAvailableBool,
 			passthroughControls: passthroughControlState.controls || [],
 			distanceReactiveControl: passthroughControlState.distanceReactiveControl || null,
@@ -852,22 +827,6 @@ const createPassthroughController = function(options) {
 		},
 		cycleDepthDiagnosticView: function(direction) {
 			cycleStateMode("depthDiagnosticViewKey", passthroughDepthDiagnosticViewDefinitions, direction);
-		},
-		cycleDepthDiagnosticSource: function(direction) {
-			cycleStateMode("depthDiagnosticSourceKey", passthroughDepthDiagnosticSourceDefinitions, direction);
-		},
-		cycleDepthDiagnosticType: function(direction) {
-			cycleStateMode("depthDiagnosticTypeKey", passthroughDepthDiagnosticTypeDefinitions, direction);
-		},
-		cycleDepthDiagnosticFormat: function(direction) {
-			cycleStateMode("depthDiagnosticFormatKey", passthroughDepthDiagnosticFormatDefinitions, direction);
-		},
-		getDepthSessionOptions: function() {
-			return {
-				sourceKey: state.depthDiagnosticSourceKey,
-				typeKey: state.depthDiagnosticTypeKey,
-				formatKey: state.depthDiagnosticFormatKey
-			};
 		},
 
 		cycleLightingMode: function(direction) {
