@@ -123,7 +123,7 @@ const DEFAULT_APP_CONFIG = {
 		stickDeadzone: 0.08,
 		stanceStickDeadzone: 0.22,
 		stanceVerticalDominanceMargin: 0.12,
-		depthMatchDepthViewBool: false
+		depthMatchDepthViewBool: true
 	},
 	scene: {
 		floorHalfSize: 40,

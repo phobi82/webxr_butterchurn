@@ -112,10 +112,10 @@ const createXrSessionBridge = function(options) {
 	const xrWebGLLayer = options.xrWebGLLayer || null;
 	const xrWebGLBinding = options.xrWebGLBinding || null;
 	const xrRigidTransform = options.xrRigidTransform || null;
-	const matchDepthViewBool = options.matchDepthViewBool == null ? false : !!options.matchDepthViewBool;
+	const matchDepthViewBool = options.matchDepthViewBool == null ? true : !!options.matchDepthViewBool;
 	const depthSourceProfile = {
-		usagePreference: ["gpu-optimized"],
-		formatPreference: ["unsigned-short"],
+		usagePreference: [],
+		formatPreference: ["float32"],
 		typePreference: ["raw"],
 		decodeMode: "gpuHyperbolic",
 		nearZ: 0.1
@@ -127,7 +127,7 @@ const createXrSessionBridge = function(options) {
 		return {
 			depthUsage: depthUsage,
 			depthDataFormat: depthDataFormat,
-			depthSensingActiveBool: depthUsage === "gpu-optimized"
+			depthSensingActiveBool: !!depthUsage
 		};
 	};
 	const startSessionWithDepthLadder = async function(sessionMode) {
@@ -135,25 +135,17 @@ const createXrSessionBridge = function(options) {
 		if (sessionMode !== "immersive-ar") {
 			return {session: await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]})};
 		}
-		// Quest Browser exposes depth as a GPU texture-array sampled as raw non-linear depth.
-		if (xrWebGLBinding) {
-			try {
-				const session = await xrApi.requestSession(sessionMode, {
-					requiredFeatures: ["local-floor"],
-					optionalFeatures: ["depth-sensing"],
-					depthSensing: {
-						usagePreference: depthSourceProfile.usagePreference,
-						dataFormatPreference: depthSourceProfile.formatPreference,
-						formatPreference: depthSourceProfile.formatPreference,
-						depthTypeRequest: depthSourceProfile.typePreference,
-						matchDepthView: matchDepthViewBool
-					}
-				});
-				return {session: session};
-			} catch (e) {}
-		}
-		// Plain AR keeps the app usable when the selected depth profile is unavailable.
-		return {session: await xrApi.requestSession(sessionMode, {requiredFeatures: ["local-floor"]})};
+		return {
+			session: await xrApi.requestSession(sessionMode, {
+				requiredFeatures: ["local-floor", "depth-sensing"],
+				depthSensing: {
+					usagePreference: depthSourceProfile.usagePreference,
+					dataFormatPreference: depthSourceProfile.formatPreference,
+					depthTypeRequest: depthSourceProfile.typePreference,
+					matchDepthView: matchDepthViewBool
+				}
+			})
+		};
 	};
 	const getSupportState = async function() {
 		if (!xrApi) {
@@ -197,10 +189,9 @@ const createXrSessionBridge = function(options) {
 			session.updateRenderState({
 				baseLayer: new xrWebGLLayer(session, gl, {framebufferScaleFactor: framebufferScaleFactor, alpha: sessionMode === "immersive-ar"})
 			});
-			// Create XRWebGLBinding for depth queries only (not for rendering)
 			const sessionDepthState = getSafeSessionDepthState(session);
 			let glBinding = null;
-			if (xrWebGLBinding && sessionDepthState.depthUsage === "gpu-optimized") {
+			if (xrWebGLBinding) {
 				try {
 					glBinding = new xrWebGLBinding(session, gl);
 				} catch (e) {
@@ -314,16 +305,13 @@ const DEFAULT_LIGHTING_SELECTION_STATE = {
 const SESSION_TIMEOUT_MS = 15000;
 const resolvedRuntimeActionPromise = Promise.resolve();
 
-const buildDepthPoseState = function(timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix) {
-	if (!viewMatrix || !worldFromViewMatrix || !projectionMatrix) {
+const buildDepthPoseStateFromView = function(view, timestampMs) {
+	if (!view || !view.projectionMatrix) {
 		return null;
 	}
-	const projectionParams = extractProjectionRayParams(projectionMatrix);
+	const projectionParams = extractProjectionRayParams(view.projectionMatrix);
 	return {
 		timestampMs: timestampMs || 0,
-		viewMatrix: new Float32Array(viewMatrix),
-		worldFromViewMatrix: new Float32Array(worldFromViewMatrix),
-		projectionMatrix: new Float32Array(projectionMatrix),
 		projectionParams: {
 			xScale: projectionParams.xScale,
 			yScale: projectionParams.yScale,
@@ -333,26 +321,30 @@ const buildDepthPoseState = function(timestampMs, viewMatrix, worldFromViewMatri
 	};
 };
 
-const buildDepthPoseStateFromView = function(view, timestampMs) {
-	if (!view || !view.transform || !view.transform.inverse || !view.transform.inverse.matrix || !view.projectionMatrix) {
-		return null;
+const resolveDepthNearZ = function(depthInfo, fallbackDepthNearZ) {
+	const candidates = [
+		depthInfo ? depthInfo.depthNear : null,
+		depthInfo ? depthInfo.nearZ : null,
+		depthInfo ? depthInfo.near : null,
+		depthInfo && depthInfo.gpuDepthData && depthInfo.gpuDepthData[0] ? depthInfo.gpuDepthData[0].depthNear : null
+	];
+	for (let i = 0; i < candidates.length; i += 1) {
+		const value = Number(candidates[i]);
+		if (Number.isFinite(value) && value > 0) {
+			return value;
+		}
 	}
-	const viewMatrix = view.transform.inverse.matrix;
-	const worldFromViewMatrix = view.transform.matrix || buildWorldFromViewMatrix(viewMatrix, new Float32Array(16));
-	return buildDepthPoseState(timestampMs, viewMatrix, worldFromViewMatrix, view.projectionMatrix);
+	return fallbackDepthNearZ || 0.1;
 };
 
-const buildDepthPoseStateFromDepthInfo = function(depthInfo, fallbackPoseState, timestampMs) {
-	if (!depthInfo || !depthInfo.transform || !depthInfo.transform.inverse || !depthInfo.transform.inverse.matrix) {
-		return null;
+const resolveDepthTextureType = function(depthInfo) {
+	if (!depthInfo) {
+		return "";
 	}
-	const projectionMatrix = depthInfo.projectionMatrix || (fallbackPoseState ? fallbackPoseState.projectionMatrix : null);
-	if (!projectionMatrix) {
-		return null;
+	if (depthInfo.textureType) {
+		return depthInfo.textureType;
 	}
-	const viewMatrix = depthInfo.transform.inverse.matrix;
-	const worldFromViewMatrix = depthInfo.transform.matrix || buildWorldFromViewMatrix(viewMatrix, new Float32Array(16));
-	return buildDepthPoseState(timestampMs, viewMatrix, worldFromViewMatrix, projectionMatrix);
+	return depthInfo.texture && depthInfo.texture.isExternalTexture ? "texture-array" : "";
 };
 
 const buildDepthSourcePackets = function(passthroughPose, depthInfoByView, timestampMs, depthDecodeMode, depthNearZ) {
@@ -363,31 +355,20 @@ const buildDepthSourcePackets = function(passthroughPose, depthInfoByView, times
 	for (let i = 0; i < passthroughPose.views.length; i += 1) {
 		const depthInfo = depthInfoByView && depthInfoByView[i] ? depthInfoByView[i] : null;
 		const currentPoseState = buildDepthPoseStateFromView(passthroughPose.views[i], timestampMs);
-		let sourcePoseState = buildDepthPoseStateFromDepthInfo(depthInfo, currentPoseState, timestampMs);
-		if (!sourcePoseState && currentPoseState) {
-			sourcePoseState = buildDepthPoseState(currentPoseState.timestampMs, currentPoseState.viewMatrix, currentPoseState.worldFromViewMatrix, currentPoseState.projectionMatrix);
-		}
-		if (!depthInfo || !currentPoseState || !sourcePoseState) {
+		if (!depthInfo || !currentPoseState) {
 			results[i] = null;
 			continue;
 		}
 		results[i] = {
 			depthInfo: depthInfo,
-			sourceViewMatrix: sourcePoseState.viewMatrix,
-			sourceWorldFromViewMatrix: sourcePoseState.worldFromViewMatrix,
-			sourceProjectionParams: sourcePoseState.projectionParams,
-			targetViewMatrix: currentPoseState.viewMatrix,
-			targetWorldFromViewMatrix: currentPoseState.worldFromViewMatrix,
-			targetProjectionParams: currentPoseState.projectionParams,
-			targetProjMatrix: currentPoseState.projectionMatrix,
-			metricOriginWorld: new Float32Array(sourcePoseState.worldFromViewMatrix),
+			viewIndex: i,
 			imageIndex: depthInfo.imageIndex != null ? depthInfo.imageIndex : null,
 			textureLayer: depthInfo.textureLayer != null ? depthInfo.textureLayer : null,
-			textureType: depthInfo.textureType || "",
-			rawValueToMeters: depthInfo.rawValueToMeters || 0.001,
+			textureType: resolveDepthTextureType(depthInfo),
+			rawValueToMeters: depthInfo.rawValueToMeters || 1,
 			depthDecodeMode: depthDecodeMode || "gpuHyperbolic",
-			depthNearZ: depthNearZ || 0.1,
-			normDepthBufferFromNormView: depthInfo.normDepthBufferFromNormView || null
+			depthNearZ: resolveDepthNearZ(depthInfo, depthNearZ),
+			targetProjectionParams: currentPoseState.projectionParams
 		};
 	}
 	return results;
@@ -610,14 +591,24 @@ const createRuntime = function(options) {
 		if (!state.depthSensingActiveBool || !frame || !pose || !pose.views) {
 			return [];
 		}
-		if (!state.glBinding || typeof state.glBinding.getDepthInformation !== "function") {
+		const gpuDepthBool = state.xrDepthUsage === "gpu-optimized";
+		if (gpuDepthBool && (!state.glBinding || typeof state.glBinding.getDepthInformation !== "function")) {
 			return [];
 		}
 		const depthInfoByView = [];
+		if (gpuDepthBool && pose.views[0]) {
+			try {
+				state.glBinding.getDepthInformation(pose.views[0]);
+			} catch (error) {}
+		}
 		for (let i = 0; i < pose.views.length; i += 1) {
 			let depthInfo = null;
 			try {
-				depthInfo = state.glBinding.getDepthInformation(pose.views[i]) || null;
+				if (gpuDepthBool) {
+					depthInfo = state.glBinding.getDepthInformation(pose.views[i]) || null;
+				} else if (typeof frame.getDepthInformation === "function") {
+					depthInfo = frame.getDepthInformation(pose.views[i]) || null;
+				}
 			} catch (error) {
 				depthInfo = null;
 			}
@@ -684,6 +675,8 @@ const createRuntime = function(options) {
 				depthFrameKind = "gpu-array";
 			} else if (depthInfo.texture) {
 				depthFrameKind = "gpu-texture";
+			} else if (depthInfo.data) {
+				depthFrameKind = "cpu-data";
 			}
 			if (!depthFrameKind) {
 				continue;
@@ -831,6 +824,7 @@ const createRuntime = function(options) {
 		state.frameHandle = state.xrSession.requestAnimationFrame(renderXr);
 		const frameStartMs = performance.now();
 		const pose = frame.getViewerPose(state.xrRefSpace);
+		const basePose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : null;
 		if (!pose) {
 			return;
 		}
@@ -842,7 +836,7 @@ const createRuntime = function(options) {
 		applyXrLocomotion(delta, pose, frame);
 		const renderPose = frame.getViewerPose(state.xrRefSpace) || pose;
 		menuController.updateXrInput({xrSession: state.xrSession, xrRefSpace: state.xrRefSpace, frame: frame, pose: renderPose, dispatchMenuAction: dispatchMenuAction});
-		const passthroughPose = state.baseRefSpace ? frame.getViewerPose(state.baseRefSpace) : renderPose;
+		const passthroughPose = basePose || renderPose;
 		if (state.depthSensingActiveBool && state.xrSession && state.xrSession.depthActive === false) {
 			try { state.xrSession.resumeDepthSensing(); } catch (e) { console.warn("[Depth] resumeDepthSensing failed:", e.message || e); }
 		}

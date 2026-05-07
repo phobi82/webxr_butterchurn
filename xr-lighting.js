@@ -900,14 +900,6 @@ const getEffectiveLightingAnchorModeKey = function(controllerState) {
 	return requestedModeKey;
 };
 
-const canUseSurfaceDepth = function(controllerState) {
-	return !!(
-		controllerState &&
-		controllerState.depthActiveBool &&
-		controllerState.usableDepthAvailableBool
-	);
-};
-
 const getRealWorldRoomOrigin = function(controllerState, args) {
 	if (!controllerState) {
 		return {x: 0, y: 0, z: 0};
@@ -1076,7 +1068,8 @@ const getFixtureWorldRadii = function(group, effectState, fillMix, surfaceBudget
 };
 
 const shouldUseSurfaceDepth = function(controllerState, args) {
-	return getEffectiveLightingAnchorModeKey(controllerState) === PASSTHROUGH_LIGHTING_ANCHOR_MODE_REAL_WORLD && canUseSurfaceDepth(controllerState);
+	// Lighting footprints stay in the current screen-space projection; depth no longer supplies world points.
+	return false;
 };
 
 const getSurfaceProjectionState = function(args, controllerState, roomPoint, anchorType, radiusX, radiusY) {

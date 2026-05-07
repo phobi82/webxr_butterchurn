@@ -403,17 +403,12 @@ const createMrLightingRenderer = function() {
 		"uniform vec4 lightLayerEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
 		"uniform float lightLayerAlphaBlendStrengths[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
 		"uniform vec4 lightLayerEffectParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldCenters[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldBasisX[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec3 lightLayerWorldBasisY[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
-		"uniform vec4 lightLayerWorldEllipseParams[" + PASSTHROUGH_MAX_LIGHT_LAYERS + "];",
 		"uniform float lightLayerAdditiveScale;",
 		"uniform float lightLayerAlphaBlendScale;",
 		"uniform sampler2D fieldTexture;",
 		"uniform sampler2D visibilityTexture;",
 		"uniform sampler2D coverageTexture;",
 		"uniform float depthMrRetain;",
-		"uniform float depthHasWorldPoints;",
 		"varying vec2 vScreenUv;",
 		"float circleMask(vec2 uv, vec2 center, vec2 params){float radius=max(params.x,0.0001);float softness=max(params.y,0.0001);float inner=max(0.0,radius-softness);return 1.0-smoothstep(inner,radius,distance(uv,center));}",
 		depthEllipseMaskShaderChunk,
@@ -422,13 +417,8 @@ const createMrLightingRenderer = function() {
 		"float sampleVisibility(vec2 depthUv){return texture2D(visibilityTexture,depthUv).r;}",
 		"float sampleCoverage(vec2 depthUv){return texture2D(coverageTexture,depthUv).r;}",
 		depthOverlayShaderChunk,
-		depthWorldEllipseMaskShaderChunk,
 		"void main(){",
 		"float alphaBlendOpen=computeDepthRetainShare(visibleShare);",
-		"vec4 packedDepth=texture2D(fieldTexture,vScreenUv);",
-		"float lightLayerDepthMeters=packedDepth.r;",
-		"float lightLayerDepthValid=sampleCoverage(vScreenUv);",
-		"vec3 lightLayerWorldPoint=packedDepth.gba;",
 		"for(int i=0;i<" + PASSTHROUGH_MAX_FLASHLIGHTS + ";i+=1){",
 		"if(float(i)>=maskCount){break;}",
 		"float localMask=circleMask(vScreenUv,maskCenters[i],maskParams[i]);",
@@ -439,10 +429,6 @@ const createMrLightingRenderer = function() {
 		"for(int i=0;i<" + PASSTHROUGH_MAX_LIGHT_LAYERS + ";i+=1){",
 		"if(float(i)>=lightLayerCount){break;}",
 		"float lightLayerMask=ellipseMask(vScreenUv,lightLayerCenters[i],lightLayerEllipseParams[i]);",
-		"if(depthHasWorldPoints>0.5&&lightLayerWorldEllipseParams[i].x>0.0001&&lightLayerDepthValid>0.001){",
-		"float worldMask=worldEllipseMask(lightLayerWorldPoint,lightLayerWorldCenters[i],lightLayerWorldBasisX[i],lightLayerWorldBasisY[i],lightLayerWorldEllipseParams[i]);",
-		"lightLayerMask=mix(lightLayerMask,worldMask,clamp(lightLayerDepthValid,0.0,1.0));",
-		"}",
 		"vec2 effectMask=lightLayerEffect(vScreenUv,lightLayerCenters[i],lightLayerEllipseParams[i],lightLayerEffectParams[i]);",
 		"float lightLayerStrength=lightLayerColors[i].a*lightLayerMask*effectMask.x*alphaBlendOpen*lightLayerAdditiveScale;",
 		"color+=lightLayerColors[i].rgb*lightLayerStrength;",
@@ -467,17 +453,12 @@ const createMrLightingRenderer = function() {
 			lightLayerEllipseParams: gl.getUniformLocation(targetProgram, "lightLayerEllipseParams"),
 			lightLayerAlphaBlendStrengths: gl.getUniformLocation(targetProgram, "lightLayerAlphaBlendStrengths"),
 			lightLayerEffectParams: gl.getUniformLocation(targetProgram, "lightLayerEffectParams"),
-			lightLayerWorldCenters: gl.getUniformLocation(targetProgram, "lightLayerWorldCenters"),
-			lightLayerWorldBasisX: gl.getUniformLocation(targetProgram, "lightLayerWorldBasisX"),
-			lightLayerWorldBasisY: gl.getUniformLocation(targetProgram, "lightLayerWorldBasisY"),
-			lightLayerWorldEllipseParams: gl.getUniformLocation(targetProgram, "lightLayerWorldEllipseParams"),
 			lightLayerAdditiveScale: gl.getUniformLocation(targetProgram, "lightLayerAdditiveScale"),
 			lightLayerAlphaBlendScale: gl.getUniformLocation(targetProgram, "lightLayerAlphaBlendScale"),
 			fieldTexture: gl.getUniformLocation(targetProgram, "fieldTexture"),
 			visibilityTexture: gl.getUniformLocation(targetProgram, "visibilityTexture"),
 			coverageTexture: gl.getUniformLocation(targetProgram, "coverageTexture"),
-			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain"),
-			depthHasWorldPoints: gl.getUniformLocation(targetProgram, "depthHasWorldPoints")
+			depthMrRetain: gl.getUniformLocation(targetProgram, "depthMrRetain")
 		};
 	};
 	return {
@@ -544,11 +525,6 @@ const createMrLightingRenderer = function() {
 			gl.uniform1f(activeLocs.lightLayerAlphaBlendScale, renderState.lightLayerAlphaBlendScale == null ? 1 : renderState.lightLayerAlphaBlendScale);
 			if (useDepthProgramBool && activeLocs.fieldTexture) {
 				gl.uniform1f(activeLocs.depthMrRetain, renderState.depth ? (renderState.depth.depthMrRetain || 0) : 0);
-				gl.uniform1f(activeLocs.depthHasWorldPoints, depthInfo.fieldWorldPointsBool ? 1 : 0);
-				gl.uniform3fv(activeLocs.lightLayerWorldCenters, lightLayers.worldCenters);
-				gl.uniform3fv(activeLocs.lightLayerWorldBasisX, lightLayers.worldBasisX);
-				gl.uniform3fv(activeLocs.lightLayerWorldBasisY, lightLayers.worldBasisY);
-				gl.uniform4fv(activeLocs.lightLayerWorldEllipseParams, lightLayers.worldEllipseParams);
 				gl.activeTexture(gl.TEXTURE1);
 				gl.bindTexture(gl.TEXTURE_2D, depthInfo.fieldTexture);
 				gl.uniform1i(activeLocs.fieldTexture, 1);
