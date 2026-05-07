@@ -46,12 +46,12 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 - **Flashlight**: controller-driven circular passthrough cutouts with radius and softness controls
 - **Distance**: near-depth cutout mode — geometry closer than a configurable distance opens toward passthrough, with optional sound-reactive modulation
 - **Echo**: repeating depth bands alternating between passthrough and modified reality, with phase animation, wavelength, duty cycle, and selective sound-reactivity
-- **Unified Depth Pipeline**: `xr-runtime` only packages per-eye depth source packets, while `xr-depth` owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation
-- **Profiled GPU Depth Processing**: the current live path requests Quest-style GPU raw depth (`gpu-optimized`, `unsigned-short`, `raw`) and keeps the decode profile explicit so additional headset profiles can be added without changing downstream consumers
-- **Stable Metric Semantics**: planar depth uses target view-space `-z`; radial depth is derived from reconstructed world points and the sensor origin after reconstruction, so radial distance stays anchored to the real sensor pose
+- **Unified Depth Pipeline**: `xr-runtime` packages current per-eye depth source packets, while `xr-depth` owns source canonicalization, native-resolution smoothing, screen-space spline upscaling, and centralized visibility derivation
+- **Matched Depth Views**: immersive AR requests required WebXR depth sensing with `matchDepthView: true`, `depthTypeRequest: ["raw"]`, and `dataFormatPreference: ["float32"]`, letting the runtime choose the supported usage path
+- **Stable Metric Semantics**: planar depth uses current view-space depth; radial depth derives real distance from the current view ray without reconstructing world points or applying extra motion compensation
 - **Central Visibility Semantics**: `fade = 0` is a hard threshold on the reconstructed field, while `fade > 0` fades only over the configured metric interval from `threshold` to `threshold + fade`; consumers do not rebuild fallback masks from raw depth presence
 - **Lighting Anchoring**: `Auto`, `VR World`, and `Real World` anchor modes for passthrough lighting placement, with `Auto` preferring real-world adhesion when usable depth is present and falling back to VR-world anchoring otherwise
-- **Depth-bound Light Projection**: passthrough lighting now reuses the shared canonical 2D depth surface directly inside the overlay renderer when available, and falls back to the hypothetical room shell when depth is unavailable
+- **Depth-bound Light Projection**: passthrough lighting consumes the shared screen-space visibility texture for depth-aware overlays, while fixture footprints stay in the current projected view
 - **Shared Light Layers**: fixture effects now build one reusable `lightLayers` frame buffer that projection and passthrough share directly, instead of repacking per-frame object lists into renderer-specific arrays
 - Background mix crossfades between visualizer and darkened modified reality via **manual** or **sound-reactive** blend modes
 
@@ -59,7 +59,7 @@ Audio-reactive WebXR visualizer built with plain HTML and vanilla JavaScript —
 
 - Lighting modes: **None**, **Uniform**, **Spots**, **Club** (preset- and audio-driven)
 - Lighting presets: `Aurora Drift`, `Disco Storm`, `Neon Wash`, `Stereo Chase`, `Pulse Strobe`
-- Optional WebXR depth sensing for depth-aware light placement in immersive AR
+- WebXR depth sensing for passthrough masks and depth-aware overlays in immersive AR
 - Shared fixture groups drive both passthrough lighting and VR-world scene lighting so color and timing stay synchronized
 - Wall-bound fixture effects keep their authored `vertical` placement in the fallback room, so silhouettes, beats, and runners stay on believable wall tracks
 
@@ -245,7 +245,7 @@ The current Quest raw-depth request also does not directly apply to Pico Browser
 | `xr-audio.js` | Audio capture, analyser pipeline, stereo metrics, debug synth |
 | `xr-lighting.js` | Lighting presets, fixture effects, scene-lighting state, and MR light-layer projection |
 | `xr-passthrough.js` | Passthrough modes, passthrough controller, and overlay-state policy |
-| `xr-depth.js` | Canonical depth pipeline: source canonicalization, GPU depth-grid warp, and centralized mask classification |
+| `xr-depth.js` | Canonical depth pipeline: source canonicalization, native smoothing, screen-space spline upscaling, and centralized mask classification |
 | `xr-menu.js` | Menu sections, menu view, menu controller, and TestLab menu config |
 | `xr-movement.js` | Collision world and locomotion |
 | `xr-render.js` | GLB asset loading, scene geometry, MR lighting renderer, and scene renderer |
@@ -257,12 +257,12 @@ The current Quest raw-depth request also does not directly apply to Pico Browser
 
 ## Depth Architecture Notes
 
-- `matchDepthView` stays disabled by default. The runtime still requests WebXR depth, but the downstream pipeline does not depend on depth-view matching.
-- `xr-runtime.js` requests the fixed Quest GPU raw depth profile, emits one `DepthSourcePacket` per eye, and does not own reprojection, reconstruction, or masking.
-- `xr-depth.js` is the only module that understands GPU raw-depth decoding, source UV transforms, grid warp, metric derivation, and visibility classification.
+- `matchDepthView` is enabled by default and is part of the effective immersive-AR depth request.
+- `xr-runtime.js` emits one current-view `DepthSourcePacket` per eye and does not own reprojection, reconstruction, or masking.
+- `xr-depth.js` is the only module that understands raw-depth decoding, native smoothing, spline upscaling, metric derivation, and visibility classification.
 - Consumers use `fieldTexture`, `coverageTexture`, and `visibilityTexture` from `xr-depth.js`; they do not perform their own reprojection, fallback masking, or world-point reconstruction.
-- The shared processed field texture stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
-- `coverageTexture` now represents warped grid occupancy in the target image, not a separate high-resolution confidence reconstruction pass.
+- The shared processed field texture stores metric depth in `r`; no depth-derived world point channels are produced.
+- `coverageTexture` represents valid screen-space depth coverage after smoothing and upscaling.
 - `Depth -> Diagnostic` can show either direct source depth or processed depth with `Rainbow`, `Grayscale`, and `Bands` palettes. `Range` and `Cycles` control how the selected palette repeats over metric depth.
 
 ## GitHub Pages

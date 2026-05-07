@@ -348,8 +348,7 @@ const createPassthroughController = function(options) {
 				depthEchoDutyCycle: state.sliders.depthEchoDutyCycle.value,
 				depthEchoFade: state.sliders.depthEchoFade.value,
 				depthPhaseOffset: depthRuntime.wrapEchoPhase(state.sliders.depthEchoPhase.value + state.depthEchoPhaseOffset, state.sliders.depthEchoWavelength.value),
-				depthMrRetain: state.sliders.depthMrRetain.value,
-				depthRadialBool: state.depthRadialBool
+				depthMrRetain: state.sliders.depthMrRetain.value
 			};
 		},
 		getEffectiveEchoDepthState: function() {
@@ -391,8 +390,7 @@ const createPassthroughController = function(options) {
 				depthEchoDutyCycle: effectiveDutyCycle,
 				depthEchoFade: effectiveFade,
 				depthPhaseOffset: effectivePhase,
-				depthMrRetain: state.sliders.depthMrRetain.value,
-				depthRadialBool: state.depthRadialBool
+				depthMrRetain: state.sliders.depthMrRetain.value
 			};
 		},
 		buildDepthRenderState: function(args) {

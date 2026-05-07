@@ -241,7 +241,6 @@ const getFixtureEffectFootprint = function(args) {
 	const surfaceBudget = args.surfaceBudget || {};
 	const surfaceKey = args.surfaceKey || "ceiling";
 	const fillMix = clampNumber(args.fillMix == null ? 0 : args.fillMix, 0, 1);
-	const surfaceDepthBool = !!args.surfaceDepthBool;
 	const baseRadius = clampNumber(args.baseRadius == null ? 0.4 : args.baseRadius, 0.14, 1.6);
 	let radiusX = baseRadius;
 	let radiusY = baseRadius;
@@ -276,7 +275,7 @@ const getFixtureEffectFootprint = function(args) {
 	} else if (effectState.mode === FIXTURE_EFFECT_MODE_FLASHLIGHT) {
 		radiusX *= group.type === "beam" ? 1.18 : 1.04;
 		radiusY = Math.max(radiusY * 1.92, radiusX * 0.72);
-	} else if (effectState.mode === FIXTURE_EFFECT_MODE_NONE && group.type === "wash" && !surfaceDepthBool) {
+	} else if (effectState.mode === FIXTURE_EFFECT_MODE_NONE && group.type === "wash") {
 		radiusX *= 1.08;
 		radiusY *= 1.12;
 	}
@@ -616,17 +615,11 @@ const PASSTHROUGH_LIGHTING_ANCHOR_MODE_REAL_WORLD = "realWorld";
 const createProjectedLightLayerBuffer = function() {
 	return {
 		count: 0,
-		surfaceDepthLayerCount: 0,
 		centersUv: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 2),
 		colors: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
 		ellipseParamsUv: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
 		alphaBlendStrengths: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS),
-		effectParams: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
-		worldCenters: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
-		worldBasisX: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
-		worldBasisY: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 3),
-		worldEllipseParams: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4),
-		surfaceDepthFlags: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS)
+		effectParams: new Float32Array(PASSTHROUGH_MAX_LIGHT_LAYERS * 4)
 	};
 };
 
@@ -645,7 +638,6 @@ const resetProjectedLightLayerBuffer = function(buffer) {
 		return;
 	}
 	buffer.count = 0;
-	buffer.surfaceDepthLayerCount = 0;
 };
 
 const projectWorldPointToUv = function(viewMatrix, projMatrix, x, y, z) {
@@ -1051,25 +1043,19 @@ const getProjectedMaskFromWorldFootprint = function(args, centerPoint, tangentX,
 	};
 };
 
-const getFixtureWorldRadii = function(group, effectState, fillMix, surfaceBudget, surfaceKey, surfaceDepthBool) {
+const getFixtureWorldRadii = function(group, effectState, fillMix, surfaceBudget, surfaceKey) {
 	const footprint = getFixtureEffectFootprint({
 		group: group,
 		effectState: effectState,
 		fillMix: fillMix,
 		surfaceBudget: surfaceBudget,
 		surfaceKey: surfaceKey,
-		surfaceDepthBool: surfaceDepthBool,
 		baseRadius: group && group.radius
 	});
 	return {
 		radiusX: clampNumber(footprint.radiusX, PASSTHROUGH_MIN_WORLD_RADIUS_METERS, PASSTHROUGH_MAX_WORLD_RADIUS_METERS),
 		radiusY: clampNumber(footprint.radiusY, PASSTHROUGH_MIN_WORLD_RADIUS_METERS * 0.6, PASSTHROUGH_MAX_WORLD_RADIUS_METERS)
 	};
-};
-
-const shouldUseSurfaceDepth = function(controllerState, args) {
-	// Lighting footprints stay in the current screen-space projection; depth no longer supplies world points.
-	return false;
 };
 
 const getSurfaceProjectionState = function(args, controllerState, roomPoint, anchorType, radiusX, radiusY) {
@@ -1090,13 +1076,7 @@ const getSurfaceProjectionState = function(args, controllerState, roomPoint, anc
 		return null;
 	}
 	return {
-		maskState: maskState,
-		centerPoint: anchoredFrame.centerPoint,
-		tangentX: anchoredFrame.tangentX,
-		tangentY: anchoredFrame.tangentY,
-		radiusX: radiusX,
-		radiusY: radiusY,
-		surfaceDepthBool: shouldUseSurfaceDepth(controllerState, args)
+		maskState: maskState
 	};
 };
 
@@ -1108,9 +1088,6 @@ const appendProjectedLightLayer = function(buffer, layerState) {
 	const centerOffset = layerIndex * 2;
 	const colorOffset = layerIndex * 4;
 	const ellipseOffset = layerIndex * 4;
-	const worldCenterOffset = layerIndex * 3;
-	const worldBasisOffset = layerIndex * 3;
-	const worldParamsOffset = layerIndex * 4;
 	buffer.centersUv[centerOffset] = layerState.centerUvX || 0;
 	buffer.centersUv[centerOffset + 1] = layerState.centerUvY || 0;
 	buffer.colors[colorOffset] = layerState.colorR || 0;
@@ -1126,24 +1103,7 @@ const appendProjectedLightLayer = function(buffer, layerState) {
 	buffer.effectParams[ellipseOffset + 1] = layerState.effectPhase || 0;
 	buffer.effectParams[ellipseOffset + 2] = layerState.effectDensity || 0;
 	buffer.effectParams[ellipseOffset + 3] = layerState.effectAmount || 0;
-	buffer.worldCenters[worldCenterOffset] = layerState.worldCenterX || 0;
-	buffer.worldCenters[worldCenterOffset + 1] = layerState.worldCenterY || 0;
-	buffer.worldCenters[worldCenterOffset + 2] = layerState.worldCenterZ || 0;
-	buffer.worldBasisX[worldBasisOffset] = layerState.worldBasisXX || 0;
-	buffer.worldBasisX[worldBasisOffset + 1] = layerState.worldBasisXY || 0;
-	buffer.worldBasisX[worldBasisOffset + 2] = layerState.worldBasisXZ || 0;
-	buffer.worldBasisY[worldBasisOffset] = layerState.worldBasisYX || 0;
-	buffer.worldBasisY[worldBasisOffset + 1] = layerState.worldBasisYY || 0;
-	buffer.worldBasisY[worldBasisOffset + 2] = layerState.worldBasisYZ || 0;
-	buffer.worldEllipseParams[worldParamsOffset] = layerState.worldRadiusX || 0;
-	buffer.worldEllipseParams[worldParamsOffset + 1] = layerState.worldRadiusY || 0;
-	buffer.worldEllipseParams[worldParamsOffset + 2] = layerState.worldSoftness || 0;
-	buffer.worldEllipseParams[worldParamsOffset + 3] = layerState.worldPlaneWidth || 0;
-	buffer.surfaceDepthFlags[layerIndex] = layerState.surfaceDepthBool ? 1 : 0;
 	buffer.count += 1;
-	if (layerState.surfaceDepthBool) {
-		buffer.surfaceDepthLayerCount += 1;
-	}
 	return true;
 };
 
@@ -1193,20 +1153,6 @@ const appendControllerFlashlightLayers = function(buffer, args, group, fillMix, 
 			effectPhase: effectState.phase,
 			effectDensity: effectState.density,
 			effectAmount: effectState.amount,
-			worldCenterX: point.x,
-			worldCenterY: point.y,
-			worldCenterZ: point.z,
-			worldBasisXX: tangentX.x,
-			worldBasisXY: tangentX.y,
-			worldBasisXZ: tangentX.z,
-			worldBasisYX: tangentY.x,
-			worldBasisYY: tangentY.y,
-			worldBasisYZ: tangentY.z,
-			worldRadiusX: baseRadius * 1.18,
-			worldRadiusY: baseRadius * 0.84,
-			worldSoftness: clampNumber(baseRadius * 0.2, 0.05, 0.28),
-			worldPlaneWidth: clampNumber(baseRadius * 0.3, 0.08, 0.34),
-			surfaceDepthBool: false,
 			strength: clampNumber(baseStrength * typeIntensityScale * strobeBoost, 0, group.type === "strobe" ? 0.88 : 0.72)
 		});
 	}
@@ -1247,7 +1193,7 @@ const appendClubFixtureLayers = function(buffer, args, group, clubState) {
 			variantCenter: variantCenter,
 			stereoBiasOffset: stereoBiasOffset
 		});
-		const worldRadii = getFixtureWorldRadii(group, effectState, fillMix, surfaceBudget, surfaceKey, shouldUseSurfaceDepth(clubState, args));
+		const worldRadii = getFixtureWorldRadii(group, effectState, fillMix, surfaceBudget, surfaceKey);
 		const surfaceState = getSurfaceProjectionState(
 			args,
 			clubState,
@@ -1269,20 +1215,6 @@ const appendClubFixtureLayers = function(buffer, args, group, clubState) {
 			radiusUvY: surfaceState.maskState.radiusY,
 			rotation: surfaceState.maskState.rotation,
 			softnessUv: clampNumber((group.softness == null ? 0.16 : group.softness) + surfaceBudget.softnessBias, 0.04, 0.4),
-			worldCenterX: surfaceState.centerPoint.x,
-			worldCenterY: surfaceState.centerPoint.y,
-			worldCenterZ: surfaceState.centerPoint.z,
-			worldBasisXX: surfaceState.tangentX.x,
-			worldBasisXY: surfaceState.tangentX.y,
-			worldBasisXZ: surfaceState.tangentX.z,
-			worldBasisYX: surfaceState.tangentY.x,
-			worldBasisYY: surfaceState.tangentY.y,
-			worldBasisYZ: surfaceState.tangentY.z,
-			worldRadiusX: surfaceState.radiusX,
-			worldRadiusY: surfaceState.radiusY,
-			worldSoftness: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.22, 0.05, 0.28),
-			worldPlaneWidth: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.32, 0.08, 0.34),
-			surfaceDepthBool: surfaceState.surfaceDepthBool,
 			alphaBlendStrength: effectState.alphaBlendStrength,
 			effectType: effectState.type,
 			effectPhase: effectState.phase,
@@ -1380,20 +1312,6 @@ const buildDirectionalLightLayers = function(args, controllerState, buffer) {
 				radiusUvY: surfaceState.maskState.radiusY,
 				rotation: surfaceState.maskState.rotation,
 				softnessUv: 0.12,
-				worldCenterX: surfaceState.centerPoint.x,
-				worldCenterY: surfaceState.centerPoint.y,
-				worldCenterZ: surfaceState.centerPoint.z,
-				worldBasisXX: surfaceState.tangentX.x,
-				worldBasisXY: surfaceState.tangentX.y,
-				worldBasisXZ: surfaceState.tangentX.z,
-				worldBasisYX: surfaceState.tangentY.x,
-				worldBasisYY: surfaceState.tangentY.y,
-				worldBasisYZ: surfaceState.tangentY.z,
-				worldRadiusX: surfaceState.radiusX,
-				worldRadiusY: surfaceState.radiusY,
-				worldSoftness: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.22, 0.05, 0.28),
-				worldPlaneWidth: clampNumber(Math.min(surfaceState.radiusX, surfaceState.radiusY) * 0.32, 0.08, 0.34),
-				surfaceDepthBool: surfaceState.surfaceDepthBool,
 				alphaBlendStrength: 0.94,
 				effectType: 0,
 				effectPhase: 0,

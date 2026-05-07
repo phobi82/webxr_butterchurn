@@ -7,25 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-07
+
 ### Added
 - Added `switch-pico-adb-to-wifi.bat` to switch USB-connected Pico headsets to ADB over Wi-Fi with the same guarded flow as the Quest helper.
 
 ### Changed
 - Documented Pico Browser remote debugging via `weblayer_devtools_remote_<pid>`, the tested WebXR/OpenXR flag combination, and the current Pico 4 Ultra WebXR Depth Sensing verification result.
 - Refactored menu sliders into menu-owned controls with centralized range clamping, value derivation, hover/active state, and passthrough value handoff.
-- Rebuilt the WebXR depth stack around one central staged pipeline: `xr-runtime.js` now emits per-eye `DepthSourcePacket` objects, `xr-render.js` forwards only those packets plus processing policy, and `xr-depth.js` now owns canonicalization, one GPU depth-grid warp into the target view, and centralized visibility derivation.
-- Narrowed live WebXR depth acquisition to one explicit Quest GPU raw-depth profile (`gpu-optimized`, `unsigned-short`, `raw`) while keeping the decode profile explicit for later headset-specific profiles.
-- Removed raw-depth decoding from the reprojection stage. Raw source values are now decoded only during canonicalization, and `normDepthBufferFromNormView` is applied only there.
-- Replaced the earlier sparse inverse-reprojection plus high-resolution reconstruction path with one GPU-warped shared depth grid that renders directly into the target image and stores metric depth in `r` and reconstructed world position in `g`, `b`, `a`.
-- Changed radial depth handling so radial distance is derived from reconstructed world points and the source sensor origin, while planar depth continues to use target view-space `-z`.
-- Rebuilt the shared visibility path so visibility is now derived from the final warped field plus warped occupancy coverage, instead of running a second mask-only reprojection path or letting consumers fall back to `step(depth)`.
+- Rebuilt the WebXR depth stack around the XR Blocks depth-map method: immersive AR now requests required depth sensing with `matchDepthView: true`, raw depth, and runtime-selected depth usage, then processes the current per-eye depth source in screen space.
+- Replaced the earlier inverse-reprojection/world-point depth path with source canonicalization, one native-resolution smoothing stage, screen-space spline upscaling, and centralized visibility derivation.
+- Changed radial depth handling so `real Distance Metric` derives distance from the current view ray and smoothed view depth, without reconstructing world points or applying extra motion compensation.
+- Rebuilt the shared visibility path so visibility is now derived from the final screen-space field plus coverage, instead of running a second mask-only path or letting consumers fall back to `step(depth)`.
 - Changed depth fade semantics in the shared shader logic: `fade = 0` is now a hard threshold on the centralized visibility path, and `fade > 0` now means fade across the exact metric interval from `threshold` to `threshold + fade`.
 - Simplified persistent depth diagnostics to direct source/processed depth views, a palette cycler (`Rainbow`, `Grayscale`, `Bands`), `Range`, and `Cycles`, removing the experimental WebXR source/type/format session switches.
+- Simplified the passthrough light-layer contract by removing unused depth-derived world-point and surface-depth fields after the screen-space depth migration.
 
 ### Fixed
-- Discard warped grid triangles as a whole when any corner falls inside the near-eye guard, avoiding large projected mask wedges from very close lower-field geometry.
-- Changed the warped depth-grid triangulation to use adaptive per-cell diagonals, choosing the locally more continuous split in each cell. This softens systematic blocky contour steps and reduces slanted wedge artifacts from near-field geometry.
-- Removed the old runtime reprojection-profile path and renderer-side raw-depth handoff, so depth ownership is now centralized instead of split across runtime, render, and depth modules.
+- Removed the old runtime reprojection-profile path and renderer-side raw-depth handoff, so depth ownership is centralized instead of split across runtime, render, and depth modules.
 - Removed consumer-side fallback visibility derivation from raw depth presence, so visibility semantics are now enforced by `xr-depth.js` instead of being reimplemented in render consumers.
 
 ## [0.8.8] - 2026-04-02

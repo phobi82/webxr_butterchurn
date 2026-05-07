@@ -414,7 +414,7 @@ const createDepthProcessingRenderer = function(options) {
 			"precision highp float;",
 			"uniform sampler2D smoothedDepthTexture;",
 			"uniform vec2 sourceTexelSize;",
-			"uniform vec4 targetProjectionParams;",
+			"uniform vec4 viewProjectionParams;",
 			"uniform float radialMetric;",
 			"in vec2 vScreenUv;",
 			"layout(location=0) out vec4 fragFieldColor;",
@@ -475,7 +475,7 @@ const createDepthProcessingRenderer = function(options) {
 			"float resolveMetricDepth(float planarDepthMeters,vec2 uv){",
 			"if(radialMetric<0.5||planarDepthMeters<=0.0001){return planarDepthMeters;}",
 			"vec2 ndc=uv*2.0-1.0;",
-			"vec2 ray=vec2((ndc.x+targetProjectionParams.z)/targetProjectionParams.x,(ndc.y+targetProjectionParams.w)/targetProjectionParams.y);",
+			"vec2 ray=vec2((ndc.x+viewProjectionParams.z)/viewProjectionParams.x,(ndc.y+viewProjectionParams.w)/viewProjectionParams.y);",
 			"return planarDepthMeters*length(vec3(ray,1.0));",
 			"}",
 			"void main(){",
@@ -489,7 +489,7 @@ const createDepthProcessingRenderer = function(options) {
 			position: gl.getAttribLocation(finalProgram, "position"),
 			smoothedDepthTexture: gl.getUniformLocation(finalProgram, "smoothedDepthTexture"),
 			sourceTexelSize: gl.getUniformLocation(finalProgram, "sourceTexelSize"),
-			targetProjectionParams: gl.getUniformLocation(finalProgram, "targetProjectionParams"),
+			viewProjectionParams: gl.getUniformLocation(finalProgram, "viewProjectionParams"),
 			radialMetric: gl.getUniformLocation(finalProgram, "radialMetric")
 		};
 	};
@@ -515,10 +515,10 @@ const createDepthProcessingRenderer = function(options) {
 		gl.bindTexture(gl.TEXTURE_2D, smoothedDepthState.texture);
 		gl.uniform1i(finalLocs.smoothedDepthTexture, 0);
 		gl.uniform2f(finalLocs.sourceTexelSize, smoothedDepthState.width > 0 ? 1 / smoothedDepthState.width : 0, smoothedDepthState.height > 0 ? 1 / smoothedDepthState.height : 0);
-		if (depthSourcePacket && depthSourcePacket.targetProjectionParams) {
-			gl.uniform4f(finalLocs.targetProjectionParams, depthSourcePacket.targetProjectionParams.xScale, depthSourcePacket.targetProjectionParams.yScale, depthSourcePacket.targetProjectionParams.xOffset, depthSourcePacket.targetProjectionParams.yOffset);
+		if (depthSourcePacket && depthSourcePacket.viewProjectionParams) {
+			gl.uniform4f(finalLocs.viewProjectionParams, depthSourcePacket.viewProjectionParams.xScale, depthSourcePacket.viewProjectionParams.yScale, depthSourcePacket.viewProjectionParams.xOffset, depthSourcePacket.viewProjectionParams.yOffset);
 		} else {
-			gl.uniform4f(finalLocs.targetProjectionParams, 1, 1, 0, 0);
+			gl.uniform4f(finalLocs.viewProjectionParams, 1, 1, 0, 0);
 		}
 		gl.uniform1f(finalLocs.radialMetric, processingConfig && processingConfig.depthMetricMode === "radial" ? 1 : 0);
 		bindFullscreenTriangle(finalLocs.position);
@@ -653,8 +653,7 @@ const createDepthProcessingRenderer = function(options) {
 				coverageTexture: highResField.coverageTexture,
 				visibilityTexture: finalVisibilityTexture,
 				fieldWidth: highResField.width,
-				fieldHeight: highResField.height,
-				fieldWorldPointsBool: false
+				fieldHeight: highResField.height
 			};
 		}
 	};

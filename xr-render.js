@@ -495,7 +495,7 @@ const createMrLightingRenderer = function() {
 			additiveColor[0] = renderState.additiveColor[0];
 			additiveColor[1] = renderState.additiveColor[1];
 			additiveColor[2] = renderState.additiveColor[2];
-			const useDepthProgramBool = !!(depthInfo && depthInfo.fieldTexture && (renderState.depth || lightLayers.surfaceDepthLayerCount > 0));
+			const useDepthProgramBool = !!(depthInfo && depthInfo.fieldTexture && renderState.depth);
 			const activeProgram = useDepthProgramBool ? depthTexture2dProgram : program;
 			const activeLocs = useDepthProgramBool ? depthTexture2dLocs : programLocs;
 			gl.enable(gl.BLEND);

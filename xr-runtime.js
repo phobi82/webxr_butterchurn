@@ -368,7 +368,7 @@ const buildDepthSourcePackets = function(passthroughPose, depthInfoByView, times
 			rawValueToMeters: depthInfo.rawValueToMeters || 1,
 			depthDecodeMode: depthDecodeMode || "gpuHyperbolic",
 			depthNearZ: resolveDepthNearZ(depthInfo, depthNearZ),
-			targetProjectionParams: currentPoseState.projectionParams
+			viewProjectionParams: currentPoseState.projectionParams
 		};
 	}
 	return results;
